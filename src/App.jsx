@@ -236,6 +236,7 @@ export default function PuntingClub() {
   const [adminSearch, setAdminSearch] = useState('');
   const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
+  const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
   const [showSecurityPanel, setShowSecurityPanel] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
 
@@ -1998,7 +1999,9 @@ export default function PuntingClub() {
                           const teamCount = registeredTeams.length || c.team_count || c.teams_count || 0;
                           const maxTeams  = c.max_teams || c.maxTeams || 20;
                           const buyIn     = c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : c.buyIn || '$1,000';
-                          const [showTeams, setShowTeams] = React.useState(false);
+                          const compKey   = c.code || c.id;
+                          const showTeams = expandedCompId === compKey;
+                          const setShowTeams = (v) => setExpandedCompId(v ? compKey : null);
                           return (
                           <div key={c.code || c.id} className={`bg-gray-900 border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-amber-500/20' : 'border-white/8'}`}>
                             <div className="p-4">
