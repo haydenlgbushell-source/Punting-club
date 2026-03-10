@@ -2,21 +2,24 @@
 // All data operations — teams, bets, leaderboard, admin
 // Uses service_role key to bypass RLS on admin operations
 
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
-  Deno.env.get('SUPABASE_URL'),
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const json  = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-const error = (msg, status = 400) => json({ error: msg }, status);
+const HEADERS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
+const json  = (data, status = 200) => ({ statusCode: status, headers: HEADERS, body: JSON.stringify(data) });
+const error = (msg, status = 400)  => json({ error: msg }, status);
 
-export default async (request) => {
-  if (request.method === 'OPTIONS') return new Response(null, { status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
-  if (request.method !== 'POST') return error('Method not allowed', 405);
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
+  if (event.httpMethod !== 'POST')    return error('Method not allowed', 405);
 
-  const { action, ...payload } = await request.json();
+  let action, payload;
+  try { const b = JSON.parse(event.body || '{}'); action = b.action; payload = b; }
+  catch(e) { return error('Invalid JSON'); }
 
   try {
     switch (action) {
@@ -337,4 +340,3 @@ const addAudit = async (adminRole, action, target, detail) => {
 // Helper: generate random code
 const genCode = (len) => Array.from({ length: len }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
 
-export const config = { path: '/api/data' };
