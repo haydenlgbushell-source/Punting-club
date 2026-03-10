@@ -19,6 +19,8 @@ const competitionStore = {
   'COMP03': { code:'COMP03', name:'Bondi Surf Club Open',   pub:'Bondi Surf Club',  status:'pending', weeks:32, buyIn:'$1,000', startDate:'01/04/2025', endDate:'31/10/2025' },
 };
 const auditLog = [];           // { ts, adminRole, action, target, detail }
+const localUserStore = {};     // phone → user object (fallback when Supabase unavailable)
+const localTeamStore = {};     // teamCode → team object (fallback)
 const rejectedBets = [];       // { team, bet, reason, reviewedBy, ts }
 const kycStore = {};           // phoneKey → { status:'pending'|'verified'|'rejected', docs:[], notes:'' }
 
@@ -49,6 +51,17 @@ const parseAnalysisJSON = (text) => {
 };
 
 const phoneKey = (p) => p.trim().replace(/\s+/g, '');
+
+// Validate and normalise Australian mobile numbers
+// Accepts: 04XX XXX XXX, +614XX XXX XXX, 614XX XXX XXX
+const validatePhone = (raw) => {
+  const digits = raw.replace(/\D/g, ''); // strip all non-digits
+  // Australian mobile: starts with 04 (10 digits) or 614 (11 digits)
+  if (/^04\d{8}$/.test(digits)) return { valid: true, normalised: '0' + digits.slice(1) };
+  if (/^614\d{8}$/.test(digits)) return { valid: true, normalised: '0' + digits.slice(2) };
+  if (/^4\d{8}$/.test(digits))  return { valid: true, normalised: '0' + digits };
+  return { valid: false, normalised: null };
+};
 
 const WEEK_BUDGET = 50;
 
@@ -192,28 +205,14 @@ export default function PuntingClub() {
   });
 
   // Leaderboard
-  const [leaderboardTeams, setLeaderboardTeams] = useState([
-    { rank: 1, team: 'The Legends',   week: 'W', total: '$4,250', color: 'from-yellow-400 to-yellow-600',  members: 5, weekHistory: ['W','W','W'], bets: [{ type: 'Multi (4 legs)', stake: '$50', combinedOdds: '3.50', estimatedReturn: '$175', overallStatus: 'pending', legs: [{ legNumber:1, selection:'Melbourne Storm', event:'NRL Round 5', market:'H2H', odds:'1.85', status:'won', resultNote:'Won 24-18' },{ legNumber:2, selection:'Sydney Roosters', event:'NRL Round 5', market:'H2H', odds:'1.95', status:'won', resultNote:'Won 18-12' },{ legNumber:3, selection:'Brisbane Broncos', event:'NRL Round 5', market:'H2H', odds:'2.10', status:'pending' },{ legNumber:4, selection:'Penrith Panthers', event:'NRL Round 5', market:'H2H', odds:'1.75', status:'pending' }] }] },
-    { rank: 2, team: 'High Rollers',  week: 'W', total: '$3,890', color: 'from-gray-300 to-gray-500',     members: 4, weekHistory: ['W','L','W'], bets: [] },
-    { rank: 3, team: 'Lucky Punters', week: 'L', total: '$2,450', color: 'from-orange-400 to-orange-600', members: 3, weekHistory: ['L','W','L'], bets: [] },
-    { rank: 4, team: 'The Dreamers',  week: 'W', total: '$1,980', color: 'from-blue-400 to-blue-600',     members: 2, weekHistory: ['P','W','W'], bets: [] },
-    { rank: 5, team: 'Golden Odds',   week: 'P', total: '$1,450', color: 'from-purple-400 to-purple-600', members: 6, weekHistory: ['W','P','P'], bets: [] },
-  ]);
+  const [leaderboardTeams, setLeaderboardTeams] = useState([]);
   const [selectedTeamIdx, setSelectedTeamIdx] = useState(null);
   const [leaderboardView, setLeaderboardView] = useState('current'); // 'current' | 'season'
 
   // My Team
-  const [pendingMembers, setPendingMembers] = useState([
-    { phone: '+61400000001', name: 'Alex Chen', joinedAt: '10/03/2025' },
-  ]);
-  const [teamMembers, setTeamMembers] = useState([
-    { phone: 'captain', name: 'You (John Smith)', role: 'captain', canBet: true, depositPaid: true },
-    { phone: 'm1', name: 'Sarah Jones',  role: 'member',    canBet: true,  depositPaid: true },
-    { phone: 'm2', name: 'Mike Wilson',  role: 'member',    canBet: true,  depositPaid: true },
-    { phone: 'm3', name: 'Emma Brown',   role: 'view-only', canBet: false, depositPaid: true },
-    { phone: 'm4', name: 'Liam Taylor',  role: 'member',    canBet: false, depositPaid: false },
-  ]);
-  const [bettingOrder, setBettingOrder] = useState(['You (John Smith)', 'Sarah Jones', 'Mike Wilson']);
+  const [pendingMembers, setPendingMembers] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [bettingOrder, setBettingOrder] = useState([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [teamFinalised, setTeamFinalised] = useState(false);
@@ -221,6 +220,7 @@ export default function PuntingClub() {
   const [depositPerMember, setDepositPerMember] = useState(null); // calculated on finalise
   const [showCreateComp, setShowCreateComp] = useState(false);
   const [newComp, setNewComp] = useState({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
+  const [phoneError, setPhoneError] = useState('');
 
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -229,48 +229,15 @@ export default function PuntingClub() {
   const [adminLoginPw, setAdminLoginPw] = useState('');
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminTab, setAdminTab] = useState('dashboard'); // dashboard | teams | users | bets | competitions | security
-  const [adminTeams, setAdminTeams] = useState([
-    { id:'T1', name:'The Legends',   status:'verified',  captain:'John Smith',  members:5,  depositsPaid:5,  compCode:'COMP01', createdAt:'01/03/2025', totalBet:'$150', flagged: false },
-    { id:'T2', name:'High Rollers',  status:'verified',  captain:'Emma Davis',  members:4,  depositsPaid:4,  compCode:'COMP01', createdAt:'02/03/2025', totalBet:'$100', flagged: false },
-    { id:'T3', name:'Lucky Punters', status:'pending',   captain:'Sam Lee',     members:3,  depositsPaid:2,  compCode:'COMP01', createdAt:'05/03/2025', totalBet:'$50',  flagged: false },
-    { id:'T4', name:'The Dreamers',  status:'verified',  captain:'Chris Park',  members:2,  depositsPaid:2,  compCode:'COMP02', createdAt:'03/03/2025', totalBet:'$100', flagged: false },
-    { id:'T5', name:'Golden Odds',   status:'suspended', captain:'Mia Chen',    members:6,  depositsPaid:5,  compCode:'COMP01', createdAt:'01/03/2025', totalBet:'$200', flagged: true  },
-  ]);
-  const [adminUsers, setAdminUsers] = useState([
-    { phone:'+61411111111', name:'John Smith',  role:'captain', kyc:'verified',  team:'The Legends',   dob:'15/06/1990', postcode:'2000', joinedAt:'01/03/2025', active:true,  flagged:false },
-    { phone:'+61422222222', name:'Emma Davis',  role:'captain', kyc:'verified',  team:'High Rollers',  dob:'22/09/1988', postcode:'3000', joinedAt:'02/03/2025', active:true,  flagged:false },
-    { phone:'+61433333333', name:'Sam Lee',     role:'captain', kyc:'pending',   team:'Lucky Punters', dob:'10/01/1995', postcode:'4000', joinedAt:'05/03/2025', active:true,  flagged:false },
-    { phone:'+61444444444', name:'Mia Chen',    role:'captain', kyc:'rejected',  team:'Golden Odds',   dob:'30/11/1992', postcode:'2010', joinedAt:'01/03/2025', active:false, flagged:true  },
-    { phone:'+61455555555', name:'Chris Park',  role:'captain', kyc:'verified',  team:'The Dreamers',  dob:'07/04/1987', postcode:'5000', joinedAt:'03/03/2025', active:true,  flagged:false },
-  ]);
-  const [adminBets, setAdminBets] = useState([
-    { id:'B1', team:'The Legends',   week:3, type:'Multi (4 legs)', stake:'$50', odds:'3.50', toWin:'$175',  status:'pending',  submittedAt:'08/03/2025 10:32', valid:true,  flagged:false, aiConfidence:94 },
-    { id:'B2', team:'High Rollers',  week:3, type:'Multi (2 legs)', stake:'$50', odds:'2.10', toWin:'$105',  status:'won',     submittedAt:'07/03/2025 14:10', valid:true,  flagged:false, aiConfidence:98 },
-    { id:'B3', team:'Lucky Punters', week:3, type:'Single',         stake:'$50', odds:'1.80', toWin:'$90',   status:'lost',    submittedAt:'09/03/2025 09:45', valid:true,  flagged:false, aiConfidence:91 },
-    { id:'B4', team:'Golden Odds',   week:3, type:'Multi (3 legs)', stake:'$80', odds:'4.20', toWin:'$336',  status:'pending', submittedAt:'08/03/2025 18:20', valid:false, flagged:true,  aiConfidence:72 },
-    { id:'B5', team:'The Dreamers',  week:3, type:'Multi (2 legs)', stake:'$25', odds:'3.00', toWin:'$75',   status:'won',     submittedAt:'06/03/2025 11:00', valid:true,  flagged:false, aiConfidence:96 },
-  ]);
-  const [adminComps, setAdminComps] = useState([
-    { code:'COMP01', name:'RSL Punting League S1', pub:'RSL Club Sydney',   teams:4, maxTeams:20, weeks:8,  startDate:'03/03/2025', endDate:'26/04/2025', buyIn:'$1,000', status:'active',   jackpot:'$5,000' },
-    { code:'COMP02', name:'Crown Hotel Cup',        pub:'Crown Hotel Melb', teams:2, maxTeams:10, weeks:16, startDate:'10/03/2025', endDate:'29/06/2025', buyIn:'$1,000', status:'active',   jackpot:'$2,000' },
-    { code:'COMP03', name:'Bondi Surf Club Open',   pub:'Bondi Surf Club',  teams:0, maxTeams:30, weeks:32, startDate:'01/04/2025', endDate:'31/10/2025', buyIn:'$1,000', status:'pending',  jackpot:'$0' },
-  ]);
+  const [adminTeams, setAdminTeams] = useState([]);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminBets, setAdminBets] = useState([]);
+  const [adminComps, setAdminComps] = useState([]);
   const [adminSearch, setAdminSearch] = useState('');
-  const [adminAuditLog, setAdminAuditLog] = useState([
-    { ts:'10/03/2025 14:32', adminRole:'owner',    action:'Team Verified',    target:'The Legends',   detail:'Manual KYC review passed' },
-    { ts:'10/03/2025 13:15', adminRole:'campaign',  action:'Bet Corrected',    target:'B4 Golden Odds', detail:'Stake corrected from $80 to $50' },
-    { ts:'10/03/2025 11:00', adminRole:'owner',    action:'User Suspended',   target:'Mia Chen',       detail:'KYC rejected, account suspended' },
-    { ts:'09/03/2025 16:45', adminRole:'pub_admin', action:'Competition Created', target:'COMP02',       detail:'Crown Hotel Cup created' },
-    { ts:'09/03/2025 09:30', adminRole:'campaign',  action:'Dispute Resolved', target:'B3 Lucky Punters', detail:'Bet result confirmed as Lost' },
-  ]);
+  const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
   const [showSecurityPanel, setShowSecurityPanel] = useState(false);
-  const [adminNotifs, setAdminNotifs] = useState([
-    { id:1, type:'warning', msg:'Golden Odds: Bet exceeds $50 weekly limit', time:'2h ago', read:false },
-    { id:2, type:'info',    msg:'Lucky Punters: KYC documents submitted', time:'4h ago', read:false },
-    { id:3, type:'success', msg:'High Rollers: Week 3 bet confirmed Won', time:'5h ago', read:true  },
-    { id:4, type:'error',   msg:'Mia Chen: KYC rejected — suspended', time:'1d ago', read:true  },
-  ]);
+  const [adminNotifs, setAdminNotifs] = useState([]);
 
   // Bet Analyzer
   const [showBetAnalyzer, setShowBetAnalyzer] = useState(false);
@@ -304,27 +271,54 @@ export default function PuntingClub() {
   // ── AUTH ──────────────────────────────────────────────────────────────────
   const handleLogin = useCallback(async (e) => {
     e.preventDefault();
+    if (!loginPhone.trim()) { alert('Please enter your mobile number.'); return; }
+    const loginPhoneCheck = validatePhone(loginPhone);
+    if (!loginPhoneCheck.valid) {
+      alert('Please enter a valid Australian mobile number.\nExample: 0412 345 678');
+      return;
+    }
+    if (!loginPassword.trim()) { alert('Please enter your password.'); return; }
     setApiLoading(true);
     setApiError(null);
+
     try {
+      // Try Supabase auth first
       const result = await apiLogin(loginPhone, loginPassword);
       const user   = result.user;
       const teams  = result.teams || [];
-      // Pick first active team
       const myTeam = teams.find(t => t.myRole !== 'pending') || teams[0];
-      setCurrentUser({ ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: myTeam?.competitions?.code });
+      setCurrentUser({ ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: myTeam?.competitions?.code });
       setCurrentTeamId(myTeam?.id || null);
       setIsLoggedIn(true);
       setShowLoginModal(false);
       setLoginPhone(''); setLoginPassword('');
-      // Load team members
       if (myTeam?.id) {
-        const members = await apiGetTeamMembers(myTeam.id);
-        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        try {
+          const members = await apiGetTeamMembers(myTeam.id);
+          setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        } catch(e) { console.warn('Could not load team members:', e.message); }
       }
     } catch (err) {
-      setApiError(err.message);
-      alert(err.message);
+      // Supabase unavailable — try local in-memory store (for testing without DB)
+      const cleanPhone = loginPhone.trim().replace(/\s+/g, '');
+      const localUser  = localUserStore[cleanPhone];
+
+      if (localUser && localUser.password === loginPassword) {
+        setCurrentUser(localUser);
+        setCurrentTeamId(localUser.teamId || null);
+        setIsLoggedIn(true);
+        setShowLoginModal(false);
+        setLoginPhone(''); setLoginPassword('');
+        // Load local team members if available
+        if (localUser.teamCode && localTeamStore[localUser.teamCode]) {
+          const lt = localTeamStore[localUser.teamCode];
+          setTeamMembers(lt.memberObjects || [{ phone: cleanPhone, name: `${localUser.firstName} ${localUser.lastName}`, role: 'captain', canBet: true, depositPaid: false }]);
+        }
+      } else if (localUser) {
+        alert('Incorrect password. Please try again.');
+      } else {
+        alert('Account not found. Please sign up first, or check your mobile number.');
+      }
     } finally {
       setApiLoading(false);
     }
@@ -339,7 +333,14 @@ export default function PuntingClub() {
     // Basic validation
     if (!formData.firstName?.trim()) { alert('Please enter your first name.'); return; }
     if (!formData.lastName?.trim())  { alert('Please enter your last name.'); return; }
-    if (!formData.phone?.trim())     { alert('Please enter your mobile number.'); return; }
+    if (!formData.phone?.trim()) { alert('Please enter your mobile number.'); return; }
+    const phoneValidation = validatePhone(formData.phone);
+    if (!phoneValidation.valid) {
+      alert('Please enter a valid Australian mobile number.\nExamples: 0412 345 678 or +61 412 345 678');
+      setPhoneError('Enter a valid Australian mobile (e.g. 0412 345 678)');
+      return;
+    }
+    setPhoneError('');
     if (!formData.password)          { alert('Please enter a password.'); return; }
     if (formData.password !== formData.confirmPassword) { alert('Passwords do not match.'); return; }
     if (formData.password.length < 6) { alert('Password must be at least 6 characters.'); return; }
@@ -352,7 +353,7 @@ export default function PuntingClub() {
     try {
       // Try Supabase first — if it works, great
       const result = await apiSignUp({
-        phone:           formData.phone.trim(),
+        phone:           validatePhone(formData.phone).normalised || formData.phone.trim(),
         password:        formData.password,
         firstName:       formData.firstName.trim(),
         lastName:        formData.lastName.trim(),
@@ -394,7 +395,7 @@ export default function PuntingClub() {
         firstName: formData.firstName.trim(),
         lastName:  formData.lastName.trim(),
         email:     formData.email?.trim() || '',
-        phone:     formData.phone.trim(),
+        phone:     validatePhone(formData.phone).normalised || formData.phone.trim(),
         password:  formData.password,
         dob:       formData.dob,
         postcode:  formData.postcode?.trim() || '',
@@ -408,6 +409,15 @@ export default function PuntingClub() {
       };
 
       if (signupMode === 'create') {
+        // Save to local store so login fallback works
+        const cleanPhone = newUser.phone.replace(/\s+/g, '');
+        newUser.teamId = 'local_team_' + newTeamCode;
+        localUserStore[cleanPhone] = newUser;
+        localTeamStore[newTeamCode] = {
+          teamCode: newTeamCode, teamName: newUser.teamName,
+          captainPhone: cleanPhone, buyInMode: newUser.buyInMode,
+          memberObjects: [{ phone: cleanPhone, name: `${newUser.firstName} ${newUser.lastName}`, role: 'captain', canBet: true, depositPaid: false }],
+        };
         const colors = ['from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600','from-indigo-400 to-indigo-600','from-rose-400 to-rose-600'];
         setLeaderboardTeams(prev => {
           if (prev.some(t => t.team.toLowerCase() === newUser.teamName.toLowerCase())) return prev;
@@ -801,6 +811,14 @@ export default function PuntingClub() {
   // ── DERIVED ───────────────────────────────────────────────────────────────
   const myTeamName = currentUser?.teamName || 'The Legends';
   const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
+
+  // Enrich leaderboard with member names for current user's team
+  const enrichedLeaderboardTeams = leaderboardTeams.map(t => {
+    if (t.team === myTeamName && teamMembers.length > 0) {
+      return { ...t, memberList: teamMembers.map(m => ({ name: m.name || `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), role: m.role })) };
+    }
+    return t;
+  });
   const currentWeekBettorIdx = 2; // Week 3 = index 2
   const currentBettor = bettingOrder[currentWeekBettorIdx % bettingOrder.length];
   const shareableLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://puntingclub.com'}?join=${currentUser?.teamCode || 'XXXXXX'}`;
@@ -1058,7 +1076,14 @@ export default function PuntingClub() {
 
             {/* Rows */}
             <div className="space-y-1.5">
-              {leaderboardTeams.map((team, idx) => {
+              {enrichedLeaderboardTeams.length === 0 && (
+                <div className="text-center py-16">
+                  <div className="text-5xl mb-4">🏆</div>
+                  <p className="text-gray-400 font-semibold text-lg">No teams yet</p>
+                  <p className="text-gray-600 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
+                </div>
+              )}
+              {enrichedLeaderboardTeams.map((team, idx) => {
                 const isMe = isLoggedIn && team.team === myTeamName;
                 const weekBet = team.bets[0] || null;
                 const isOpen = selectedTeamIdx === idx;
@@ -1125,6 +1150,23 @@ export default function PuntingClub() {
                     {/* Expanded bet slip */}
                     {isOpen && (
                       <div className="border-t border-white/5 bg-black/30 px-3 py-3">
+                        {/* Member roster */}
+                        {team.memberList?.length > 0 && (
+                          <div className="mb-3 pb-3 border-b border-white/5">
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">👥 Members</p>
+                            <div className="flex flex-wrap gap-2">
+                              {team.memberList.map((m, mi) => (
+                                <div key={mi} className="flex items-center gap-1.5 bg-white/5 rounded-full px-2.5 py-1">
+                                  <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
+                                    {(m.name || m).charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="text-xs text-gray-300 font-medium">{m.name || m}</span>
+                                  {m.role === 'captain' && <span className="text-amber-400 text-xs">👑</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
                       </div>
                     )}
@@ -1194,6 +1236,9 @@ export default function PuntingClub() {
                   <PermissionBadge role={currentUser?.role || 'captain'} />
                   <span className="text-gray-500 text-sm">·</span>
                   <span className="text-gray-400 text-sm">#{myTeamData?.rank || 1} on leaderboard</span>
+                  {currentUser?.competitionCode && (
+                    <span className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">{currentUser.competitionCode}</span>
+                  )}
                   {!allDepositsConfirmed && <span className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-2 py-0.5 rounded-full">⚠ Deposits pending</span>}
                   {allDepositsConfirmed && <span className="bg-green-500/20 border border-green-500/40 text-green-400 text-xs px-2 py-0.5 rounded-full">✓ All deposits confirmed</span>}
                 </div>
@@ -1267,6 +1312,12 @@ export default function PuntingClub() {
                 {/* Per-member breakdown */}
                 <div className="space-y-2">
                   <p className="text-gray-500 text-xs uppercase tracking-wider">Member Payment Status</p>
+                  {teamMembers.length === 0 && (
+                    <div className="text-center py-8 text-gray-600">
+                      <p className="text-2xl mb-2">👥</p>
+                      <p className="text-sm">No members yet — share your team code to invite people.</p>
+                    </div>
+                  )}
                   {teamMembers.map(m => (
                     <div key={m.phone} className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${m.depositPaid ? 'bg-green-950/30 border border-green-500/20' : 'bg-red-950/30 border border-red-500/20'}`}>
                       <div className="flex items-center gap-2">
@@ -1497,9 +1548,9 @@ export default function PuntingClub() {
         const filteredBets  = adminBets.filter(b => adminSearch === '' || b.team.toLowerCase().includes(adminSearch.toLowerCase()) || b.id.toLowerCase().includes(adminSearch.toLowerCase()));
 
         return (
-          <section style={{paddingTop:"64px",minHeight:"100vh",backgroundColor:"#030712",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale",textRendering:"optimizeLegibility",imageRendering:"crisp-edges"}}>
-            {/* Admin top bar - solid bg, no blur */}
-            <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:"64px",zIndex:40}} className="px-6 py-3 flex items-center justify-between">
+          <section style={{position:"fixed",inset:0,zIndex:50,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
+            {/* Admin top bar */}
+            <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:0,zIndex:10}} className="px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2.5">
                   <Shield className="w-5 h-5 text-red-400" />
@@ -1525,7 +1576,7 @@ export default function PuntingClub() {
 
             <div className="flex">
               {/* Sidebar */}
-              <aside style={{backgroundColor:"#0f172a",borderRight:"1px solid rgba(255,255,255,0.07)",paddingTop:"20px",width:"220px",flexShrink:0,position:"sticky",top:"112px",alignSelf:"flex-start",minHeight:"calc(100vh - 112px)"}} className="hidden md:flex flex-col">
+              <aside style={{backgroundColor:"#0f172a",borderRight:"1px solid rgba(255,255,255,0.07)",paddingTop:"20px",width:"220px",flexShrink:0,position:"sticky",top:"52px",alignSelf:"flex-start",height:"calc(100vh - 52px)",overflowY:"auto"}} className="hidden md:flex flex-col">
                 <div className="px-3 mb-3">
                   <p className="text-gray-600 text-xs font-bold uppercase tracking-widest px-1 mb-2">Navigation</p>
                 </div>
@@ -1555,7 +1606,7 @@ export default function PuntingClub() {
               </aside>
 
               {/* Main content */}
-              <main style={{flex:1,minWidth:0,overflowX:"hidden",maxWidth:"1200px"}} className="p-6 lg:p-8">
+              <main style={{flex:1,minWidth:0,overflowX:"hidden"}} className="p-6 lg:p-8 max-w-5xl">
 
                 {/* Mobile tab bar */}
                 <div style={{WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}} className="md:hidden flex gap-1 overflow-x-auto pb-2 mb-4">
@@ -1693,6 +1744,13 @@ export default function PuntingClub() {
                       )}
                     </div>
                     <div className="space-y-2">
+                      {filteredTeams.length === 0 && (
+                        <div className="text-center py-12 text-gray-600">
+                          <p className="text-3xl mb-2">🏆</p>
+                          <p className="font-semibold">No teams registered yet</p>
+                          <p className="text-sm mt-1">Teams will appear here after signup.</p>
+                        </div>
+                      )}
                       {filteredTeams.map(t => (
                         <div key={t.id} className={`bg-gray-900 border rounded-xl p-4 ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
                           <div className="flex items-start justify-between gap-3">
@@ -1754,6 +1812,13 @@ export default function PuntingClub() {
                     </div>
 
                     <div className="space-y-2">
+                      {filteredUsers.length === 0 && (
+                        <div className="text-center py-12 text-gray-600">
+                          <p className="text-3xl mb-2">👤</p>
+                          <p className="font-semibold">No users yet</p>
+                          <p className="text-sm mt-1">Users will appear here after they sign up.</p>
+                        </div>
+                      )}
                       {filteredUsers.map(u => (
                         <div key={u.phone} className={`bg-gray-900 border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-white/8'}`}>
                           <div className="flex items-start justify-between gap-3">
@@ -1921,34 +1986,82 @@ export default function PuntingClub() {
 
                       {/* Comp list */}
                       <div className="space-y-3">
-                        {adminComps.map(c => (
-                          <div key={c.code} className={`bg-gray-900 border rounded-xl p-4 ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-amber-500/20' : 'border-white/8'}`}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                                  <p className="font-bold">{c.name}</p>
-                                  <StatusPill s={c.status} />
-                                  <span className="font-mono text-xs bg-black/40 border border-white/10 text-amber-300 px-2 py-0.5 rounded">{c.code}</span>
+                        {adminComps.length === 0 && (
+                          <div className="text-center py-12 text-gray-600">
+                            <p className="text-3xl mb-2">🏟</p>
+                            <p className="font-semibold">No competitions yet</p>
+                            <p className="text-sm mt-1">Create your first competition using the form above.</p>
+                          </div>
+                        )}
+                        {adminComps.map(c => {
+                          const registeredTeams = c.teams || [];
+                          const teamCount = registeredTeams.length || c.team_count || c.teams_count || 0;
+                          const maxTeams  = c.max_teams || c.maxTeams || 20;
+                          const buyIn     = c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : c.buyIn || '$1,000';
+                          const [showTeams, setShowTeams] = React.useState(false);
+                          return (
+                          <div key={c.code || c.id} className={`bg-gray-900 border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-amber-500/20' : 'border-white/8'}`}>
+                            <div className="p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                    <p className="font-bold text-base">{c.name}</p>
+                                    <StatusPill s={c.status} />
+                                    <span className="font-mono text-xs bg-black/40 border border-white/10 text-amber-300 px-2 py-0.5 rounded">{c.code}</span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+                                    <span>🏟 {c.pub}</span>
+                                    <span>📅 {c.weeks} weeks</span>
+                                    <span>💰 Buy-in: {buyIn}</span>
+                                    {c.start_date && <span>🗓 {c.start_date} → {c.end_date}</span>}
+                                  </div>
+                                  {/* Team registration bar */}
+                                  <div className="mt-2">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-xs text-gray-400 font-semibold">
+                                        👥 {teamCount} / {maxTeams} teams registered
+                                      </span>
+                                      {teamCount > 0 && (
+                                        <button onClick={() => setShowTeams(!showTeams)} className="text-xs text-blue-400 hover:text-blue-300">
+                                          {showTeams ? 'Hide teams ▲' : 'View teams ▼'}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="w-full bg-white/5 rounded-full h-1.5">
+                                      <div className={`h-1.5 rounded-full transition-all ${c.status === 'active' ? 'bg-green-500' : 'bg-amber-500'}`}
+                                        style={{width: `${Math.min(100, (teamCount / maxTeams) * 100)}%`}} />
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-xs text-gray-500">
-                                  <span>🏟 {c.pub}</span>
-                                  <span>👥 {c.teams}/{c.maxTeams} teams</span>
-                                  <span>📅 {c.weeks} weeks</span>
-                                  <span>💰 Buy-in: {c.buyIn}</span>
-                                  <span>🗓 {c.startDate} → {c.endDate}</span>
-                                  <span>🏆 Jackpot: <span className="text-green-400 font-semibold">{c.jackpot}</span></span>
+                                {canAdmin('competitions') && (
+                                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                                    {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Approve</button>}
+                                    {c.status === 'active'  && <button onClick={() => updateCompStatus(c.id || c.code, 'closed')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs">Close</button>}
+                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {/* Registered teams list */}
+                            {showTeams && teamCount > 0 && (
+                              <div className="border-t border-white/5 bg-black/20 px-4 py-3">
+                                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Registered Teams</p>
+                                <div className="space-y-1.5">
+                                  {registeredTeams.map((t, ti) => (
+                                    <div key={ti} className="flex items-center justify-between bg-white/3 rounded-lg px-3 py-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">{t.team_code}</span>
+                                        <span className="text-sm font-semibold text-white">{t.team_name}</span>
+                                      </div>
+                                      <StatusPill s={t.status || 'pending'} />
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-                              {canAdmin('competitions') && (
-                                <div className="flex flex-col gap-1.5">
-                                  {c.status === 'pending' && <button onClick={() => updateCompStatus(c.code,'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Approve</button>}
-                                  {c.status === 'active'  && <button onClick={() => updateCompStatus(c.code,'closed')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs">Close</button>}
-                                  <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Share link copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">Share</button>
-                                </div>
-                              )}
-                            </div>
+                            )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -2037,6 +2150,13 @@ export default function PuntingClub() {
                         <div className="col-span-4">Target / Detail</div>
                       </div>
                       <div className="divide-y divide-white/5">
+                        {adminAuditLog.length === 0 && (
+                          <div className="text-center py-10 text-gray-600">
+                            <p className="text-2xl mb-2">📋</p>
+                            <p className="font-semibold text-sm">No audit entries yet</p>
+                            <p className="text-xs mt-1">Admin actions will be logged here automatically.</p>
+                          </div>
+                        )}
                         {adminAuditLog.map((e, i) => (
                           <div key={i} className="grid grid-cols-12 text-xs px-4 py-2.5 hover:bg-white/2">
                             <div className="col-span-3 text-gray-600 font-mono">{e.ts}</div>
@@ -2121,7 +2241,34 @@ export default function PuntingClub() {
               ))}
             </div>
 
-            {[['phone','Mobile Number','tel','+61 412 345 678','tel'],['email','Email','email','john@example.com','email']].map(([f,l,t,p,ac]) => (
+            {/* Phone with live validation */}
+            <div>
+              <label className="block text-xs font-semibold text-amber-400 mb-1.5">Mobile Number <span className="text-red-400">*</span></label>
+              <input
+                type="tel"
+                required
+                value={formData.phone}
+                onChange={e => {
+                  const v = e.target.value;
+                  setFormData(p => ({...p, phone: v}));
+                  if (v.length > 5) {
+                    const res = validatePhone(v);
+                    setPhoneError(res.valid ? '' : 'Enter a valid Australian mobile (e.g. 0412 345 678)');
+                  } else {
+                    setPhoneError('');
+                  }
+                }}
+                className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${phoneError ? 'border-red-500/60 focus:border-red-500' : formData.phone.length > 5 && !phoneError ? 'border-green-500/50 focus:border-green-500' : 'border-white/10 focus:border-amber-500/50'}`}
+                placeholder="0412 345 678"
+              />
+              {phoneError
+                ? <p className="text-red-400 text-xs mt-1">⚠ {phoneError}</p>
+                : formData.phone.length > 5 && !phoneError
+                  ? <p className="text-green-400 text-xs mt-1">✓ Valid mobile number</p>
+                  : <p className="text-gray-600 text-xs mt-1">Australian mobile numbers only (04XX XXX XXX)</p>
+              }
+            </div>
+            {[['email','Email','email','john@example.com','email']].map(([f,l,t,p,ac]) => (
               <div key={f}>
                 <label className="block text-xs font-semibold text-amber-400 mb-1">{l} *</label>
                 <input type={t} required autoComplete={ac} value={formData[f]} onChange={e => setFormData(prev => ({...prev, [f]: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder={p} />
