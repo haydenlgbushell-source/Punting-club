@@ -6,6 +6,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Normalise Australian mobile numbers to 04XXXXXXXX format
+const normalisePhone = (raw) => {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (/^04\d{8}$/.test(digits)) return digits;
+  if (/^614\d{8}$/.test(digits)) return '0' + digits.slice(2);
+  if (/^4\d{8}$/.test(digits))  return '0' + digits;
+  return digits; // return as-is if unrecognised — let DB constraint catch it
+};
+
 const HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -31,7 +40,10 @@ exports.handler = async (event) => {
     // ── SIGNUP ──────────────────────────────────────────────────────────────
     if (action === 'signup') {
       const { phone, password, firstName, lastName, email, dob, postcode, teamName, teamCode, buyInMode, competitionCode } = payload;
-      const cleanPhone = (phone || '').trim().replace(/\s+/g, '');
+      const cleanPhone = normalisePhone(phone);
+      if (!cleanPhone || cleanPhone.length < 10) {
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number. Please use format: 0412 345 678' }) };
+      }
       // Always use phone-based email so login always works
       const authEmail = `${cleanPhone}@puntingclub.app`;
 
@@ -98,6 +110,17 @@ exports.handler = async (event) => {
           betting_order: 1,
         });
         await supabase.from('users').update({ role: 'captain' }).eq('id', user.id);
+
+        // Increment competition team count
+        if (compId) {
+          await supabase.rpc('increment_competition_teams', { comp_id: compId }).catch(() => {
+            // Fallback: manual increment if RPC not available
+            supabase.from('competitions').select('teams_count').eq('id', compId).single().then(({ data: cd }) => {
+              if (cd) supabase.from('competitions').update({ teams_count: (cd.teams_count || 0) + 1 }).eq('id', compId);
+            });
+          });
+        }
+
         team = { ...newTeam, teamCode: teamCodeGen, team_code: teamCodeGen };
 
       } else if (teamCode) {
@@ -119,7 +142,7 @@ exports.handler = async (event) => {
     // ── LOGIN ────────────────────────────────────────────────────────────────
     if (action === 'login') {
       const { phone, password } = payload;
-      const cleanPhone = (phone || '').trim().replace(/\s+/g, '');
+      const cleanPhone = normalisePhone(phone);
       const authEmail  = `${cleanPhone}@puntingclub.app`;
 
       console.log('Login attempt:', authEmail);
