@@ -379,19 +379,9 @@ export default function PuntingClub() {
         setCurrentTeamId(team.id);
         setIsLoggedIn(true);
         setActiveNav('team');
-        alert('👑 Team Created! You are the Captain.
-
-Team: ' + teamName + '
-Team Code: ' + teamCode + '
-Login (mobile): ' + formData.phone + '
-
-Share your Team Code with friends to join!');
+        alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + teamName + '\nTeam Code: ' + teamCode + '\nLogin (mobile): ' + formData.phone + '\n\nShare your Team Code with friends to join!');
       } else {
-        alert('Registration submitted!
-
-Your request to join has been sent to the captain.
-
-Login with: ' + formData.phone);
+        alert('Registration submitted!\n\nYour request to join has been sent to the captain.\n\nLogin with: ' + formData.phone);
       }
 
     } catch (apiErr) {
@@ -429,22 +419,12 @@ Login with: ' + formData.phone);
         setCurrentUser(newUser);
         setIsLoggedIn(true);
         setActiveNav('team');
-        alert('👑 Team Created! You are the Captain.
-
-Team: ' + newUser.teamName + '
-Team Code: ' + newTeamCode + '
-Login (mobile): ' + newUser.phone + '
-
-Share your Team Code with friends to join!');
+        alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + newUser.teamName + '\nTeam Code: ' + newTeamCode + '\nLogin (mobile): ' + newUser.phone + '\n\nShare your Team Code with friends to join!');
       } else {
         setShowSignupModal(false);
         setSignupMode(null);
         setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
-        alert('Registration submitted!
-
-Your request to join has been sent.
-
-Login with: ' + formData.phone);
+        alert('Registration submitted!\n\nYour request to join has been sent.\n\nLogin with: ' + formData.phone);
       }
     } finally {
       setApiLoading(false);
