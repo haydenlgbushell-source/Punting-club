@@ -219,6 +219,8 @@ export default function PuntingClub() {
   const [teamFinalised, setTeamFinalised] = useState(false);
   const [showFinaliseModal, setShowFinaliseModal] = useState(false);
   const [depositPerMember, setDepositPerMember] = useState(null); // calculated on finalise
+  const [showCreateComp, setShowCreateComp] = useState(false);
+  const [newComp, setNewComp] = useState({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
 
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -1446,12 +1448,12 @@ export default function PuntingClub() {
       {activeNav === 'admin' && isAdminLoggedIn && (() => {
         // ── Admin sub-components (inline) ──────────────────────────────
         const AdminCard = ({ title, value, sub, icon, color = 'text-amber-400' }) => (
-          <div className="rounded-xl p-5 flex items-start gap-4" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.08)"}}>
-            <div className={`text-2xl ${color} flex-shrink-0`}>{icon}</div>
-            <div>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-0.5">{title}</p>
-              <p className={`text-2xl font-black ${color}`}>{value}</p>
-              {sub && <p className="text-gray-600 text-xs mt-0.5">{sub}</p>}
+          <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.10)"}}>
+            <div className={`${color} flex-shrink-0 mt-0.5`}>{icon}</div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+              <p className={`text-3xl font-black ${color} leading-none mb-1`}>{value}</p>
+              {sub && <p className="text-gray-500 text-xs leading-relaxed">{sub}</p>}
             </div>
           </div>
         );
@@ -1478,34 +1480,42 @@ export default function PuntingClub() {
         return (
           <section style={{paddingTop:"64px",minHeight:"100vh",backgroundColor:"#030712",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale",textRendering:"optimizeLegibility",imageRendering:"crisp-edges"}}>
             {/* Admin top bar - solid bg, no blur */}
-            <div style={{backgroundColor:"#111827",borderBottom:"1px solid rgba(239,68,68,0.2)",position:"sticky",top:"64px",zIndex:40}} className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
+            <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:"64px",zIndex:40}} className="px-6 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2.5">
                   <Shield className="w-5 h-5 text-red-400" />
-                  <span className="font-black text-red-400 text-sm">ADMIN PANEL</span>
-                  <span className="bg-red-500/20 border border-red-500/30 text-red-400 text-xs px-2 py-0.5 rounded-full font-semibold capitalize">{adminUser.role}</span>
+                  <span className="font-black text-red-400 text-base tracking-wide">ADMIN PANEL</span>
+                  <span style={{backgroundColor:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",fontSize:"11px",padding:"2px 10px",borderRadius:"999px",fontWeight:700,textTransform:"capitalize"}}>{adminUser.role}</span>
                 </div>
-                <span className="text-gray-600 text-xs hidden sm:block">Logged in as {adminUser.name}</span>
+                <div className="hidden sm:flex items-center gap-2 text-gray-500 text-sm">
+                  <span>·</span>
+                  <span>{adminUser.name}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {/* Notifications */}
+              <div className="flex items-center gap-3">
                 <div className="relative">
-                  <button className="relative p-2 text-gray-400 hover:text-white">
+                  <button className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
                     <Bell className="w-4 h-4" />
-                    {unreadNotifs > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />}
+                    {unreadNotifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"/>}
                   </button>
                 </div>
-                <button onClick={handleAdminLogout} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 px-3 py-1.5 rounded-lg text-xs font-semibold">Logout</button>
+                <div className="hidden sm:block text-gray-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
+                <button onClick={handleAdminLogout} style={{backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",padding:"6px 14px",borderRadius:"8px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>Logout</button>
               </div>
             </div>
 
             <div className="flex">
               {/* Sidebar */}
-              <aside style={{backgroundColor:"#0f172a",borderRight:"1px solid rgba(255,255,255,0.07)",paddingTop:"16px",width:"192px",flexShrink:0,position:"sticky",top:"112px",alignSelf:"flex-start",minHeight:"calc(100vh - 112px)"}} className="hidden md:flex flex-col">
+              <aside style={{backgroundColor:"#0f172a",borderRight:"1px solid rgba(255,255,255,0.07)",paddingTop:"20px",width:"220px",flexShrink:0,position:"sticky",top:"112px",alignSelf:"flex-start",minHeight:"calc(100vh - 112px)"}} className="hidden md:flex flex-col">
+                <div className="px-3 mb-3">
+                  <p className="text-gray-600 text-xs font-bold uppercase tracking-widest px-1 mb-2">Navigation</p>
+                </div>
                 <nav className="space-y-0.5 px-2">
                   {tabs.map(t => (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-2.5 transition-all ${adminTab === t.id ? 'bg-red-500/15 text-red-400 font-semibold border border-red-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}>
-                      <span className="text-base">{t.icon}</span>{t.label}
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} style={adminTab === t.id ? {backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontWeight:700} : {border:"1px solid transparent",color:"#9ca3af"}} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 transition-all hover:bg-white/5 hover:text-white`}>
+                      <span className="text-base w-5 text-center flex-shrink-0">{t.icon}</span>
+                      <span>{t.label}</span>
+                      {adminTab === t.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0"/>}
                     </button>
                   ))}
                 </nav>
@@ -1526,7 +1536,7 @@ export default function PuntingClub() {
               </aside>
 
               {/* Main content */}
-              <main style={{flex:1,minWidth:0,overflowX:"hidden"}} className="p-4 sm:p-6">
+              <main style={{flex:1,minWidth:0,overflowX:"hidden",maxWidth:"1200px"}} className="p-6 lg:p-8">
 
                 {/* Mobile tab bar */}
                 <div style={{WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}} className="md:hidden flex gap-1 overflow-x-auto pb-2 mb-4">
@@ -1547,18 +1557,26 @@ export default function PuntingClub() {
                 {/* ── DASHBOARD ───────────────────────────────────────────── */}
                 {adminTab === 'dashboard' && (
                   <div className="space-y-6">
-                    <div>
-                      <h2 className="text-xl font-black mb-1">Dashboard</h2>
-                      <p className="text-gray-500 text-sm">Overview · Week 3 of 8 · {new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-2xl font-black mb-1">Dashboard</h2>
+                        <p className="text-gray-500 text-sm">Overview · Week 3 of 8 · {new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-900 border border-white/8 px-3 py-2 rounded-lg">
+                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"/>
+                        Live
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <AdminCard title="Total Teams"       value={adminTeams.length}                                      sub={`${adminTeams.filter(t=>t.status==='verified').length} verified`}   icon={<Users className="w-6 h-6"/>}      color="text-amber-400" />
-                      <AdminCard title="Total Users"       value={adminUsers.length}                                      sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending`}    icon={<UserCheck className="w-6 h-6"/>}  color="text-blue-400"  />
-                      <AdminCard title="Bets This Week"    value={adminBets.length}                                       sub={`${adminBets.filter(b=>b.flagged).length} flagged`}                  icon={<FileText className="w-6 h-6"/>}   color="text-green-400" />
-                      <AdminCard title="Competitions"      value={adminComps.length}                                      sub={`${adminComps.filter(c=>c.status==='active').length} active`}         icon={<Trophy className="w-6 h-6"/>}     color="text-purple-400"/>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-amber-400" />
+                      <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-blue-400"  />
+                      <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
+                      <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-purple-400"/>
                     </div>
 
+                    {/* Flagged + KYC side by side on desktop */}
+                    <div className="grid lg:grid-cols-2 gap-4">
                     {/* Flagged items */}
                     {(adminBets.some(b=>b.flagged) || adminTeams.some(t=>t.flagged) || adminUsers.some(u=>u.flagged)) && (
                       <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-5">
@@ -1613,24 +1631,31 @@ export default function PuntingClub() {
                         </div>
                       </div>
                     )}
+                    </div>{/* end two-col grid */}
 
                     {/* Recent activity */}
                     <div className="rounded-xl p-5" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.08)"}}>
-                      <h3 className="font-bold text-white mb-3 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400"/>Recent Activity</h3>
-                      <div className="space-y-2">
-                        {adminAuditLog.slice(0, 5).map((e, i) => (
-                          <div key={i} className="flex items-start gap-3 py-2 border-b border-white/5 last:border-0">
-                            <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"/>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white"><span className="text-blue-400 font-semibold">{e.action}</span> — {e.target}</p>
-                              {e.detail && <p className="text-xs text-gray-600">{e.detail}</p>}
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-white flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400"/>Recent Activity</h3>
+                        <button onClick={() => setAdminTab('audit')} className="text-xs text-blue-400 hover:text-blue-300">View all →</button>
+                      </div>
+                      <div className="space-y-0">
+                        {adminAuditLog.slice(0, 8).map((e, i) => (
+                          <div key={i} className="flex items-start gap-3 py-2.5 border-b border-white/5 last:border-0">
+                            <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <div className="w-2 h-2 rounded-full bg-blue-400"/>
                             </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-xs text-gray-600">{e.ts}</p>
-                              <p className="text-xs text-gray-700 capitalize">{e.adminRole}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white font-medium"><span className="text-blue-400">{e.action}</span>{e.target ? ` — ${e.target}` : ''}</p>
+                              {e.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{e.detail}</p>}
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-2">
+                              <p className="text-xs text-gray-500 whitespace-nowrap">{e.ts}</p>
+                              <span className="text-xs text-gray-700 capitalize bg-white/5 px-1.5 py-0.5 rounded mt-0.5 inline-block">{e.adminRole}</span>
                             </div>
                           </div>
                         ))}
+                        {adminAuditLog.length === 0 && <p className="text-gray-600 text-sm text-center py-4">No activity yet</p>}
                       </div>
                     </div>
                   </div>
@@ -1833,8 +1858,6 @@ export default function PuntingClub() {
 
                 {/* ── COMPETITIONS ─────────────────────────────────────────── */}
                 {adminTab === 'competitions' && (() => {
-                  const [showCreateComp, setShowCreateComp] = React.useState(false);
-                  const [newComp, setNewComp] = React.useState({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
                   return (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
