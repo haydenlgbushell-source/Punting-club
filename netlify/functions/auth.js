@@ -27,19 +27,23 @@ exports.handler = async (event) => {
   }
 
   try {
+
     // ── SIGNUP ──────────────────────────────────────────────────────────────
     if (action === 'signup') {
       const { phone, password, firstName, lastName, email, dob, postcode, teamName, teamCode, buyInMode, competitionCode } = payload;
       const cleanPhone = (phone || '').trim().replace(/\s+/g, '');
-      const authEmail  = `${cleanPhone}@puntingclub.app`;
+      // Always use phone-based email so login always works
+      const authEmail = `${cleanPhone}@puntingclub.app`;
 
       // Check phone not already registered
       const { data: existing } = await supabase.from('users').select('id').eq('phone', cleanPhone).maybeSingle();
       if (existing) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number already registered.' }) };
 
-      // Create Supabase auth user
+      // Create Supabase auth user using phone-derived email (consistent with login)
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email, password, email_confirm: true,
+        email:          authEmail,
+        password,
+        email_confirm:  true,
       });
       if (authError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: authError.message }) };
 
@@ -75,19 +79,37 @@ exports.handler = async (event) => {
         } while (++attempts < 10);
 
         const { data: newTeam, error: teamError } = await supabase.from('teams').insert({
-          team_code: teamCodeGen, team_name: teamName, captain_id: user.id,
-          competition_id: compId, buy_in_mode: buyInMode || 'split', status: 'pending', finalised: false,
+          team_code:      teamCodeGen,
+          team_name:      teamName,
+          captain_id:     user.id,
+          competition_id: compId,
+          buy_in_mode:    buyInMode || 'split',
+          status:         'pending',
+          finalised:      false,
         }).select().single();
         if (teamError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: teamError.message }) };
 
-        await supabase.from('team_members').insert({ team_id: newTeam.id, user_id: user.id, role: 'captain', can_bet: true, deposit_paid: false, betting_order: 1 });
+        await supabase.from('team_members').insert({
+          team_id:       newTeam.id,
+          user_id:       user.id,
+          role:          'captain',
+          can_bet:       true,
+          deposit_paid:  false,
+          betting_order: 1,
+        });
         await supabase.from('users').update({ role: 'captain' }).eq('id', user.id);
         team = { ...newTeam, teamCode: teamCodeGen, team_code: teamCodeGen };
 
       } else if (teamCode) {
         const { data: existingTeam } = await supabase.from('teams').select('*').eq('team_code', teamCode.toUpperCase()).maybeSingle();
         if (!existingTeam) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Team code not found.' }) };
-        await supabase.from('team_members').insert({ team_id: existingTeam.id, user_id: user.id, role: 'pending', can_bet: false, deposit_paid: false });
+        await supabase.from('team_members').insert({
+          team_id:      existingTeam.id,
+          user_id:      user.id,
+          role:         'pending',
+          can_bet:      false,
+          deposit_paid: false,
+        });
         team = existingTeam;
       }
 
@@ -104,7 +126,10 @@ exports.handler = async (event) => {
       if (error) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password.' }) };
 
       const { data: user } = await supabase.from('users').select('*').eq('phone', cleanPhone).single();
-      const { data: memberships } = await supabase.from('team_members').select('*, teams(*, competitions(*))').eq('user_id', user.id);
+      const { data: memberships } = await supabase
+        .from('team_members')
+        .select('*, teams(*, competitions(*))')
+        .eq('user_id', user.id);
 
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({
         user,
