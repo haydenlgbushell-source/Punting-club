@@ -333,82 +333,121 @@ export default function PuntingClub() {
   const handleLogout = () => { setIsLoggedIn(false); setCurrentUser(null); setCurrentTeamId(null); setTeamMembers([]); setActiveNav('home'); };
 
   // ── SIGNUP ────────────────────────────────────────────────────────────────
-  const handleSubmitSignup = useCallback((e) => {
+  const handleSubmitSignup = useCallback(async (e) => {
     e.preventDefault();
+
+    // Basic validation
+    if (!formData.firstName?.trim()) { alert('Please enter your first name.'); return; }
+    if (!formData.lastName?.trim())  { alert('Please enter your last name.'); return; }
+    if (!formData.phone?.trim())     { alert('Please enter your mobile number.'); return; }
+    if (!formData.password)          { alert('Please enter a password.'); return; }
     if (formData.password !== formData.confirmPassword) { alert('Passwords do not match.'); return; }
     if (formData.password.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    if (signupMode === 'create' && !formData.teamName?.trim()) { alert('Please enter a team name.'); return; }
+    if (signupMode === 'join'   && !formData.teamCode?.trim()) { alert('Please enter a team code.'); return; }
 
-    const key = phoneKey(formData.phone);
-    if (userStore[key]) { alert('An account with this mobile number already exists.'); return; }
+    setApiLoading(true);
+    setApiError(null);
 
-    // Validate selected competition if provided
-    if (formData.competitionCode && !competitionStore[formData.competitionCode]) {
-      alert('Selected competition not found. Please choose from the dropdown.'); return;
-    }
-
-    // Validate team code for join
-    let joinedTeam = null;
-    if (signupMode === 'join') {
-      joinedTeam = Object.values(teamStore).find(t => t.teamCode === formData.teamCode.trim().toUpperCase());
-      if (!joinedTeam) { alert('Team code not found. Ask your captain for the correct code.'); return; }
-      // Max 3 teams per person check (simplified — in real app track per user)
-    }
-
-    const newTeamCode = genCode();
-    const newUser = {
-      firstName: formData.firstName,
-      lastName:  formData.lastName,
-      email:     formData.email,
-      phone:     formData.phone.trim(),
-      password:  formData.password,
-      dob:       formData.dob,
-      postcode:  formData.postcode,
-      createdAt: new Date().toLocaleDateString(),
-      role:      signupMode === 'create' ? 'captain' : 'pending', // pending until captain approves
-      teamCode:  signupMode === 'create' ? newTeamCode : formData.teamCode.trim().toUpperCase(),
-      teamName:  signupMode === 'create' ? formData.teamName.trim() : joinedTeam?.teamName || '',
-      buyInMode: signupMode === 'create' ? formData.buyInMode : null,
-      competitionCode: formData.competitionCode?.toUpperCase() || null,
-      canBet:    signupMode === 'create', // captain can bet; member pending approval
-      teams:     [], // for multi-team support
-    };
-
-    userStore[key] = newUser;
-
-    if (signupMode === 'create') {
-      teamStore[newTeamCode] = {
-        teamCode:     newTeamCode,
-        teamName:     newUser.teamName,
-        captainPhone: key,
-        buyInMode:    newUser.buyInMode,
-        members:      [key],
-        pendingMembers: [],
-        bettingOrder: [key],
-        depositConfirmed: false,
-      };
-      const colors = ['from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600','from-indigo-400 to-indigo-600','from-rose-400 to-rose-600'];
-      setLeaderboardTeams(prev => {
-        if (prev.some(t => t.team.toLowerCase() === newUser.teamName.toLowerCase())) return prev;
-        return [...prev, { rank: prev.length + 1, team: newUser.teamName, week: 'P', total: '$0', color: colors[prev.length % colors.length], members: 1, weekHistory: [], bets: [] }];
+    try {
+      // Try Supabase first — if it works, great
+      const result = await apiSignUp({
+        phone:           formData.phone.trim(),
+        password:        formData.password,
+        firstName:       formData.firstName.trim(),
+        lastName:        formData.lastName.trim(),
+        email:           formData.email?.trim() || null,
+        dob:             formData.dob || null,
+        postcode:        formData.postcode?.trim() || null,
+        teamName:        signupMode === 'create' ? formData.teamName.trim() : null,
+        teamCode:        signupMode === 'join'   ? formData.teamCode.trim().toUpperCase() : null,
+        buyInMode:       formData.buyInMode || 'split',
+        competitionCode: formData.competitionCode || null,
       });
-      alert(`\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ${newUser.teamName}\nYour Role: Team Captain\nTeam Code: ${newTeamCode}\nLogin (mobile): ${newUser.phone}\n\nAs captain you can:\n- Approve / reject new members\n- Set the betting order\n- Manage member permissions\n- Track deposit payments\n\nShare your Team Code with friends to join!`);
-    } else {
-      // Add to pending — captain must approve
-      if (teamStore[joinedTeam.teamCode]) {
-        teamStore[joinedTeam.teamCode].pendingMembers.push(key);
+
+      const { user, team } = result;
+      const teamCode = team?.team_code || team?.teamCode || '';
+      const teamName = team?.team_name || team?.teamName || formData.teamName;
+
+      setShowSignupModal(false);
+      setSignupMode(null);
+      setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
+
+      if (signupMode === 'create' && team) {
+        const enrichedUser = { ...user, role:'captain', teamId: team.id, teamCode, teamName, firstName: formData.firstName.trim(), lastName: formData.lastName.trim() };
+        setCurrentUser(enrichedUser);
+        setCurrentTeamId(team.id);
+        setIsLoggedIn(true);
+        setActiveNav('team');
+        alert('👑 Team Created! You are the Captain.
+
+Team: ' + teamName + '
+Team Code: ' + teamCode + '
+Login (mobile): ' + formData.phone + '
+
+Share your Team Code with friends to join!');
+      } else {
+        alert('Registration submitted!
+
+Your request to join has been sent to the captain.
+
+Login with: ' + formData.phone);
       }
-      alert(`Registration submitted!\n\nYou've requested to join "${joinedTeam.teamName}".\nThe team captain will approve your request.\n\nLogin: ${newUser.phone}`);
-    }
 
-    setShowSignupModal(false); setSignupMode(null);
-    setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
+    } catch (apiErr) {
+      // Supabase unavailable — fall back to local in-memory signup
+      console.warn('Supabase signup failed, using local fallback:', apiErr.message);
 
-    // Auto-login captains immediately after signup
-    // Members stay logged out as they need captain approval first
-    if (signupMode === 'create') {
-      setIsLoggedIn(true);
-      setCurrentUser(newUser);
-      setActiveNav('team'); // Take them straight to My Team page
+      const newTeamCode = genCode();
+      const newUser = {
+        id:        'local_' + Date.now(),
+        firstName: formData.firstName.trim(),
+        lastName:  formData.lastName.trim(),
+        email:     formData.email?.trim() || '',
+        phone:     formData.phone.trim(),
+        password:  formData.password,
+        dob:       formData.dob,
+        postcode:  formData.postcode?.trim() || '',
+        createdAt: new Date().toLocaleDateString(),
+        role:      signupMode === 'create' ? 'captain' : 'pending',
+        teamCode:  signupMode === 'create' ? newTeamCode : formData.teamCode.trim().toUpperCase(),
+        teamName:  signupMode === 'create' ? formData.teamName.trim() : '',
+        buyInMode: formData.buyInMode || 'split',
+        competitionCode: formData.competitionCode || null,
+        canBet:    signupMode === 'create',
+      };
+
+      if (signupMode === 'create') {
+        const colors = ['from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600','from-indigo-400 to-indigo-600','from-rose-400 to-rose-600'];
+        setLeaderboardTeams(prev => {
+          if (prev.some(t => t.team.toLowerCase() === newUser.teamName.toLowerCase())) return prev;
+          return [...prev, { rank: prev.length + 1, team: newUser.teamName, week: 'P', total: '$0', color: colors[prev.length % colors.length], members: 1, weekHistory: [], bets: [] }];
+        });
+        setShowSignupModal(false);
+        setSignupMode(null);
+        setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
+        setCurrentUser(newUser);
+        setIsLoggedIn(true);
+        setActiveNav('team');
+        alert('👑 Team Created! You are the Captain.
+
+Team: ' + newUser.teamName + '
+Team Code: ' + newTeamCode + '
+Login (mobile): ' + newUser.phone + '
+
+Share your Team Code with friends to join!');
+      } else {
+        setShowSignupModal(false);
+        setSignupMode(null);
+        setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
+        alert('Registration submitted!
+
+Your request to join has been sent.
+
+Login with: ' + formData.phone);
+      }
+    } finally {
+      setApiLoading(false);
     }
   }, [formData, signupMode]);
 
