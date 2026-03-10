@@ -1,4 +1,4 @@
-    // netlify/functions/data.js
+   // netlify/functions/data.js
 // All data operations — teams, bets, leaderboard, admin
 // Uses service_role key to bypass RLS on admin operations
 
@@ -93,7 +93,7 @@ exports.handler = async (event) => {
       case 'get_all_teams': {
         const { data, error: e } = await supabase
           .from('teams')
-          .select(`*, competitions(name), team_members(count)`)
+          .select('*, competitions(id, name, code), users!teams_captain_id_fkey(id, first_name, last_name, phone), team_members(id, role, deposit_paid, can_bet, users(id, first_name, last_name, phone, kyc_status))')
           .order('created_at', { ascending: false });
         if (e) return error(e.message);
         return json(data);
@@ -295,7 +295,10 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'get_all_users': {
-        const { data, error: e } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+        const { data, error: e } = await supabase
+          .from('users')
+          .select('*, team_members(role, deposit_paid, can_bet, teams(id, team_name, team_code))')
+          .order('created_at', { ascending: false });
         if (e) return error(e.message);
         return json(data);
       }
