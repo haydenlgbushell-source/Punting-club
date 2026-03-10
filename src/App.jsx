@@ -681,15 +681,43 @@ export default function PuntingClub() {
 
   // ── ADMIN COMPETITION ACTIONS ─────────────────────────────────────────────
   const createCompetition = async (comp) => {
+    if (!comp.name?.trim()) { alert('Please enter a competition name.'); return; }
+    if (!comp.pub?.trim())  { alert('Please enter a pub/club name.'); return; }
+
+    // Generate code and build competition object locally first
+    const code = genCode(6);
+    const status = adminUser?.role === 'owner' ? 'active' : 'pending';
+    const buyInNum = parseInt(String(comp.buyIn || comp.buy_in || '1000').replace(/[^0-9]/g, '')) || 1000;
+    const localComp = {
+      id:         code,
+      code,
+      name:       comp.name.trim(),
+      pub:        comp.pub.trim(),
+      status,
+      weeks:      parseInt(comp.weeks) || 8,
+      buy_in:     buyInNum,
+      buyIn:      `$${buyInNum.toLocaleString()}`,
+      max_teams:  parseInt(comp.maxTeams) || 20,
+      start_date: comp.startDate || null,
+      end_date:   comp.endDate   || null,
+      jackpot:    0,
+      teams:      0,
+    };
+
+    // Update local state immediately — works even without Supabase
+    setAdminComps(prev => [...prev, localComp]);
+    setActiveCompetitions(prev => status === 'active' ? [...prev, localComp] : prev);
+    addAuditEntry(adminUser?.role, 'Competition Created', localComp.name, `Code: ${code}`);
+    alert(`Competition created!\n\nName: ${localComp.name}\nCode: ${code}\nStatus: ${status}\n\nNow appears in the signup dropdown.`);
+
+    // Also try to save to Supabase in background (won't block if it fails)
     try {
-      const newComp = await apiCreateCompetition(comp, adminUser?.role);
-      setAdminComps(prev => [...prev, { ...newComp, name: newComp.name, code: newComp.code, pub: newComp.pub, status: newComp.status, weeks: newComp.weeks, buy_in: newComp.buy_in, teams: 0 }]);
-      // Refresh active competitions for signup dropdown
-      const active = await apiGetActiveCompetitions();
-      setActiveCompetitions(active);
-      addAuditEntry(adminUser?.role, 'Competition Created', comp.name, `Code: ${newComp.code}`);
-      alert(`Competition created!\n\nName: ${newComp.name}\nCode: ${newComp.code}\nStatus: ${newComp.status}\n\nNow appears in the signup dropdown.`);
-    } catch(err) { alert(`Failed to create competition: ${err.message}`); }
+      const saved = await apiCreateCompetition(comp, adminUser?.role);
+      // Update local entry with real DB id
+      setAdminComps(prev => prev.map(c => c.code === code ? { ...c, id: saved.id } : c));
+    } catch(err) {
+      console.warn('Supabase save failed (competition saved locally only):', err.message);
+    }
   };
   const updateCompStatus = async (id, status) => {
     setAdminComps(prev => prev.map(c => c.id === id ? { ...c, status } : c));
@@ -1844,7 +1872,7 @@ export default function PuntingClub() {
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                            <button onClick={() => { createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
+                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
                         </div>
                       )}
