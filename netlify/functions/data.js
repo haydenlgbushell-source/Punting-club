@@ -1,4 +1,4 @@
-// netlify/functions/data.js
+    // netlify/functions/data.js
 // All data operations — teams, bets, leaderboard, admin
 // Uses service_role key to bypass RLS on admin operations
 
@@ -29,15 +29,25 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'get_active_competitions': {
-        const { data, error: e } = await supabase.from('competitions').select('*').eq('status', 'active').order('created_at', { ascending: false });
+        const { data, error: e } = await supabase
+          .from('competitions')
+          .select('*, teams(id, team_name, team_code, status)')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false });
         if (e) return error(e.message);
-        return json(data);
+        // Add live team count to each competition
+        const enriched = (data || []).map(c => ({ ...c, team_count: c.teams?.length || 0 }));
+        return json(enriched);
       }
 
       case 'get_all_competitions': {
-        const { data, error: e } = await supabase.from('competitions').select('*').order('created_at', { ascending: false });
+        const { data, error: e } = await supabase
+          .from('competitions')
+          .select('*, teams(id, team_name, team_code, status, captain_id, users!teams_captain_id_fkey(first_name, last_name))')
+          .order('created_at', { ascending: false });
         if (e) return error(e.message);
-        return json(data);
+        const enriched = (data || []).map(c => ({ ...c, team_count: c.teams?.length || 0 }));
+        return json(enriched);
       }
 
       case 'create_competition': {
