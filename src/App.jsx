@@ -296,8 +296,18 @@ export default function PuntingClub() {
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
-          setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
-        } catch(e) { console.warn('Could not load team members:', e.message); }
+          const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+          // Always ensure the logged-in user appears in the list
+          const selfInList = mapped.some(m => m.user_id === user.id);
+          if (!selfInList) {
+            mapped.unshift({ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone });
+          }
+          setTeamMembers(mapped);
+        } catch(e) { 
+          // Fallback: at minimum show the logged-in user
+          setTeamMembers([{ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone }]);
+          console.warn('Could not load team members:', e.message); 
+        }
       }
     } catch (err) {
       // Supabase unavailable — try local in-memory store (for testing without DB)
@@ -381,6 +391,35 @@ export default function PuntingClub() {
         setCurrentTeamId(team.id);
         setIsLoggedIn(true);
         setActiveNav('team');
+        // Add captain to teamMembers immediately
+        setTeamMembers([{
+          user_id:     user.id,
+          role:        'captain',
+          can_bet:     true,
+          canBet:      true,
+          deposit_paid: false,
+          depositPaid: false,
+          name:        `${formData.firstName.trim()} ${formData.lastName.trim()}`,
+          phone:       validatePhone(formData.phone).normalised || formData.phone.trim(),
+          users:       { first_name: formData.firstName.trim(), last_name: formData.lastName.trim(), phone: validatePhone(formData.phone).normalised },
+        }]);
+        // Also try to load full member list from DB
+        if (team.id) {
+          apiGetTeamMembers(team.id).then(members => {
+            if (members?.length > 0) {
+              setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+            }
+          }).catch(() => {});
+        }
+        // Push new team into admin panel immediately
+        const captainName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+        setAdminTeams(prev => [{
+          id: team.id, name: teamName, status: 'pending', captain: captainName,
+          captainPhone: validatePhone(formData.phone).normalised || formData.phone.trim(),
+          members: 1, memberList: [{ name: captainName, role: 'captain', depositPaid: false, canBet: true }],
+          depositsPaid: 0, compCode: formData.competitionCode || '', teamCode,
+          createdAt: new Date().toLocaleDateString('en-AU'), totalBet: '$0', flagged: false,
+        }, ...prev]);
         alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + teamName + '\nTeam Code: ' + teamCode + '\nLogin (mobile): ' + formData.phone + '\n\nShare your Team Code with friends to join!');
       } else {
         alert('Registration submitted!\n\nYour request to join has been sent to the captain.\n\nLogin with: ' + formData.phone);
@@ -532,50 +571,63 @@ export default function PuntingClub() {
       .catch(err => console.error('Failed to load competitions:', err));
   }, []);
 
-  // Load admin data when admin logs in
-  useEffect(() => {
-    if (!isAdminLoggedIn) return;
-    // Load teams
-    apiGetAllTeams().then(data => {
-      if (data) setAdminTeams(data.map(t => ({
-        id: t.id, name: t.team_name, status: t.status, captain: t.captain_id,
-        members: t.team_members?.[0]?.count || 0, depositsPaid: 0,
-        compCode: t.competitions?.code || '', createdAt: new Date(t.created_at).toLocaleDateString('en-AU'),
-        totalBet: '$0', flagged: t.flagged || false,
-      })));
-    }).catch(console.error);
-    // Load users
-    apiGetAllUsers().then(data => {
-      if (data) setAdminUsers(data.map(u => ({
-        id: u.id, name: `${u.first_name} ${u.last_name}`, phone: u.phone,
-        role: u.role, kyc: u.kyc_status, kyc_status: u.kyc_status,
-        team: '', dob: u.dob, postcode: u.postcode, active: u.active, flagged: u.flagged,
-        joinedAt: new Date(u.created_at).toLocaleDateString('en-AU'),
-      })));
-    }).catch(console.error);
-    // Load bets
-    apiGetAllBets().then(data => {
-      if (data) setAdminBets(data.map(b => ({
-        id: b.id, team: b.teams?.team_name, status: b.overall_status, overall_status: b.overall_status,
-        stake: `$${((b.stake || 0)/100).toFixed(2)}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
+  // ── Admin data loader (reusable) ────────────────────────────────────────
+  const mapTeam = (t) => {
+    const captain = t.users ? `${t.users.first_name} ${t.users.last_name}`.trim() : t.captain_id;
+    const members = Array.isArray(t.team_members) ? t.team_members : [];
+    return {
+      id: t.id, name: t.team_name, status: t.status || 'pending',
+      captain, captainPhone: t.users?.phone || '',
+      members: members.length,
+      memberList: members.map(m => ({
+        name: m.users ? `${m.users.first_name} ${m.users.last_name}`.trim() : '',
+        role: m.role, phone: m.users?.phone, kyc: m.users?.kyc_status,
+        depositPaid: m.deposit_paid, canBet: m.can_bet,
+      })),
+      depositsPaid: members.filter(m => m.deposit_paid).length,
+      compCode: t.competitions?.code || '', compName: t.competitions?.name || '',
+      teamCode: t.team_code,
+      createdAt: new Date(t.created_at).toLocaleDateString('en-AU'),
+      totalBet: '$0', flagged: t.flagged || false,
+    };
+  };
+
+  const mapUser = (u) => {
+    const membership = u.team_members?.[0];
+    return {
+      id: u.id, name: `${u.first_name} ${u.last_name}`.trim(), phone: u.phone,
+      role: u.role, kyc: u.kyc_status, kyc_status: u.kyc_status,
+      team: membership?.teams?.team_name || '',
+      teamCode: membership?.teams?.team_code || '',
+      dob: u.dob, postcode: u.postcode, active: u.active !== false, flagged: u.flagged || false,
+      joinedAt: new Date(u.created_at).toLocaleDateString('en-AU'),
+    };
+  };
+
+  const refreshAdminData = useCallback(() => {
+    apiGetAllTeams().then(d => { if (d) setAdminTeams(d.map(mapTeam)); }).catch(console.error);
+    apiGetAllUsers().then(d => { if (d) setAdminUsers(d.map(mapUser)); }).catch(console.error);
+    apiGetAllBets().then(d => {
+      if (d) setAdminBets(d.map(b => ({
+        id: b.id, team: b.teams?.team_name, status: b.overall_status,
+        stake: `$${b.stake || 0}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
         flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
         legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note })),
       })));
     }).catch(console.error);
-    // Load competitions
-    apiGetActiveCompetitions().then(data => {
-      if (data) setAdminComps(prev => {
-        // Merge with existing demo comps, real ones take priority
-        const ids = data.map(c => c.code);
-        const filtered = prev.filter(p => !ids.includes(p.code));
-        return [...data.map(c => ({ ...c, buy_in: c.buy_in, buyIn: `$${c.buy_in?.toLocaleString()}`, maxTeams: c.max_teams, startDate: c.start_date, endDate: c.end_date })), ...filtered];
-      });
+    apiGetActiveCompetitions().then(d => {
+      if (d) setAdminComps(d.map(c => ({ ...c, buyIn: `$${(c.buy_in||0).toLocaleString()}`, maxTeams: c.max_teams, startDate: c.start_date, endDate: c.end_date })));
     }).catch(console.error);
-    // Load audit log
-    apiGetAuditLog(100).then(data => {
-      if (data) setAdminAuditLog(data.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
+    apiGetAuditLog(100).then(d => {
+      if (d) setAdminAuditLog(d.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
     }).catch(console.error);
-  }, [isAdminLoggedIn]);
+  }, []);
+
+  // Load admin data when admin logs in
+  useEffect(() => {
+    if (!isAdminLoggedIn) return;
+    refreshAdminData();
+  }, [isAdminLoggedIn, refreshAdminData]);
 
   // Load leaderboard when competition is known
   useEffect(() => {
@@ -1738,11 +1790,11 @@ export default function PuntingClub() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-xl font-black">Teams</h2>
-                        <p className="text-gray-500 text-sm">{filteredTeams.length} teams · {adminTeams.filter(t=>t.status==='pending').length} pending verification</p>
+                        <p className="text-gray-500 text-sm">{adminTeams.length} registered · {adminTeams.filter(t=>t.status==='pending').length} pending</p>
                       </div>
-                      {canAdmin('bets') && (
-                        <button onClick={() => { const name = prompt('Team name:'); if (name) { setAdminTeams(prev => [...prev, { id:`T${Date.now()}`, name, status:'pending', captain:'TBA', members:0, depositsPaid:0, compCode:'', createdAt: new Date().toLocaleDateString('en-AU'), totalBet:'$0', flagged:false }]); addAuditEntry(adminUser.role,'Team Created',name,'Manual creation by admin'); }}} className="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-2 rounded-lg text-xs font-semibold">+ Add Team</button>
-                      )}
+                      <button onClick={refreshAdminData} className="bg-white/5 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5">
+                        <RefreshCw className="w-3 h-3" /> Refresh
+                      </button>
                     </div>
                     <div className="space-y-2">
                       {filteredTeams.length === 0 && (
