@@ -122,8 +122,13 @@ exports.handler = async (event) => {
       const cleanPhone = (phone || '').trim().replace(/\s+/g, '');
       const authEmail  = `${cleanPhone}@puntingclub.app`;
 
+      console.log('Login attempt:', authEmail);
+
       const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
-      if (error) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password.' }) };
+      if (error) {
+        console.log('Supabase auth error:', error.message, 'for email:', authEmail);
+        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password. (tried: ' + authEmail + ')' }) };
+      }
 
       const { data: user } = await supabase.from('users').select('*').eq('phone', cleanPhone).single();
       const { data: memberships } = await supabase
