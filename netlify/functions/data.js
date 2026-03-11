@@ -1,4 +1,4 @@
-   // netlify/functions/data.js
+// netlify/functions/data.js
 // All data operations — teams, bets, leaderboard, admin
 // Uses service_role key to bypass RLS on admin operations
 
@@ -91,12 +91,41 @@ exports.handler = async (event) => {
       }
 
       case 'get_all_teams': {
-        const { data, error: e } = await supabase
+        // Get teams with competition info
+        const { data: teams, error: e1 } = await supabase
           .from('teams')
-          .select('*, competitions(id, name, code), users!teams_captain_id_fkey(id, first_name, last_name, phone), team_members(id, role, deposit_paid, can_bet, users(id, first_name, last_name, phone, kyc_status))')
+          .select('*, competitions(id, name, code)')
           .order('created_at', { ascending: false });
-        if (e) return error(e.message);
-        return json(data);
+        if (e1) return error(e1.message);
+        if (!teams || teams.length === 0) return json([]);
+
+        // Get captain names separately to avoid FK alias issues
+        const captainIds = [...new Set(teams.map(t => t.captain_id).filter(Boolean))];
+        const { data: captains } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, phone')
+          .in('id', captainIds);
+        const captainMap = {};
+        (captains || []).forEach(u => { captainMap[u.id] = u; });
+
+        // Get all team members with user info
+        const teamIds = teams.map(t => t.id);
+        const { data: members } = await supabase
+          .from('team_members')
+          .select('*, users(id, first_name, last_name, phone, kyc_status)')
+          .in('team_id', teamIds);
+        const membersByTeam = {};
+        (members || []).forEach(m => {
+          if (!membersByTeam[m.team_id]) membersByTeam[m.team_id] = [];
+          membersByTeam[m.team_id].push(m);
+        });
+
+        const result = teams.map(t => ({
+          ...t,
+          users: captainMap[t.captain_id] || null,
+          team_members: membersByTeam[t.id] || [],
+        }));
+        return json(result);
       }
 
       case 'update_team': {
@@ -136,7 +165,7 @@ exports.handler = async (event) => {
         const { teamId, userId } = payload;
         const { data, error: e } = await supabase
           .from('team_members')
-          .update({ role: 'member', can_bet: false })
+          .update({ role: 'member', can_bet: true })
           .eq('team_id', teamId).eq('user_id', userId).select().single();
         if (e) return error(e.message);
         return json(data);
@@ -180,9 +209,9 @@ exports.handler = async (event) => {
           team_id:          teamId,
           week_number:      weekNumber,
           bet_type:         betType,
-          stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, '')) * 100),
+          stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, ''))),
           combined_odds:    parseFloat(combinedOdds) || null,
-          estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, '')) * 100),
+          estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, ''))),
           overall_status:   'pending',
           submission_valid: submissionValid !== false,
           ai_confidence:    aiConfidence || null,
@@ -295,12 +324,27 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'get_all_users': {
-        const { data, error: e } = await supabase
+        const { data: users, error: e } = await supabase
           .from('users')
-          .select('*, team_members(role, deposit_paid, can_bet, teams(id, team_name, team_code))')
+          .select('*')
           .order('created_at', { ascending: false });
         if (e) return error(e.message);
-        return json(data);
+        if (!users || users.length === 0) return json([]);
+
+        // Get team memberships separately
+        const userIds = users.map(u => u.id);
+        const { data: memberships } = await supabase
+          .from('team_members')
+          .select('user_id, role, deposit_paid, can_bet, teams(id, team_name, team_code)')
+          .in('user_id', userIds);
+        const membershipMap = {};
+        (memberships || []).forEach(m => { membershipMap[m.user_id] = m; });
+
+        const result = users.map(u => ({
+          ...u,
+          team_members: membershipMap[u.id] ? [membershipMap[u.id]] : [],
+        }));
+        return json(result);
       }
 
       case 'update_kyc': {
