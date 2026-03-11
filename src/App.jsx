@@ -278,11 +278,14 @@ export default function PuntingClub() {
       const myTeam = teams.find(t => t.myRole !== 'pending') || teams[0];
       // competitions may be nested as object or array depending on join
       const compCode = myTeam?.competitions?.code || (Array.isArray(myTeam?.competitions) ? myTeam.competitions[0]?.code : null);
-      setCurrentUser({ ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode });
+      const sessionUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode };
+      setCurrentUser(sessionUser);
       setCurrentTeamId(myTeam?.id || null);
       setIsLoggedIn(true);
       setShowLoginModal(false);
       setLoginPhone(''); setLoginPassword('');
+      // Persist session so refresh doesn't log out
+      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok' })); } catch(e) {}
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
@@ -336,6 +339,7 @@ export default function PuntingClub() {
     setTeamFinalised(false);
     setDepositPerMember(null);
     setActiveNav('home');
+    try { localStorage.removeItem('pc_session'); } catch(e) {}
   };
 
   // ── SIGNUP ────────────────────────────────────────────────────────────────
@@ -387,12 +391,15 @@ export default function PuntingClub() {
       setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
 
       if (signupMode === 'create' && team) {
-        const enrichedUser = { ...user, role:'captain', teamId: team.id, teamCode, teamName, firstName: formData.firstName.trim(), lastName: formData.lastName.trim() };
+        const enrichedUser = { ...user, role:'captain', teamId: team.id, teamCode, teamName, firstName: formData.firstName.trim(), lastName: formData.lastName.trim(), competitionCode: formData.competitionCode || null };
         setCurrentUser(enrichedUser);
         setCurrentTeamId(team.id);
         setIsLoggedIn(true);
         setActiveNav('team');
+        // Persist session
+        try { localStorage.setItem('pc_session', JSON.stringify({ user: { ...user, first_name: formData.firstName.trim(), last_name: formData.lastName.trim() }, teamId: team.id, teamCode, teamName, role: 'captain', competitionCode: formData.competitionCode || null, token: result.session?.access_token || 'ok' })); } catch(e) {}
         // Add captain to teamMembers immediately
+        const captainPhone = validatePhone(formData.phone).normalised || formData.phone.trim();
         setTeamMembers([{
           user_id:     user.id,
           role:        'captain',
@@ -401,8 +408,8 @@ export default function PuntingClub() {
           deposit_paid: false,
           depositPaid: false,
           name:        `${formData.firstName.trim()} ${formData.lastName.trim()}`,
-          phone:       validatePhone(formData.phone).normalised || formData.phone.trim(),
-          users:       { first_name: formData.firstName.trim(), last_name: formData.lastName.trim(), phone: validatePhone(formData.phone).normalised },
+          phone:       captainPhone,
+          users:       { id: user.id, first_name: formData.firstName.trim(), last_name: formData.lastName.trim(), phone: captainPhone },
         }]);
         // Also try to load full member list from DB
         if (team.id) {
@@ -570,6 +577,38 @@ export default function PuntingClub() {
     apiGetActiveCompetitions()
       .then(data => setActiveCompetitions(data || []))
       .catch(err => console.error('Failed to load competitions:', err));
+
+    // Restore session from localStorage so refresh doesn't log out
+    try {
+      const saved = localStorage.getItem('pc_session');
+      if (saved) {
+        const sess = JSON.parse(saved);
+        if (sess?.token && sess?.user) {
+          const restoredUser = { ...sess.user, teamId: sess.teamId, teamCode: sess.teamCode, teamName: sess.teamName, role: sess.role, competitionCode: sess.competitionCode, firstName: sess.user.first_name, lastName: sess.user.last_name };
+          setCurrentUser(restoredUser);
+          setCurrentTeamId(sess.teamId || null);
+          setIsLoggedIn(true);
+          // Re-load team members from DB
+          if (sess.teamId) {
+            apiGetTeamMembers(sess.teamId).then(members => {
+              if (members?.length > 0) {
+                const mapped = members.map(m => ({
+                  ...m,
+                  name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
+                  phone: m.users?.phone || m.user_id,
+                  depositPaid: m.deposit_paid,
+                  canBet: m.can_bet,
+                }));
+                const selfIn = mapped.some(m => m.user_id === sess.user.id);
+                if (!selfIn) mapped.unshift({ user_id: sess.user.id, role: sess.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${sess.user.first_name} ${sess.user.last_name}`.trim(), phone: sess.user.phone });
+                setTeamMembers(mapped);
+                setPendingMembers(mapped.filter(m => m.role === 'pending'));
+              }
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }
   }, []);
 
   // ── Admin data loader (reusable) ────────────────────────────────────────
@@ -1326,10 +1365,7 @@ export default function PuntingClub() {
               <div>
                 <h1 className="text-3xl font-black mb-1">{myTeamName}</h1>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {currentUser?.role === 'captain' && (
-                    <span className="bg-amber-500 text-black text-xs font-black px-3 py-1 rounded-full flex items-center gap-1">👑 Team Captain</span>
-                  )}
-                  <PermissionBadge role={currentUser?.role || 'captain'} />
+                  <PermissionBadge role={currentUser?.role || 'member'} />
                   <span className="text-gray-500 text-sm">·</span>
                   <span className="text-gray-400 text-sm">#{myTeamData?.rank || 1} on leaderboard</span>
                   {currentUser?.competitionCode && (
@@ -1356,13 +1392,13 @@ export default function PuntingClub() {
               </div>
             </div>
 
-            {/* Captain features callout */}
-            {(currentUser?.role === 'captain' || !isLoggedIn) && (
+            {/* Captain tip — only shown if team has no members yet */}
+            {currentUser?.role === 'captain' && teamMembers.length <= 1 && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start gap-3">
-                <span className="text-2xl flex-shrink-0">👑</span>
+                <span className="text-xl flex-shrink-0">👑</span>
                 <div>
-                  <p className="font-bold text-amber-400 text-sm mb-1">You're the Team Captain</p>
-                  <p className="text-gray-400 text-xs leading-relaxed">You have full control — approve members, set betting order, manage permissions and track deposits. Members you invite will need your approval before they can join.</p>
+                  <p className="font-bold text-amber-400 text-sm mb-1">Invite your team</p>
+                  <p className="text-gray-400 text-xs leading-relaxed">Share your Team Code <strong className="text-amber-300">{currentUser?.teamCode}</strong> with friends. Members you invite need your approval before joining.</p>
                 </div>
               </div>
             )}
@@ -1541,12 +1577,15 @@ export default function PuntingClub() {
               <h3 className="font-bold text-amber-400 mb-4">👥 Team Members</h3>
               <div className="space-y-2">
                 {teamMembers.map(m => (
-                  <div key={m.phone} className="bg-black/30 rounded-xl px-3 py-3 flex items-start gap-3">
+                  <div key={m.user_id || m.phone} className="bg-black/30 rounded-xl px-3 py-3 flex items-start gap-3">
                     <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-sm flex-shrink-0">
-                      {m.name.charAt(0)}
+                      {(m.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{m.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-sm truncate">{m.name}</p>
+                        {m.role === 'captain' && <span className="text-amber-400 text-sm leading-none">👑</span>}
+                      </div>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <PermissionBadge role={m.role} />
                         {m.depositPaid
