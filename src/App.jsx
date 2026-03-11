@@ -4,7 +4,7 @@ import {
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
-  apiSubmitBet, apiGetTeamBets, apiGetAllBets, apiUpdateBetResult, apiRejectBet, apiCorrectBet,
+  apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiRejectBet, apiCorrectBet,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
@@ -13,16 +13,10 @@ import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCc
 // ── Data is now persisted in Supabase ──────────────────────────────────────
 // userStore and teamStore replaced by Supabase tables via /api/auth and /api/data
 // See src/supabase.js and src/api.js for all DB operations
-const competitionStore = {
-  'COMP01': { code:'COMP01', name:'RSL Punting League S1', pub:'RSL Club Sydney',   status:'active',  weeks:8,  buyIn:'$1,000', startDate:'03/03/2025', endDate:'26/04/2025' },
-  'COMP02': { code:'COMP02', name:'Crown Hotel Cup',        pub:'Crown Hotel Melb', status:'active',  weeks:16, buyIn:'$1,000', startDate:'10/03/2025', endDate:'29/06/2025' },
-  'COMP03': { code:'COMP03', name:'Bondi Surf Club Open',   pub:'Bondi Surf Club',  status:'pending', weeks:32, buyIn:'$1,000', startDate:'01/04/2025', endDate:'31/10/2025' },
-};
-const auditLog = [];           // { ts, adminRole, action, target, detail }
-const localUserStore = {};     // phone → user object (fallback when Supabase unavailable)
-const localTeamStore = {};     // teamCode → team object (fallback)
-const rejectedBets = [];       // { team, bet, reason, reviewedBy, ts }
-const kycStore = {};           // phoneKey → { status:'pending'|'verified'|'rejected', docs:[], notes:'' }
+// competitionStore replaced by activeCompetitions state (loaded from Supabase)
+// In-memory fallback stores (used when Supabase is unavailable)
+const localUserStore = {};     // phone → user object
+const localTeamStore = {};     // teamCode → team object
 
 // ── Admin roles ──────────────────────────────────────────────────────────────
 // owner        → all privileges
@@ -32,11 +26,6 @@ const ADMIN_USERS = {
   'admin': { password: 'admin123', role: 'owner',    name: 'Owner Admin',       phone: 'admin' },
   'cm':    { password: 'cm123',    role: 'campaign',  name: 'Campaign Manager',  phone: 'cm' },
   'pub':   { password: 'pub123',   role: 'pub_admin', name: 'Pub Admin (RSL)',   phone: 'pub' },
-};
-
-const logAudit = (adminRole, action, target, detail = '') => {
-  auditLog.unshift({ ts: new Date().toLocaleString(), adminRole, action, target, detail });
-  if (auditLog.length > 200) auditLog.pop();
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -49,8 +38,6 @@ const parseAnalysisJSON = (text) => {
   try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
   catch { return null; }
 };
-
-const phoneKey = (p) => p.trim().replace(/\s+/g, '');
 
 // Validate and normalise Australian mobile numbers
 // Accepts: 04XX XXX XXX, +614XX XXX XXX, 614XX XXX XXX
@@ -237,7 +224,8 @@ export default function PuntingClub() {
   const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
-  const [showSecurityPanel, setShowSecurityPanel] = useState(false);
+  const [adminLoadError, setAdminLoadError] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
 
   // Bet Analyzer
@@ -288,7 +276,9 @@ export default function PuntingClub() {
       const user   = result.user;
       const teams  = result.teams || [];
       const myTeam = teams.find(t => t.myRole !== 'pending') || teams[0];
-      setCurrentUser({ ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: myTeam?.competitions?.code });
+      // competitions may be nested as object or array depending on join
+      const compCode = myTeam?.competitions?.code || (Array.isArray(myTeam?.competitions) ? myTeam.competitions[0]?.code : null);
+      setCurrentUser({ ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode });
       setCurrentTeamId(myTeam?.id || null);
       setIsLoggedIn(true);
       setShowLoginModal(false);
@@ -335,7 +325,18 @@ export default function PuntingClub() {
     }
   }, [loginPhone, loginPassword]);
 
-  const handleLogout = () => { setIsLoggedIn(false); setCurrentUser(null); setCurrentTeamId(null); setTeamMembers([]); setActiveNav('home'); };
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    setCurrentTeamId(null);
+    setTeamMembers([]);
+    setPendingMembers([]);
+    setBettingOrder([]);
+    setLeaderboardTeams([]);
+    setTeamFinalised(false);
+    setDepositPerMember(null);
+    setActiveNav('home');
+  };
 
   // ── SIGNUP ────────────────────────────────────────────────────────────────
   const handleSubmitSignup = useCallback(async (e) => {
@@ -604,23 +605,45 @@ export default function PuntingClub() {
     };
   };
 
-  const refreshAdminData = useCallback(() => {
-    apiGetAllTeams().then(d => { if (d) setAdminTeams(d.map(mapTeam)); }).catch(console.error);
-    apiGetAllUsers().then(d => { if (d) setAdminUsers(d.map(mapUser)); }).catch(console.error);
-    apiGetAllBets().then(d => {
-      if (d) setAdminBets(d.map(b => ({
-        id: b.id, team: b.teams?.team_name, status: b.overall_status,
-        stake: `$${b.stake || 0}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
-        flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
-        legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note })),
-      })));
-    }).catch(console.error);
-    apiGetActiveCompetitions().then(d => {
-      if (d) setAdminComps(d.map(c => ({ ...c, buyIn: `$${(c.buy_in||0).toLocaleString()}`, maxTeams: c.max_teams, startDate: c.start_date, endDate: c.end_date })));
-    }).catch(console.error);
-    apiGetAuditLog(100).then(d => {
-      if (d) setAdminAuditLog(d.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
-    }).catch(console.error);
+  const refreshAdminData = useCallback(async () => {
+    // mapTeam and mapUser are inlined here to avoid stale closure
+    setAdminLoading(true);
+    setAdminLoadError(null);
+    try {
+      const [teams, users, bets, comps, audit] = await Promise.allSettled([
+        apiGetAllTeams(),
+        apiGetAllUsers(),
+        apiGetAllBets(),
+        apiGetActiveCompetitions(),
+        apiGetAuditLog(100),
+      ]);
+      if (teams.status === 'fulfilled' && teams.value) {
+        setAdminTeams(teams.value.map(mapTeam));
+      } else if (teams.status === 'rejected') {
+        setAdminLoadError('Teams: ' + teams.reason?.message);
+      }
+      if (users.status === 'fulfilled' && users.value) {
+        setAdminUsers(users.value.map(mapUser));
+      } else if (users.status === 'rejected') {
+        setAdminLoadError(e => e ? e + ' | Users: ' + users.reason?.message : 'Users: ' + users.reason?.message);
+      }
+      if (bets.status === 'fulfilled' && bets.value) {
+        setAdminBets(bets.value.map(b => ({
+          id: b.id, team: b.teams?.team_name, status: b.overall_status,
+          stake: `$${b.stake || 0}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
+          flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
+          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note })),
+        })));
+      }
+      if (comps.status === 'fulfilled' && comps.value) {
+        setAdminComps(comps.value.map(c => ({ ...c, buyIn: `$${(c.buy_in||0).toLocaleString()}`, maxTeams: c.max_teams, startDate: c.start_date, endDate: c.end_date })));
+      }
+      if (audit.status === 'fulfilled' && audit.value) {
+        setAdminAuditLog(audit.value.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
+      }
+    } finally {
+      setAdminLoading(false);
+    }
   }, []);
 
   // Load admin data when admin logs in
@@ -665,9 +688,9 @@ export default function PuntingClub() {
 
   // ── TEAM FINALISATION ─────────────────────────────────────────────────────
   const finaliseTeam = async () => {
-    const comp = competitionStore[currentUser?.competitionCode];
+    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
     const totalBuyIn = comp
-      ? parseInt((comp.buyIn || comp.buy_in || '1000').toString().replace(/[^0-9]/g, '')) || 1000
+      ? parseInt((comp.buy_in || comp.buyIn || '1000').toString().replace(/[^0-9]/g, '')) || 1000
       : 1000;
     const allMembers = teamMembers.length || 1;
     const perMember  = Math.ceil(totalBuyIn / allMembers);
@@ -852,17 +875,37 @@ export default function PuntingClub() {
     finally { setAnalyzing(false); }
   };
 
-  const submitBet = () => {
+  const submitBet = async () => {
     if (!selectedTeamForBet) { alert('Please select a team.'); return; }
     const newBet = { type: analyzedBet.betType, stake: analyzedBet.stake, combinedOdds: analyzedBet.combinedOdds, estimatedReturn: analyzedBet.estimatedReturn, submissionValid: analyzedBet.submissionValid, legs: analyzedBet.legs, overallStatus: 'pending', submittedAt: analyzedBet.timestamp };
+    // Optimistic UI update
     setLeaderboardTeams(prev => prev.map(t => t.team === selectedTeamForBet ? { ...t, bets: [...t.bets, newBet] } : t));
-    setShowBetAnalyzer(false); setShowBetResults(true);
+    setShowBetAnalyzer(false);
+    setShowBetResults(true);
+    // Persist to Supabase
+    try {
+      const team = leaderboardTeams.find(t => t.team === selectedTeamForBet);
+      if (team?.id && currentUser?.id) {
+        await apiSubmitBet({
+          teamId:          team.id,
+          userId:          currentUser.id,
+          betType:         analyzedBet.betType || 'Multi',
+          stake:           Math.round(parseFloat((analyzedBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
+          combinedOdds:    analyzedBet.combinedOdds,
+          estimatedReturn: Math.round(parseFloat((analyzedBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
+          submissionValid: analyzedBet.submissionValid !== false,
+          legs:            analyzedBet.legs || [],
+        });
+      }
+    } catch (err) {
+      console.error('Bet save failed (recorded locally only):', err.message);
+    }
   };
 
   const resetBetAnalyzer = () => { setUploadedImages([]); setAnalyzedBet(null); setSelectedTeamForBet(''); };
 
   // ── DERIVED ───────────────────────────────────────────────────────────────
-  const myTeamName = currentUser?.teamName || 'The Legends';
+  const myTeamName = currentUser?.teamName || '';
   const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
 
   // Enrich leaderboard with member names for current user's team
@@ -872,18 +915,18 @@ export default function PuntingClub() {
     }
     return t;
   });
-  const currentWeekBettorIdx = 2; // Week 3 = index 2
-  const currentBettor = bettingOrder[currentWeekBettorIdx % bettingOrder.length];
+  // Week number derived from competition start date, fallback to 0
+  const currentWeekNum = (() => {
+    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+    if (!comp?.start_date) return 0;
+    const start = new Date(comp.start_date);
+    const now = new Date();
+    const weeks = Math.floor((now - start) / (7 * 24 * 60 * 60 * 1000));
+    return Math.max(0, weeks);
+  })();
+  const currentWeekBettorIdx = currentWeekNum;
+  const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)];
   const shareableLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://puntingclub.com'}?join=${currentUser?.teamCode || 'XXXXXX'}`;
-
-  // Load active competitions from Supabase on mount
-  useEffect(() => {
-    apiGetActiveCompetitions()
-      .then(comps => {
-        comps.forEach(c => { competitionStore[c.code] = { ...c, buyIn: `$${c.buy_in}` }; });
-      })
-      .catch(err => console.warn('Could not load competitions (using demo data):', err));
-  }, []);
 
   // Load team data when user logs in
   useEffect(() => {
@@ -1356,7 +1399,7 @@ export default function PuntingClub() {
                   <p className="text-4xl font-black text-green-400">${depositPerMember.toLocaleString()}</p>
                   <p className="text-gray-500 text-xs mt-1">
                     ${(() => {
-                      const comp = competitionStore[currentUser?.competitionCode];
+                      const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
                       return comp ? parseInt((comp.buyIn || '$1,000').replace(/[^0-9]/g,'')) || 1000 : 1000;
                     })()} total ÷ {teamMembers.filter(m => m.depositPaid).length} members
                   </p>
@@ -1398,7 +1441,7 @@ export default function PuntingClub() {
                 <div className="mt-4 pt-3 border-t border-green-500/20 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-gray-500">{teamMembers.filter(m=>m.depositPaid).length} of {teamMembers.length} paid</p>
-                    <p className="text-xs text-gray-600 mt-0.5">Total collected: <span className="text-green-400 font-bold">${(teamMembers.filter(m=>m.depositPaid).length * depositPerMember).toLocaleString()}</span> of <span className="text-white font-bold">${(() => { const comp = competitionStore[currentUser?.competitionCode]; return comp ? parseInt((comp.buyIn||'$1,000').replace(/[^0-9]/g,''))||1000 : 1000; })().toLocaleString()}</span></p>
+                    <p className="text-xs text-gray-600 mt-0.5">Total collected: <span className="text-green-400 font-bold">${(teamMembers.filter(m=>m.depositPaid).length * depositPerMember).toLocaleString()}</span> of <span className="text-white font-bold">${(() => { const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode); return comp ? parseInt((comp.buy_in||'1000').toString().replace(/[^0-9]/g,''))||1000 : 1000; })().toLocaleString()}</span></p>
                   </div>
                   {teamMembers.every(m => m.depositPaid) && (
                     <span className="bg-green-500 text-black text-xs font-black px-3 py-1 rounded-full">🎉 All Paid!</span>
@@ -1623,6 +1666,11 @@ export default function PuntingClub() {
                   </button>
                 </div>
                 <div className="hidden sm:block text-gray-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
+                {adminLoading && <span className="text-xs text-amber-400 animate-pulse">Loading...</span>}
+                {adminLoadError && <span className="text-xs text-red-400 max-w-xs truncate" title={adminLoadError}>⚠ {adminLoadError}</span>}
+                <button onClick={refreshAdminData} className="text-gray-500 hover:text-gray-300 p-1.5 rounded-lg hover:bg-white/5" title="Refresh data">
+                  <RefreshCw className={`w-3.5 h-3.5 ${adminLoading ? 'animate-spin' : ''}`} />
+                </button>
                 <button onClick={handleAdminLogout} style={{backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",padding:"6px 14px",borderRadius:"8px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>Logout</button>
               </div>
             </div>
@@ -1979,13 +2027,13 @@ export default function PuntingClub() {
                       ))}
                     </div>
 
-                    {/* Rejected bets log */}
-                    {rejectedBets.length > 0 && (
+                    {/* Rejected bets log — sourced from adminBets state */}
+                    {adminBets.filter(b => b.status === 'rejected').length > 0 && (
                       <div className="bg-gray-900 border border-white/8 rounded-xl p-4">
                         <h3 className="font-bold text-gray-400 mb-3 text-sm">Rejected Bets Archive</h3>
-                        {rejectedBets.map((b, i) => (
+                        {adminBets.filter(b => b.status === 'rejected').map((b, i) => (
                           <div key={i} className="text-xs text-gray-600 py-1.5 border-b border-white/5 last:border-0">
-                            <span className="text-gray-400">{b.team}</span> · {b.type} · {b.stake} · <span className="text-red-400">Rejected: {b.reason}</span> · by {b.reviewedBy} · {b.ts}
+                            <span className="text-gray-400">{b.team}</span> · {b.stake} · <span className="text-red-400">Rejected</span> · {b.submittedAt}
                           </div>
                         ))}
                       </div>
@@ -2528,7 +2576,7 @@ export default function PuntingClub() {
             <div className="bg-green-950/20 border border-green-500/30 rounded-xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Deposit Calculation Preview</p>
               {(() => {
-                const comp = competitionStore[currentUser?.competitionCode];
+                const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
                 const totalBuyIn = comp ? parseInt((comp.buyIn || '$1,000').replace(/[^0-9]/g, '')) || 1000 : 1000;
                 const confirmedMembers = teamMembers.filter(m => m.depositPaid).length;
                 const allMembers = teamMembers.length;
