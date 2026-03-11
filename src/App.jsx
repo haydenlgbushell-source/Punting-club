@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  apiSignUp, apiLogin,
+  apiSignUp, apiLogin, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
@@ -22,11 +22,7 @@ const localTeamStore = {};     // teamCode → team object
 // owner        → all privileges
 // campaign     → confirm/correct results, disputes, password help
 // pub_admin    → manage their own competition
-const ADMIN_USERS = {
-  'admin': { password: 'admin123', role: 'owner',    name: 'Owner Admin',       phone: 'admin' },
-  'cm':    { password: 'cm123',    role: 'campaign',  name: 'Campaign Manager',  phone: 'cm' },
-  'pub':   { password: 'pub123',   role: 'pub_admin', name: 'Pub Admin (RSL)',   phone: 'pub' },
-};
+// Admin credentials are validated server-side via ADMIN_<ID>_PASSWORD env vars
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const genCode = (len = 6) => {
@@ -762,16 +758,19 @@ export default function PuntingClub() {
   };
 
   // ── ADMIN AUTH ────────────────────────────────────────────────────────────
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    const a = ADMIN_USERS[adminLoginId.trim()];
-    if (!a || a.password !== adminLoginPw) { alert('Invalid admin credentials.'); return; }
-    setIsAdminLoggedIn(true);
-    setAdminUser(a);
-    setShowAdminLogin(false);
-    setActiveNav('admin');
-    setAdminLoginId(''); setAdminLoginPw('');
-    addAuditEntry(a.role, 'Admin Login', a.name, 'Logged in to admin panel');
+    try {
+      const a = await apiAdminLogin(adminLoginId.trim(), adminLoginPw);
+      setIsAdminLoggedIn(true);
+      setAdminUser(a);
+      setShowAdminLogin(false);
+      setActiveNav('admin');
+      setAdminLoginId(''); setAdminLoginPw('');
+      addAuditEntry(a.role, 'Admin Login', a.name, 'Logged in to admin panel');
+    } catch {
+      alert('Invalid admin credentials.');
+    }
   };
 
   const handleAdminLogout = () => {

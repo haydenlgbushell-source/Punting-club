@@ -70,6 +70,8 @@ exports.handler = async (event) => {
 
       case 'update_competition_status': {
         const { id, status, adminRole } = payload;
+        const validStatuses = ['pending', 'active', 'closed'];
+        if (!validStatuses.includes(status)) return error(`Invalid status: ${status}`);
         const { data, error: e } = await supabase.from('competitions').update({ status }).eq('id', id).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, `Competition ${status}`, data.name, '');
@@ -182,8 +184,11 @@ exports.handler = async (event) => {
 
       case 'update_member': {
         const { teamId, userId, updates } = payload;
+        const allowedMemberFields = ['role', 'can_bet', 'deposit_paid', 'betting_order'];
+        const safeUpdates = Object.fromEntries(Object.entries(updates || {}).filter(([k]) => allowedMemberFields.includes(k)));
+        if (Object.keys(safeUpdates).length === 0) return error('No valid fields to update');
         const { data, error: e } = await supabase
-          .from('team_members').update(updates)
+          .from('team_members').update(safeUpdates)
           .eq('team_id', teamId).eq('user_id', userId).select().single();
         if (e) return error(e.message);
         return json(data);
@@ -209,9 +214,9 @@ exports.handler = async (event) => {
           team_id:          teamId,
           week_number:      weekNumber,
           bet_type:         betType,
-          stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, ''))),
+          stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, '')) * 100),
           combined_odds:    parseFloat(combinedOdds) || null,
-          estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, ''))),
+          estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, '')) * 100),
           overall_status:   'pending',
           submission_valid: submissionValid !== false,
           ai_confidence:    aiConfidence || null,
@@ -357,9 +362,12 @@ exports.handler = async (event) => {
 
       case 'update_user': {
         const { userId, updates, adminRole } = payload;
-        const { data, error: e } = await supabase.from('users').update(updates).eq('id', userId).select().single();
+        const allowedUserFields = ['first_name', 'last_name', 'email', 'dob', 'postcode', 'active', 'kyc_status'];
+        const safeUpdates = Object.fromEntries(Object.entries(updates || {}).filter(([k]) => allowedUserFields.includes(k)));
+        if (Object.keys(safeUpdates).length === 0) return error('No valid fields to update');
+        const { data, error: e } = await supabase.from('users').update(safeUpdates).eq('id', userId).select().single();
         if (e) return error(e.message);
-        if (adminRole) await addAudit(adminRole, 'User Updated', `${data.first_name} ${data.last_name}`, JSON.stringify(updates));
+        if (adminRole) await addAudit(adminRole, 'User Updated', `${data.first_name} ${data.last_name}`, JSON.stringify(safeUpdates));
         return json(data);
       }
 
