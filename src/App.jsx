@@ -296,6 +296,8 @@ export default function PuntingClub() {
             mapped.unshift({ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone });
           }
           setTeamMembers(mapped);
+          const approved = mapped.filter(m => m.role !== 'pending');
+          if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
         } catch(e) { 
           // Fallback: at minimum show the logged-in user
           setTeamMembers([{ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone }]);
@@ -429,8 +431,15 @@ export default function PuntingClub() {
           createdAt: new Date().toLocaleDateString('en-AU'), totalBet: '$0', flagged: false,
         }, ...prev]);
         alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + teamName + '\nTeam Code: ' + teamCode + '\nLogin (mobile): ' + formData.phone + '\n\nShare your Team Code with friends to join!');
-      } else {
-        alert('Registration submitted!\n\nYour request to join has been sent to the captain.\n\nLogin with: ' + formData.phone);
+      } else if (result?.user && result?.team) {
+        // Joined existing team — log in immediately
+        const joinedUser = { ...result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', firstName: formData.firstName.trim(), lastName: formData.lastName.trim(), competitionCode: result.team.competition_id || null };
+        setCurrentUser(joinedUser);
+        setCurrentTeamId(result.team.id);
+        setIsLoggedIn(true);
+        setActiveNav('team');
+        try { localStorage.setItem('pc_session', JSON.stringify({ user: result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', competitionCode: null, token: result.session?.access_token || 'ok' })); } catch(e) {}
+        alert('✅ Request sent!\n\nYou\'re now pending captain approval.\n\nTeam: ' + result.team.team_name + '\nTeam Code: ' + result.team.team_code);
       }
 
     } catch (apiErr) {
@@ -479,10 +488,11 @@ export default function PuntingClub() {
         setActiveNav('team');
         alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + newUser.teamName + '\nTeam Code: ' + newTeamCode + '\nLogin (mobile): ' + newUser.phone + '\n\nShare your Team Code with friends to join!');
       } else {
+        // Local fallback join — just confirm
         setShowSignupModal(false);
         setSignupMode(null);
         setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
-        alert('Registration submitted!\n\nYour request to join has been sent.\n\nLogin with: ' + formData.phone);
+        alert('Request submitted!\n\nYour captain needs to approve you.\n\nLogin with: ' + formData.phone);
       }
     } finally {
       setApiLoading(false);
@@ -603,6 +613,11 @@ export default function PuntingClub() {
                 if (!selfIn) mapped.unshift({ user_id: sess.user.id, role: sess.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${sess.user.first_name} ${sess.user.last_name}`.trim(), phone: sess.user.phone });
                 setTeamMembers(mapped);
                 setPendingMembers(mapped.filter(m => m.role === 'pending'));
+                // Restore betting order from member list
+                const approvedMembers = mapped.filter(m => m.role !== 'pending');
+                if (approvedMembers.length > 0) {
+                  setBettingOrder(approvedMembers.map(m => m.name));
+                }
               }
             }).catch(() => {});
           }
