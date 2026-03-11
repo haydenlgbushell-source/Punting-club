@@ -136,7 +136,13 @@ exports.handler = async (event) => {
         team = existingTeam;
       }
 
-      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, team }) };
+      // Sign in to get a session token so frontend can persist the session
+      const { data: sessionData } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password,
+      }).catch(() => ({ data: null }));
+
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, team, session: sessionData?.session || null }) };
     }
 
     // ── LOGIN ────────────────────────────────────────────────────────────────
