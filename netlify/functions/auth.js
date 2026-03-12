@@ -182,6 +182,28 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true }) };
     }
 
+    // ── VERIFY SESSION ───────────────────────────────────────────────────────
+    // Called on page refresh to re-fetch fresh user + team data from DB
+    if (action === 'verify_session') {
+      const { userId } = payload;
+      if (!userId || String(userId).startsWith('local_')) {
+        return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'Invalid session' }) };
+      }
+      const { data: user, error: userErr } = await supabase
+        .from('users').select('*').eq('id', userId).maybeSingle();
+      if (userErr || !user) {
+        return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'User not found' }) };
+      }
+      const { data: memberships } = await supabase
+        .from('team_members')
+        .select('*, teams(*, competitions(*))')
+        .eq('user_id', userId);
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({
+        user,
+        teams: (memberships || []).map(m => ({ ...m.teams, myRole: m.role, myCanBet: m.can_bet })),
+      })};
+    }
+
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Unknown action: ${action}` }) };
 
   } catch (err) {

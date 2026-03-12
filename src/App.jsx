@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  apiSignUp, apiLogin,
+  apiSignUp, apiLogin, apiVerifySession,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
@@ -593,34 +593,34 @@ export default function PuntingClub() {
       const saved = localStorage.getItem('pc_session');
       if (saved) {
         const sess = JSON.parse(saved);
-        if (sess?.token && sess?.user) {
+        const userId = sess?.user?.id;
+        if (userId && !String(userId).startsWith('local_')) {
+          // Optimistically restore from cache for instant UI
           const restoredUser = { ...sess.user, teamId: sess.teamId, teamCode: sess.teamCode, teamName: sess.teamName, role: sess.role, competitionCode: sess.competitionCode, firstName: sess.user.first_name, lastName: sess.user.last_name };
           setCurrentUser(restoredUser);
           setCurrentTeamId(sess.teamId || null);
           setIsLoggedIn(true);
-          // Re-load team members from DB
-          if (sess.teamId) {
-            apiGetTeamMembers(sess.teamId).then(members => {
-              if (members?.length > 0) {
-                const mapped = members.map(m => ({
-                  ...m,
-                  name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
-                  phone: m.users?.phone || m.user_id,
-                  depositPaid: m.deposit_paid,
-                  canBet: m.can_bet,
-                }));
-                const selfIn = mapped.some(m => m.user_id === sess.user.id);
-                if (!selfIn) mapped.unshift({ user_id: sess.user.id, role: sess.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${sess.user.first_name} ${sess.user.last_name}`.trim(), phone: sess.user.phone });
-                setTeamMembers(mapped);
-                setPendingMembers(mapped.filter(m => m.role === 'pending'));
-                // Restore betting order from member list
-                const approvedMembers = mapped.filter(m => m.role !== 'pending');
-                if (approvedMembers.length > 0) {
-                  setBettingOrder(approvedMembers.map(m => m.name));
-                }
-              }
-            }).catch(() => {});
-          }
+          // Verify with server and refresh all data (handles stale cache, role changes, new teams)
+          apiVerifySession(userId).then(result => {
+            if (!result?.user) {
+              // User no longer exists in DB — clear session
+              try { localStorage.removeItem('pc_session'); } catch(_) {}
+              setIsLoggedIn(false); setCurrentUser(null); setCurrentTeamId(null);
+              return;
+            }
+            const { user, teams } = result;
+            const myTeam = (teams || []).find(t => t.myRole !== 'pending') || (teams || [])[0];
+            const compCode = myTeam?.competitions?.code || (Array.isArray(myTeam?.competitions) ? myTeam.competitions[0]?.code : null);
+            const freshUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode };
+            setCurrentUser(freshUser);
+            setCurrentTeamId(myTeam?.id || null);
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok' })); } catch(_) {}
+          }).catch(() => {
+            // Server unreachable — keep cached session, data will load via normal effects
+          });
+        } else {
+          // local_ fallback ID — no longer valid now that functions are deployed, clear it
+          try { localStorage.removeItem('pc_session'); } catch(_) {}
         }
       }
     } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }
