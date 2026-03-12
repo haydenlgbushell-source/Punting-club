@@ -1,0 +1,7 @@
+node_modules/
+dist/
+netlify/functions/node_modules/
+package-lock.json
+netlify/functions/package-lock.json
+.env
+.env.local
