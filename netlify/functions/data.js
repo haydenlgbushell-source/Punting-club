@@ -152,11 +152,20 @@ exports.handler = async (event) => {
 
       case 'get_team_members': {
         const { teamId } = payload;
-        const { data, error: e } = await supabase
+        let { data, error: e } = await supabase
           .from('team_members')
           .select(`*, users(id, first_name, last_name, phone, kyc_status)`)
           .eq('team_id', teamId)
           .order('betting_order', { ascending: true, nullsFirst: false });
+        // betting_order column may not exist — retry without it
+        if (e) {
+          const res2 = await supabase
+            .from('team_members')
+            .select(`*, users(id, first_name, last_name, phone, kyc_status)`)
+            .eq('team_id', teamId);
+          data = res2.data;
+          e    = res2.error;
+        }
         if (e) return error(e.message);
         return json(data);
       }
