@@ -16,9 +16,10 @@ const call = async (endpoint, payload) => {
 };
 
 // ── AUTH ─────────────────────────────────────────────────────
-export const apiSignUp = (payload)              => call('auth', { action: 'signup', ...payload });
-export const apiLogin  = (phone, password)      => call('auth', { action: 'login', phone, password });
-export const apiResetPassword = (phone)         => call('auth', { action: 'reset_password', phone });
+export const apiSignUp      = (payload)                   => call('auth', { action: 'signup', ...payload });
+export const apiLogin       = (phone, password)           => call('auth', { action: 'login', phone, password });
+export const apiResetPassword = (phone)                   => call('auth', { action: 'reset_password', phone });
+export const apiAdminLogin  = (adminId, adminPassword)    => call('auth', { action: 'admin_login', adminId, adminPassword });
 
 // ── COMPETITIONS ─────────────────────────────────────────────
 export const apiGetActiveCompetitions = ()      => call('data', { action: 'get_active_competitions' });
@@ -60,7 +61,7 @@ export const apiAddAudit     = (adminRole, action, target, detail) => call('data
 
 // ── CLAUDE AI ────────────────────────────────────────────────
 export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-sonnet-4-5',
   max_tokens: 1200,
   messages: [{
     role: 'user',
@@ -72,7 +73,7 @@ export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {
 });
 
 export const apiCheckBetResults = (legs) => call('claude', {
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-sonnet-4-5',
   max_tokens: 500,
   messages: [{
     role: 'user',

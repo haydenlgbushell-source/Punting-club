@@ -151,12 +151,9 @@ exports.handler = async (event) => {
       const cleanPhone = normalisePhone(phone);
       const authEmail  = `${cleanPhone}@puntingclub.app`;
 
-      console.log('Login attempt:', authEmail);
-
       const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
       if (error) {
-        console.log('Supabase auth error:', error.message, 'for email:', authEmail);
-        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password. (tried: ' + authEmail + ')' }) };
+        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password.' }) };
       }
 
       const { data: user } = await supabase.from('users').select('*').eq('phone', cleanPhone).single();
@@ -180,6 +177,28 @@ exports.handler = async (event) => {
       const { error } = await supabase.auth.admin.generateLink({ type: 'recovery', email: authEmail });
       if (error) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: error.message }) };
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true }) };
+    }
+
+    // ── ADMIN LOGIN ──────────────────────────────────────────────────────────
+    if (action === 'admin_login') {
+      const { adminId, adminPassword } = payload;
+      if (!adminId || !adminPassword) {
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Missing credentials.' }) };
+      }
+
+      // Admin credentials are stored in environment variables:
+      // ADMIN_<ID>_PASSWORD and ADMIN_<ID>_ROLE
+      // e.g. ADMIN_ADMIN_PASSWORD, ADMIN_ADMIN_ROLE, ADMIN_ADMIN_NAME
+      const idKey     = adminId.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+      const envPass   = process.env[`ADMIN_${idKey}_PASSWORD`];
+      const envRole   = process.env[`ADMIN_${idKey}_ROLE`];
+      const envName   = process.env[`ADMIN_${idKey}_NAME`] || adminId;
+
+      if (!envPass || !envRole || adminPassword !== envPass) {
+        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid admin credentials.' }) };
+      }
+
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ role: envRole, name: envName, phone: adminId }) };
     }
 
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Unknown action: ${action}` }) };
