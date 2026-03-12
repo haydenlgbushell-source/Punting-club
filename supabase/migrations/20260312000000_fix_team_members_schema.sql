@@ -29,13 +29,12 @@ INSERT INTO team_members (team_id, user_id, role, can_bet, deposit_paid, betting
   FROM teams t
   LEFT JOIN team_members tm ON tm.team_id = t.id AND tm.user_id = t.captain_id
   WHERE t.captain_id IS NOT NULL
-    AND tm.user_id IS NULL
-ON CONFLICT DO NOTHING;
+    AND tm.user_id IS NULL;
 
 -- 5. Make sure captains have the captain role in team_members
-UPDATE team_members tm
+UPDATE team_members
   SET role = 'captain', can_bet = true
-  FROM teams t
-  WHERE tm.team_id = t.id
-    AND tm.user_id = t.captain_id
-    AND tm.role != 'captain';
+  FROM teams
+  WHERE team_members.team_id = teams.id
+    AND team_members.user_id = teams.captain_id
+    AND team_members.role != 'captain';
