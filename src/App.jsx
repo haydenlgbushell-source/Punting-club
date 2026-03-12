@@ -284,6 +284,7 @@ export default function PuntingClub() {
       setIsLoggedIn(true);
       setShowLoginModal(false);
       setLoginPhone(''); setLoginPassword('');
+      if (myTeam?.id) setActiveNav('team');
       // Persist session so refresh doesn't log out
       try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok' })); } catch(e) {}
       if (myTeam?.id) {
@@ -600,6 +601,7 @@ export default function PuntingClub() {
           setCurrentUser(restoredUser);
           setCurrentTeamId(sess.teamId || null);
           setIsLoggedIn(true);
+          if (sess.teamId) setActiveNav('team');
           // Verify with server and refresh all data (handles stale cache, role changes, new teams)
           apiVerifySession(userId).then(result => {
             if (!result?.user) {
