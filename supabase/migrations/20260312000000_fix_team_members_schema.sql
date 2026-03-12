@@ -25,11 +25,11 @@ CREATE TABLE IF NOT EXISTS betting_order (
 -- 4. Repair any captains who are missing their team_members record
 --    (insert failed silently if betting_order column was missing during signup)
 INSERT INTO team_members (team_id, user_id, role, can_bet, deposit_paid, betting_order)
-  SELECT t.id, t.captain_id, 'captain', true, false, 1
-  FROM teams t
-  LEFT JOIN team_members tm ON tm.team_id = t.id AND tm.user_id = t.captain_id
-  WHERE t.captain_id IS NOT NULL
-    AND tm.user_id IS NULL;
+SELECT teams.id, teams.captain_id, 'captain', true, false, 1
+FROM teams
+LEFT JOIN team_members ON team_members.team_id = teams.id AND team_members.user_id = teams.captain_id
+WHERE teams.captain_id IS NOT NULL
+AND team_members.user_id IS NULL;
 
 -- 5. Make sure captains have the captain role in team_members
 UPDATE team_members
