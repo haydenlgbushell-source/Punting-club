@@ -306,26 +306,8 @@ export default function PuntingClub() {
         }
       }
     } catch (err) {
-      // Supabase unavailable — try local in-memory store (for testing without DB)
-      const cleanPhone = loginPhone.trim().replace(/\s+/g, '');
-      const localUser  = localUserStore[cleanPhone];
-
-      if (localUser && localUser.password === loginPassword) {
-        setCurrentUser(localUser);
-        setCurrentTeamId(localUser.teamId || null);
-        setIsLoggedIn(true);
-        setShowLoginModal(false);
-        setLoginPhone(''); setLoginPassword('');
-        // Load local team members if available
-        if (localUser.teamCode && localTeamStore[localUser.teamCode]) {
-          const lt = localTeamStore[localUser.teamCode];
-          setTeamMembers(lt.memberObjects || [{ phone: cleanPhone, name: `${localUser.firstName} ${localUser.lastName}`, role: 'captain', canBet: true, depositPaid: false }]);
-        }
-      } else if (localUser) {
-        alert('Incorrect password. Please try again.');
-      } else {
-        alert('Account not found. Please sign up first, or check your mobile number.');
-      }
+      // Show the actual server error so we know what went wrong
+      alert('Login failed: ' + (err.message || 'Unknown error'));
     } finally {
       setApiLoading(false);
     }
@@ -444,57 +426,7 @@ export default function PuntingClub() {
       }
 
     } catch (apiErr) {
-      // Supabase unavailable — fall back to local in-memory signup
-      console.warn('Supabase signup failed, using local fallback:', apiErr.message);
-
-      const newTeamCode = genCode();
-      const newUser = {
-        id:        'local_' + Date.now(),
-        firstName: formData.firstName.trim(),
-        lastName:  formData.lastName.trim(),
-        email:     formData.email?.trim() || '',
-        phone:     validatePhone(formData.phone).normalised || formData.phone.trim(),
-        password:  formData.password,
-        dob:       formData.dob,
-        postcode:  formData.postcode?.trim() || '',
-        createdAt: new Date().toLocaleDateString(),
-        role:      signupMode === 'create' ? 'captain' : 'pending',
-        teamCode:  signupMode === 'create' ? newTeamCode : formData.teamCode.trim().toUpperCase(),
-        teamName:  signupMode === 'create' ? formData.teamName.trim() : '',
-        buyInMode: formData.buyInMode || 'split',
-        competitionCode: formData.competitionCode || null,
-        canBet:    signupMode === 'create',
-      };
-
-      if (signupMode === 'create') {
-        // Save to local store so login fallback works
-        const cleanPhone = newUser.phone.replace(/\s+/g, '');
-        newUser.teamId = 'local_team_' + newTeamCode;
-        localUserStore[cleanPhone] = newUser;
-        localTeamStore[newTeamCode] = {
-          teamCode: newTeamCode, teamName: newUser.teamName,
-          captainPhone: cleanPhone, buyInMode: newUser.buyInMode,
-          memberObjects: [{ phone: cleanPhone, name: `${newUser.firstName} ${newUser.lastName}`, role: 'captain', canBet: true, depositPaid: false }],
-        };
-        const colors = ['from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600','from-indigo-400 to-indigo-600','from-rose-400 to-rose-600'];
-        setLeaderboardTeams(prev => {
-          if (prev.some(t => t.team.toLowerCase() === newUser.teamName.toLowerCase())) return prev;
-          return [...prev, { rank: prev.length + 1, team: newUser.teamName, week: 'P', total: '$0', color: colors[prev.length % colors.length], members: 1, weekHistory: [], bets: [] }];
-        });
-        setShowSignupModal(false);
-        setSignupMode(null);
-        setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
-        setCurrentUser(newUser);
-        setIsLoggedIn(true);
-        setActiveNav('team');
-        alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + newUser.teamName + '\nTeam Code: ' + newTeamCode + '\nLogin (mobile): ' + newUser.phone + '\n\nShare your Team Code with friends to join!');
-      } else {
-        // Local fallback join — just confirm
-        setShowSignupModal(false);
-        setSignupMode(null);
-        setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
-        alert('Request submitted!\n\nYour captain needs to approve you.\n\nLogin with: ' + formData.phone);
-      }
+      alert('Sign up failed: ' + (apiErr.message || 'Unknown error'));
     } finally {
       setApiLoading(false);
     }
