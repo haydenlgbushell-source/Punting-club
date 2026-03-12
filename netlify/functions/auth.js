@@ -24,13 +24,38 @@ const HEADERS = {
 
 // Resolve a user's teams: checks team_members first, then falls back to captain_id lookup.
 // This handles the case where the team_members insert failed during signup.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const resolveUserTeams = async (userId) => {
-  const { data: memberships } = await supabase
+  // First fetch team_members without join to avoid UUID cast errors from stale local_ IDs
+  const { data: rawMemberships } = await supabase
     .from('team_members')
-    .select('*, teams(*, competitions(*))')
+    .select('team_id, role, can_bet')
     .eq('user_id', userId);
 
-  const memberTeamIds = new Set((memberships || []).map(m => m.team_id));
+  // Filter to valid UUIDs only, then fetch team details
+  const validTeamIds = (rawMemberships || []).map(m => m.team_id).filter(id => UUID_RE.test(String(id || '')));
+  const membershipMeta = {};
+  (rawMemberships || []).forEach(m => { membershipMeta[m.team_id] = m; });
+
+  let teamRows = [];
+  if (validTeamIds.length > 0) {
+    const { data } = await supabase
+      .from('teams')
+      .select('*, competitions(*)')
+      .in('id', validTeamIds);
+    teamRows = data || [];
+  }
+
+  // Reconstruct memberships with team data
+  const memberships = teamRows.map(t => ({
+    team_id: t.id,
+    role: membershipMeta[t.id]?.role,
+    can_bet: membershipMeta[t.id]?.can_bet,
+    teams: t,
+  }));
+
+  const memberTeamIds = new Set(validTeamIds);
 
   // Fallback: find teams where user is captain but has no team_members record
   const { data: captainedTeams } = await supabase
