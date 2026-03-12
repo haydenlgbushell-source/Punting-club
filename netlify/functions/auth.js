@@ -216,7 +216,8 @@ exports.handler = async (event) => {
         return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password. (tried: ' + authEmail + ')' }) };
       }
 
-      const { data: user } = await supabase.from('users').select('*').eq('phone', cleanPhone).single();
+      const { data: user } = await supabase.from('users').select('*').eq('phone', cleanPhone).maybeSingle();
+      if (!user) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'User profile not found. Please contact support.' }) };
       const teams = await resolveUserTeams(user.id);
 
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({
