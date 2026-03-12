@@ -527,7 +527,8 @@ export default function PuntingClub() {
       if (saved) {
         const sess = JSON.parse(saved);
         const userId = sess?.user?.id;
-        if (userId && !String(userId).startsWith('local_')) {
+        const teamId = sess?.teamId;
+        if (userId && !String(userId).startsWith('local_') && (!teamId || !String(teamId).startsWith('local_'))) {
           // Optimistically restore from cache for instant UI
           const restoredUser = { ...sess.user, teamId: sess.teamId, teamCode: sess.teamCode, teamName: sess.teamName, role: sess.role, competitionCode: sess.competitionCode, firstName: sess.user.first_name, lastName: sess.user.last_name };
           setCurrentUser(restoredUser);
