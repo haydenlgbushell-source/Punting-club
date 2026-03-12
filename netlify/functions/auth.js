@@ -92,15 +92,15 @@ exports.handler = async (event) => {
       if (existing) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number already registered.' }) };
 
       // Create Supabase auth user using phone-derived email (consistent with login)
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email:          authEmail,
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email:    authEmail,
         password,
-        email_confirm:  true,
       });
-      if (authError || !authData?.user) {
-        const msg = authError?.message || 'Auth user creation returned null — check SUPABASE_SERVICE_ROLE_KEY in Netlify env vars (must be service_role key, not anon key)';
+      if (signUpError || !signUpData?.user) {
+        const msg = signUpError?.message || 'Signup failed — no user returned';
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: msg }) };
       }
+      const authData = { user: signUpData.user };
 
       // Insert user profile
       const { data: user, error: userError } = await supabase.from('users').insert({
