@@ -22,6 +22,46 @@ const HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Resolve a user's teams: checks team_members first, then falls back to captain_id lookup.
+// This handles the case where the team_members insert failed during signup.
+const resolveUserTeams = async (userId) => {
+  const { data: memberships } = await supabase
+    .from('team_members')
+    .select('*, teams(*, competitions(*))')
+    .eq('user_id', userId);
+
+  const memberTeamIds = new Set((memberships || []).map(m => m.team_id));
+
+  // Fallback: find teams where user is captain but has no team_members record
+  const { data: captainedTeams } = await supabase
+    .from('teams')
+    .select('*, competitions(*)')
+    .eq('captain_id', userId)
+    .neq('status', 'suspended');
+
+  const missingMemberships = (captainedTeams || [])
+    .filter(t => !memberTeamIds.has(t.id))
+    .map(t => ({ teams: t, role: 'captain', can_bet: true }));
+
+  // If user is captain of a team but has no team_members record, auto-insert it
+  for (const m of missingMemberships) {
+    console.log('Repairing missing team_members record for captain', userId, 'team', m.teams.id);
+    await supabase.from('team_members').insert({
+      team_id:      m.teams.id,
+      user_id:      userId,
+      role:         'captain',
+      can_bet:      true,
+      deposit_paid: false,
+    }).catch(e => console.error('Auto-repair insert failed:', e.message));
+  }
+
+  const allMemberships = [
+    ...(memberships || []).map(m => ({ ...m.teams, myRole: m.role, myCanBet: m.can_bet })),
+    ...missingMemberships.map(m => ({ ...m.teams, myRole: 'captain', myCanBet: true })),
+  ];
+  return allMemberships;
+};
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
   if (event.httpMethod !== 'POST')    return { statusCode: 405, headers: HEADERS, body: 'Method not allowed' };
@@ -101,7 +141,10 @@ exports.handler = async (event) => {
         }).select().single();
         if (teamError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: teamError.message }) };
 
-        await supabase.from('team_members').insert({
+        await supabase.from('users').update({ role: 'captain' }).eq('id', user.id);
+
+        // Insert captain into team_members — check result and retry without betting_order if needed
+        const { error: memberErr } = await supabase.from('team_members').insert({
           team_id:       newTeam.id,
           user_id:       user.id,
           role:          'captain',
@@ -109,7 +152,18 @@ exports.handler = async (event) => {
           deposit_paid:  false,
           betting_order: 1,
         });
-        await supabase.from('users').update({ role: 'captain' }).eq('id', user.id);
+        if (memberErr) {
+          console.error('team_members insert (with betting_order) failed:', memberErr.message);
+          // Retry without betting_order in case the column doesn't exist
+          const { error: memberErr2 } = await supabase.from('team_members').insert({
+            team_id:      newTeam.id,
+            user_id:      user.id,
+            role:         'captain',
+            can_bet:      true,
+            deposit_paid: false,
+          });
+          if (memberErr2) console.error('team_members insert (minimal) also failed:', memberErr2.message);
+        }
 
         // Increment competition team count
         if (compId) {
@@ -160,15 +214,12 @@ exports.handler = async (event) => {
       }
 
       const { data: user } = await supabase.from('users').select('*').eq('phone', cleanPhone).single();
-      const { data: memberships } = await supabase
-        .from('team_members')
-        .select('*, teams(*, competitions(*))')
-        .eq('user_id', user.id);
+      const teams = await resolveUserTeams(user.id);
 
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({
         user,
         session: data.session,
-        teams: (memberships || []).map(m => ({ ...m.teams, myRole: m.role, myCanBet: m.can_bet })),
+        teams,
       })};
     }
 
@@ -194,14 +245,8 @@ exports.handler = async (event) => {
       if (userErr || !user) {
         return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'User not found' }) };
       }
-      const { data: memberships } = await supabase
-        .from('team_members')
-        .select('*, teams(*, competitions(*))')
-        .eq('user_id', userId);
-      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({
-        user,
-        teams: (memberships || []).map(m => ({ ...m.teams, myRole: m.role, myCanBet: m.can_bet })),
-      })};
+      const teams = await resolveUserTeams(userId);
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, teams })};
     }
 
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Unknown action: ${action}` }) };
