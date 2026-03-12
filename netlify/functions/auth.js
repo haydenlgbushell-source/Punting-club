@@ -282,6 +282,6 @@ exports.handler = async (event) => {
 
   } catch (err) {
     console.error('Auth function error:', err);
-    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message, at: err.stack?.split('\n')[1]?.trim() || 'unknown' }) };
   }
 };
