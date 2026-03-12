@@ -27,11 +27,9 @@ CREATE TABLE IF NOT EXISTS betting_order (
 INSERT INTO team_members (team_id, user_id, role, can_bet, deposit_paid, betting_order)
   SELECT t.id, t.captain_id, 'captain', true, false, 1
   FROM teams t
+  LEFT JOIN team_members tm ON tm.team_id = t.id AND tm.user_id = t.captain_id
   WHERE t.captain_id IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM team_members tm
-      WHERE tm.team_id = t.id AND tm.user_id = t.captain_id
-    )
+    AND tm.user_id IS NULL
 ON CONFLICT DO NOTHING;
 
 -- 5. Make sure captains have the captain role in team_members
