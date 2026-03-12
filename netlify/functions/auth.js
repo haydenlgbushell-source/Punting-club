@@ -97,7 +97,10 @@ exports.handler = async (event) => {
         password,
         email_confirm:  true,
       });
-      if (authError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: authError.message }) };
+      if (authError || !authData?.user) {
+        const msg = authError?.message || 'Auth user creation returned null — check SUPABASE_SERVICE_ROLE_KEY in Netlify env vars (must be service_role key, not anon key)';
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: msg }) };
+      }
 
       // Insert user profile
       const { data: user, error: userError } = await supabase.from('users').insert({
