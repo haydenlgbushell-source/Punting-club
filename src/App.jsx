@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  apiSignUp, apiLogin,
+  apiSignUp, apiLogin, apiVerifySession,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
@@ -284,6 +284,7 @@ export default function PuntingClub() {
       setIsLoggedIn(true);
       setShowLoginModal(false);
       setLoginPhone(''); setLoginPassword('');
+      if (myTeam?.id) setActiveNav('team');
       // Persist session so refresh doesn't log out
       try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok' })); } catch(e) {}
       if (myTeam?.id) {
@@ -305,26 +306,8 @@ export default function PuntingClub() {
         }
       }
     } catch (err) {
-      // Supabase unavailable — try local in-memory store (for testing without DB)
-      const cleanPhone = loginPhone.trim().replace(/\s+/g, '');
-      const localUser  = localUserStore[cleanPhone];
-
-      if (localUser && localUser.password === loginPassword) {
-        setCurrentUser(localUser);
-        setCurrentTeamId(localUser.teamId || null);
-        setIsLoggedIn(true);
-        setShowLoginModal(false);
-        setLoginPhone(''); setLoginPassword('');
-        // Load local team members if available
-        if (localUser.teamCode && localTeamStore[localUser.teamCode]) {
-          const lt = localTeamStore[localUser.teamCode];
-          setTeamMembers(lt.memberObjects || [{ phone: cleanPhone, name: `${localUser.firstName} ${localUser.lastName}`, role: 'captain', canBet: true, depositPaid: false }]);
-        }
-      } else if (localUser) {
-        alert('Incorrect password. Please try again.');
-      } else {
-        alert('Account not found. Please sign up first, or check your mobile number.');
-      }
+      // Show the actual server error so we know what went wrong
+      alert('Login failed: ' + (err.message || 'Unknown error'));
     } finally {
       setApiLoading(false);
     }
@@ -443,57 +426,7 @@ export default function PuntingClub() {
       }
 
     } catch (apiErr) {
-      // Supabase unavailable — fall back to local in-memory signup
-      console.warn('Supabase signup failed, using local fallback:', apiErr.message);
-
-      const newTeamCode = genCode();
-      const newUser = {
-        id:        'local_' + Date.now(),
-        firstName: formData.firstName.trim(),
-        lastName:  formData.lastName.trim(),
-        email:     formData.email?.trim() || '',
-        phone:     validatePhone(formData.phone).normalised || formData.phone.trim(),
-        password:  formData.password,
-        dob:       formData.dob,
-        postcode:  formData.postcode?.trim() || '',
-        createdAt: new Date().toLocaleDateString(),
-        role:      signupMode === 'create' ? 'captain' : 'pending',
-        teamCode:  signupMode === 'create' ? newTeamCode : formData.teamCode.trim().toUpperCase(),
-        teamName:  signupMode === 'create' ? formData.teamName.trim() : '',
-        buyInMode: formData.buyInMode || 'split',
-        competitionCode: formData.competitionCode || null,
-        canBet:    signupMode === 'create',
-      };
-
-      if (signupMode === 'create') {
-        // Save to local store so login fallback works
-        const cleanPhone = newUser.phone.replace(/\s+/g, '');
-        newUser.teamId = 'local_team_' + newTeamCode;
-        localUserStore[cleanPhone] = newUser;
-        localTeamStore[newTeamCode] = {
-          teamCode: newTeamCode, teamName: newUser.teamName,
-          captainPhone: cleanPhone, buyInMode: newUser.buyInMode,
-          memberObjects: [{ phone: cleanPhone, name: `${newUser.firstName} ${newUser.lastName}`, role: 'captain', canBet: true, depositPaid: false }],
-        };
-        const colors = ['from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600','from-indigo-400 to-indigo-600','from-rose-400 to-rose-600'];
-        setLeaderboardTeams(prev => {
-          if (prev.some(t => t.team.toLowerCase() === newUser.teamName.toLowerCase())) return prev;
-          return [...prev, { rank: prev.length + 1, team: newUser.teamName, week: 'P', total: '$0', color: colors[prev.length % colors.length], members: 1, weekHistory: [], bets: [] }];
-        });
-        setShowSignupModal(false);
-        setSignupMode(null);
-        setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
-        setCurrentUser(newUser);
-        setIsLoggedIn(true);
-        setActiveNav('team');
-        alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + newUser.teamName + '\nTeam Code: ' + newTeamCode + '\nLogin (mobile): ' + newUser.phone + '\n\nShare your Team Code with friends to join!');
-      } else {
-        // Local fallback join — just confirm
-        setShowSignupModal(false);
-        setSignupMode(null);
-        setFormData({ firstName:'', lastName:'', phone:'', dob:'', postcode:'', email:'', password:'', confirmPassword:'', teamName:'', teamCode:'', buyInMode:'captain', competitionCode:'' });
-        alert('Request submitted!\n\nYour captain needs to approve you.\n\nLogin with: ' + formData.phone);
-      }
+      alert('Sign up failed: ' + (apiErr.message || 'Unknown error'));
     } finally {
       setApiLoading(false);
     }
@@ -593,34 +526,35 @@ export default function PuntingClub() {
       const saved = localStorage.getItem('pc_session');
       if (saved) {
         const sess = JSON.parse(saved);
-        if (sess?.token && sess?.user) {
+        const userId = sess?.user?.id;
+        if (userId && !String(userId).startsWith('local_')) {
+          // Optimistically restore from cache for instant UI
           const restoredUser = { ...sess.user, teamId: sess.teamId, teamCode: sess.teamCode, teamName: sess.teamName, role: sess.role, competitionCode: sess.competitionCode, firstName: sess.user.first_name, lastName: sess.user.last_name };
           setCurrentUser(restoredUser);
           setCurrentTeamId(sess.teamId || null);
           setIsLoggedIn(true);
-          // Re-load team members from DB
-          if (sess.teamId) {
-            apiGetTeamMembers(sess.teamId).then(members => {
-              if (members?.length > 0) {
-                const mapped = members.map(m => ({
-                  ...m,
-                  name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
-                  phone: m.users?.phone || m.user_id,
-                  depositPaid: m.deposit_paid,
-                  canBet: m.can_bet,
-                }));
-                const selfIn = mapped.some(m => m.user_id === sess.user.id);
-                if (!selfIn) mapped.unshift({ user_id: sess.user.id, role: sess.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${sess.user.first_name} ${sess.user.last_name}`.trim(), phone: sess.user.phone });
-                setTeamMembers(mapped);
-                setPendingMembers(mapped.filter(m => m.role === 'pending'));
-                // Restore betting order from member list
-                const approvedMembers = mapped.filter(m => m.role !== 'pending');
-                if (approvedMembers.length > 0) {
-                  setBettingOrder(approvedMembers.map(m => m.name));
-                }
-              }
-            }).catch(() => {});
-          }
+          if (sess.teamId) setActiveNav('team');
+          // Verify with server and refresh all data (handles stale cache, role changes, new teams)
+          apiVerifySession(userId).then(result => {
+            if (!result?.user) {
+              // User no longer exists in DB — clear session
+              try { localStorage.removeItem('pc_session'); } catch(_) {}
+              setIsLoggedIn(false); setCurrentUser(null); setCurrentTeamId(null);
+              return;
+            }
+            const { user, teams } = result;
+            const myTeam = (teams || []).find(t => t.myRole !== 'pending') || (teams || [])[0];
+            const compCode = myTeam?.competitions?.code || (Array.isArray(myTeam?.competitions) ? myTeam.competitions[0]?.code : null);
+            const freshUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode };
+            setCurrentUser(freshUser);
+            setCurrentTeamId(myTeam?.id || null);
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok' })); } catch(_) {}
+          }).catch(() => {
+            // Server unreachable — keep cached session, data will load via normal effects
+          });
+        } else {
+          // local_ fallback ID — no longer valid now that functions are deployed, clear it
+          try { localStorage.removeItem('pc_session'); } catch(_) {}
         }
       }
     } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }

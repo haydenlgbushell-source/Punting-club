@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Netlify Function Diagnostics</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #eee; padding: 2rem; }
+    h1 { color: #f90; }
+    h2 { color: #8cf; margin-top: 2rem; }
+    button { background: #333; color: #fff; border: 1px solid #555; padding: .5rem 1rem; cursor: pointer; margin: .25rem; border-radius: 4px; }
+    button:hover { background: #444; }
+    pre { background: #1a1a1a; border: 1px solid #333; padding: 1rem; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .ok   { color: #4f4; }
+    .fail { color: #f44; }
+    .warn { color: #fa4; }
+    .label { color: #8cf; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Netlify Function Diagnostics</h1>
+  <p>Tests each endpoint directly and via the /api redirect to pinpoint deployment issues.</p>
+
+  <h2>Route Tests</h2>
+  <button onclick="testAll()">Test All Routes</button>
+  <button onclick="testDirect()">Test Direct /.netlify/functions/*</button>
+  <button onclick="testRedirect()">Test /api/* Redirects</button>
+  <pre id="out">Click a button above to run tests...</pre>
+
+  <script>
+    const log = [];
+
+    function ts() { return new Date().toISOString(); }
+
+    async function probe(label, url, options = {}) {
+      const entry = { label, url, ts: ts() };
+      log.push(entry);
+      try {
+        const res = await fetch(url, {
+          method: options.method || 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(options.body || { action: '__ping__' }),
+          signal: AbortSignal.timeout(8000),
+        });
+        const text = await res.text();
+        const isJson = text.trim().startsWith('{') || text.trim().startsWith('[');
+        entry.status = res.status;
+        entry.contentType = res.headers.get('content-type');
+        entry.isJson = isJson;
+        entry.preview = text.slice(0, 200);
+        entry.ok = isJson;
+      } catch (err) {
+        entry.status = 'ERR';
+        entry.error = err.message;
+        entry.ok = false;
+      }
+      render();
+      return entry;
+    }
+
+    function render() {
+      const lines = log.map(e => {
+        const icon = e.ok ? '✅' : '❌';
+        const ct = e.contentType || '(none)';
+        const diagnosis = e.ok
+          ? 'Function deployed and responding with JSON'
+          : e.status === 'ERR'
+            ? `Network error: ${e.error}`
+            : e.isJson === false && String(e.preview).trim().startsWith('<')
+              ? `HTML returned — function NOT found (redirect points to dead function or /.netlify/functions/* path is wrong)`
+              : `HTTP ${e.status} — ${e.preview}`;
+        return [
+          `${icon} [${e.ts}] ${e.label}`,
+          `   URL:     ${e.url}`,
+          `   HTTP:    ${e.status}   Content-Type: ${ct}`,
+          `   Verdict: ${diagnosis}`,
+          `   Preview: ${(e.preview || '').slice(0, 120)}`,
+          '',
+        ].join('\n');
+      });
+      document.getElementById('out').textContent = lines.join('\n');
+    }
+
+    async function testDirect() {
+      log.length = 0;
+      await probe('Direct → /.netlify/functions/auth',  '/.netlify/functions/auth',  { body: { action: '__ping__' } });
+      await probe('Direct → /.netlify/functions/data',  '/.netlify/functions/data',  { body: { action: '__ping__' } });
+      await probe('Direct → /.netlify/functions/claude','/.netlify/functions/claude',{ body: { action: '__ping__' } });
+    }
+
+    async function testRedirect() {
+      log.length = 0;
+      await probe('Redirect → /api/auth',  '/api/auth',  { body: { action: '__ping__' } });
+      await probe('Redirect → /api/data',  '/api/data',  { body: { action: '__ping__' } });
+      await probe('Redirect → /api/claude','/api/claude',{ body: { action: '__ping__' } });
+    }
+
+    async function testAll() {
+      log.length = 0;
+      await probe('Direct → /.netlify/functions/auth',   '/.netlify/functions/auth',   { body: { action: '__ping__' } });
+      await probe('Direct → /.netlify/functions/data',   '/.netlify/functions/data',   { body: { action: '__ping__' } });
+      await probe('Direct → /.netlify/functions/claude', '/.netlify/functions/claude', { body: { action: '__ping__' } });
+      await probe('Redirect → /api/auth',   '/api/auth',   { body: { action: '__ping__' } });
+      await probe('Redirect → /api/data',   '/api/data',   { body: { action: '__ping__' } });
+      await probe('Redirect → /api/claude', '/api/claude', { body: { action: '__ping__' } });
+    }
+  </script>
+</body>
+</html>
