@@ -225,15 +225,14 @@ exports.handler = async (event) => {
         const { data: nameDup } = await nameQuery.maybeSingle();
         if (nameDup) return error(`Team name "${teamName.trim()}" is already taken in this competition. Please choose a different name.`);
 
-        // Enforce max 3 teams per user per competition
+        // Enforce max 3 teams per user per competition (any role)
         const countQuery = supabase
           .from('team_members')
           .select('teams!inner(competition_id)', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('role', 'captain');
+          .eq('user_id', userId);
         if (compId) countQuery.eq('teams.competition_id', compId);
         const { count: teamCount } = await countQuery;
-        if (teamCount >= 3) return error('You can only captain up to 3 teams in the same competition.');
+        if (teamCount >= 3) return error('You can only be in up to 3 teams in the same competition.');
 
         // Generate unique team code
         let teamCodeGen, attempts = 0;

@@ -2826,7 +2826,7 @@ export default function PuntingClub() {
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
-                You can captain up to <span className="text-white font-semibold">3 teams</span> per competition. Team names must be unique within each competition.
+                You can be in up to <span className="text-white font-semibold">3 teams</span> per competition (as captain or member). Team names must be unique within each competition.
               </div>
 
               <button
