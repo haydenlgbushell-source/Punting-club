@@ -195,12 +195,12 @@ exports.handler = async (event) => {
 
         // Increment competition team count
         if (compId) {
-          await supabase.rpc('increment_competition_teams', { comp_id: compId }).catch(() => {
+          const { error: rpcErr } = await supabase.rpc('increment_competition_teams', { comp_id: compId });
+          if (rpcErr) {
             // Fallback: manual increment if RPC not available
-            supabase.from('competitions').select('teams_count').eq('id', compId).single().then(({ data: cd }) => {
-              if (cd) supabase.from('competitions').update({ teams_count: (cd.teams_count || 0) + 1 }).eq('id', compId);
-            });
-          });
+            const { data: cd } = await supabase.from('competitions').select('teams_count').eq('id', compId).maybeSingle();
+            if (cd) await supabase.from('competitions').update({ teams_count: (cd.teams_count || 0) + 1 }).eq('id', compId);
+          }
         }
 
         team = { ...newTeam, teamCode: teamCodeGen, team_code: teamCodeGen };
