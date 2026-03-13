@@ -1513,8 +1513,8 @@ export default function PuntingClub() {
                         <p className="text-gray-500 text-xs">{m.phone} · Joined {m.joinedAt}</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => approveMember(m.phone)} className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Approve</button>
-                        <button onClick={() => rejectMember(m.phone)} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><AlertCircle className="w-3 h-3" />Reject</button>
+                        <button onClick={() => approveMember(m.user_id)} className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Approve</button>
+                        <button onClick={() => rejectMember(m.user_id)} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><AlertCircle className="w-3 h-3" />Reject</button>
                       </div>
                     </div>
                   ))}
