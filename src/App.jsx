@@ -647,7 +647,8 @@ export default function PuntingClub() {
     // Find competition id from active competitions
     const comp = activeCompetitions.find(c => c.code === currentUser.competitionCode);
     if (!comp?.id) return;
-    apiGetLeaderboard(comp.id, 1).then(data => {
+    const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
+    apiGetLeaderboard(comp.id, weekNum).then(data => {
       if (!data?.length) return;
       const colors = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
       setLeaderboardTeams(data.map((t, i) => ({
@@ -888,17 +889,19 @@ export default function PuntingClub() {
       if (team?.id && currentUser?.id) {
         await apiSubmitBet({
           teamId:          team.id,
-          userId:          currentUser.id,
-          betType:         analyzedBet.betType || 'Multi',
-          stake:           Math.round(parseFloat((analyzedBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
-          combinedOdds:    analyzedBet.combinedOdds,
-          estimatedReturn: Math.round(parseFloat((analyzedBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
-          submissionValid: analyzedBet.submissionValid !== false,
-          legs:            analyzedBet.legs || [],
+          submittedBy:     currentUser.id,
+          weekNumber:      Math.max(1, currentWeekNum),
+          betType:         newBet.type || 'Multi',
+          stake:           Math.round(parseFloat((newBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
+          combinedOdds:    newBet.combinedOdds,
+          estimatedReturn: Math.round(parseFloat((newBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
+          submissionValid: newBet.submissionValid !== false,
+          legs:            newBet.legs || [],
         });
       }
     } catch (err) {
-      console.error('Bet save failed (recorded locally only):', err.message);
+      console.error('Bet save failed:', err.message);
+      alert(`Bet could not be saved: ${err.message}`);
     }
   };
 
