@@ -6,6 +6,9 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."check-results"]
+  schedule = "0 */3 * * *"
+
 [[redirects]]
   from = "/api/auth"
   to = "/.netlify/functions/auth"

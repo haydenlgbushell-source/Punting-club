@@ -4,7 +4,7 @@ import {
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
-  apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiRejectBet, apiCorrectBet,
+  apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog,
   apiCreateAdditionalTeam,
 } from './api.js';
@@ -70,24 +70,26 @@ const Modal = ({ onClose, title, children, maxWidth = 'max-w-md' }) => (
 
 const Badge = ({ status }) => {
   const map = {
-    won:     'bg-green-500/20 border-green-500/60 text-green-400',
-    lost:    'bg-red-500/20 border-red-500/60 text-red-400',
-    partial: 'bg-yellow-500/20 border-yellow-500/60 text-yellow-400',
-    pending: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-    void:    'bg-gray-500/20 border-gray-500/60 text-gray-400',
+    won:         'bg-green-500/20 border-green-500/60 text-green-400',
+    lost:        'bg-red-500/20 border-red-500/60 text-red-400',
+    partial:     'bg-yellow-500/20 border-yellow-500/60 text-yellow-400',
+    pending:     'bg-amber-500/10 border-amber-500/30 text-amber-400',
+    void:        'bg-gray-500/20 border-gray-500/60 text-gray-400',
+    in_progress: 'bg-orange-500/20 border-orange-500/60 text-orange-400',
   };
-  const label = { won: '✓ Won', lost: '✗ Lost', partial: '⚡ Partial', pending: '⏳ Pending', void: '— Void' };
+  const label = { won: '✓ Won', lost: '✗ Lost', partial: '⚡ Partial', pending: '⏳ Pending', void: '— Void', in_progress: '🔴 Live' };
   return <span className={`border text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${map[status] || map.pending}`}>{label[status] || '⏳ Pending'}</span>;
 };
 
 const LegDot = ({ leg }) => {
   const colors = {
-    won:     'bg-green-500/30 border-green-500 text-green-400',
-    lost:    'bg-red-500/30 border-red-500 text-red-400',
-    void:    'bg-gray-500/30 border-gray-500 text-gray-400',
-    pending: 'bg-amber-500/10 border-amber-500/40 text-amber-400',
+    won:         'bg-green-500/30 border-green-500 text-green-400',
+    lost:        'bg-red-500/30 border-red-500 text-red-400',
+    void:        'bg-gray-500/30 border-gray-500 text-gray-400',
+    pending:     'bg-amber-500/10 border-amber-500/40 text-amber-400',
+    in_progress: 'bg-orange-500/30 border-orange-500 text-orange-400',
   };
-  const icon = { won: '✓', lost: '✗', void: '—', pending: String(leg.legNumber) };
+  const icon = { won: '✓', lost: '✗', void: '—', pending: String(leg.legNumber), in_progress: '◉' };
   return (
     <div title={`Leg ${leg.legNumber}: ${leg.selection} @ ${leg.odds} — ${leg.status}`}
       className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${colors[leg.status] || colors.pending}`}>
@@ -110,10 +112,11 @@ const PermissionBadge = ({ role }) => {
 const BetSlipCard = ({ bet, compact = false }) => {
   if (!bet) return null;
   const statusBg = {
-    won:     'border-green-500/40 bg-green-950/30',
-    lost:    'border-red-500/40 bg-red-950/30',
-    partial: 'border-yellow-500/40 bg-yellow-950/20',
-    pending: 'border-amber-500/20 bg-black/40',
+    won:         'border-green-500/40 bg-green-950/30',
+    lost:        'border-red-500/40 bg-red-950/30',
+    partial:     'border-yellow-500/40 bg-yellow-950/20',
+    pending:     'border-amber-500/20 bg-black/40',
+    in_progress: 'border-orange-500/40 bg-orange-950/20',
   };
   return (
     <div className={`rounded-xl border overflow-hidden ${statusBg[bet.overallStatus] || statusBg.pending}`}>
@@ -139,7 +142,7 @@ const BetSlipCard = ({ bet, compact = false }) => {
         <div className="px-3 pb-3 pt-2 space-y-1.5">
           <p className="text-gray-600 text-xs uppercase tracking-wider mb-2">{bet.legs.length} Leg{bet.legs.length !== 1 ? 's' : ''}</p>
           {bet.legs.map((leg, i) => {
-            const legBg = { won: 'bg-green-950/40 border-green-500/20', lost: 'bg-red-950/40 border-red-500/20', void: 'bg-gray-900/40 border-gray-500/20', pending: 'bg-black/30 border-white/5' };
+            const legBg = { won: 'bg-green-950/40 border-green-500/20', lost: 'bg-red-950/40 border-red-500/20', void: 'bg-gray-900/40 border-gray-500/20', pending: 'bg-black/30 border-white/5', in_progress: 'bg-orange-950/40 border-orange-500/20' };
             return (
               <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${legBg[leg.status] || legBg.pending}`}>
                 <LegDot leg={leg} />
@@ -150,8 +153,8 @@ const BetSlipCard = ({ bet, compact = false }) => {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-amber-300 font-bold text-sm">@ {leg.odds}</p>
-                  <p className={`text-xs font-semibold ${leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-yellow-400'}`}>
-                    {leg.status === 'won' ? '✓ Won' : leg.status === 'lost' ? '✗ Lost' : leg.status === 'void' ? '— Void' : '⏳'}
+                  <p className={`text-xs font-semibold ${leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : leg.status === 'in_progress' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                    {leg.status === 'won' ? '✓ Won' : leg.status === 'lost' ? '✗ Lost' : leg.status === 'void' ? '— Void' : leg.status === 'in_progress' ? '🔴 Live' : '⏳'}
                   </p>
                 </div>
               </div>
@@ -512,38 +515,72 @@ export default function PuntingClub() {
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
   const reviewBetResults = useCallback(async (teams) => {
-    const teamsWithPending = teams.filter(t => t.bets.some(b => b.legs?.some(l => l.status === 'pending')));
+    const UNSETTLED = ['pending', 'in_progress'];
+    const teamsWithPending = teams.filter(t => t.bets.some(b => b.legs?.some(l => UNSETTLED.includes(l.status))));
     if (!teamsWithPending.length) { setLastChecked(new Date()); return; }
     setCheckingResults(true);
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     try {
       for (const team of teamsWithPending) {
         for (let bi = 0; bi < team.bets.length; bi++) {
           const bet = team.bets[bi];
-          if (!bet.legs?.some(l => l.status === 'pending')) continue;
-          const desc = bet.legs.map(l => `Leg ${l.legNumber}: ${l.selection} — ${l.event} — ${l.market} — @ ${l.odds} — status: ${l.status}`).join('\n');
-          const prompt = `Today: ${new Date().toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}.\n\nBet legs:\n${desc}\n\nFor each pending leg determine if it has concluded. Return ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"pending","result":"brief note"}]\nOnly mark settled if confident. Return all legs.`;
-          const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:500, messages:[{ role:'user', content: prompt }] }) });
+          if (!bet.legs?.some(l => UNSETTLED.includes(l.status))) continue;
+          const desc = bet.legs.map(l => {
+            const eventDateStr = l.eventDate ? ` — date: ${l.eventDate}${l.startTime ? ' ' + l.startTime : ''}` : '';
+            return `Leg ${l.legNumber}: ${l.selection} — ${l.event} — ${l.market} — @ ${l.odds} — status: ${l.status}${eventDateStr}`;
+          }).join('\n');
+          const prompt = `Today: ${todayStr}. Current time: ${now.toLocaleTimeString('en-AU')}.\n\nBet legs:\n${desc}\n\nFor each unsettled leg (pending or in_progress) determine its current state:\n- "won" if the selection won\n- "lost" if the selection lost\n- "void" if the bet was voided/cancelled\n- "in_progress" if the event has started but not yet concluded (live right now)\n- "pending" if the event hasn't started yet\n\nReturn ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"in_progress"|"pending","result":"brief note"}]\nOnly mark won/lost/void if fully confident the event is concluded. Return all legs.`;
+          const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:600, messages:[{ role:'user', content: prompt }] }) });
           const data = await res.json();
           if (!data.content?.[0]?.text) continue;
           const updates = parseAnalysisJSON(data.content[0].text);
           if (!Array.isArray(updates)) continue;
+
+          // Persist each changed leg to DB
+          for (const u of updates) {
+            const origLeg = bet.legs.find(l => l.legNumber === u.legNumber);
+            if (origLeg && origLeg.status !== u.status && origLeg.id) {
+              try { await apiUpdateBetLeg(origLeg.id, u.status, u.result || ''); } catch(e) { console.error('leg persist failed', e); }
+            }
+          }
+
+          // Calculate new overall bet status
+          const newLegs = bet.legs.map(leg => {
+            const u = updates.find(x => x.legNumber === leg.legNumber);
+            return u ? { ...leg, status: u.status, resultNote: u.result || leg.resultNote } : leg;
+          });
+          const settled = ['won', 'lost', 'void'];
+          const allDone  = newLegs.every(l => settled.includes(l.status));
+          const allWon   = newLegs.every(l => l.status === 'won');
+          const anyLost  = newLegs.some(l => l.status === 'lost');
+          const anyLive  = newLegs.some(l => l.status === 'in_progress');
+          const newOverall = allDone ? (allWon ? 'won' : anyLost ? 'lost' : 'partial') : anyLive ? 'in_progress' : 'pending';
+
+          // Persist overall bet status if changed
+          if (bet.id && newOverall !== bet.overallStatus) {
+            try { await apiUpdateBetResult(bet.id, newOverall, 'system'); } catch(e) { console.error('bet persist failed', e); }
+          }
+
           setLeaderboardTeams(prev => prev.map(t => {
             if (t.team !== team.team) return t;
             const newBets = t.bets.map((b, idx) => {
               if (idx !== bi) return b;
-              const newLegs = b.legs.map(leg => { const u = updates.find(x => x.legNumber === leg.legNumber); return u ? { ...leg, status: u.status, resultNote: u.result || leg.resultNote } : leg; });
-              const allDone = newLegs.every(l => l.status !== 'pending');
-              const allWon  = newLegs.every(l => l.status === 'won');
-              const anyLost = newLegs.some(l => l.status === 'lost');
-              return { ...b, legs: newLegs, overallStatus: allDone ? (allWon ? 'won' : anyLost ? 'lost' : 'partial') : 'pending' };
+              const updatedLegs = b.legs.map(leg => { const u = updates.find(x => x.legNumber === leg.legNumber); return u ? { ...leg, status: u.status, resultNote: u.result || leg.resultNote } : leg; });
+              const al = updatedLegs.every(l => settled.includes(l.status));
+              const aw = updatedLegs.every(l => l.status === 'won');
+              const lo = updatedLegs.some(l => l.status === 'lost');
+              const li = updatedLegs.some(l => l.status === 'in_progress');
+              return { ...b, legs: updatedLegs, overallStatus: al ? (aw ? 'won' : lo ? 'lost' : 'partial') : li ? 'in_progress' : 'pending' };
             });
             const anyWon  = newBets.some(b => b.overallStatus === 'won');
             const anyLost = newBets.some(b => b.overallStatus === 'lost');
+            const anyLive = newBets.some(b => b.overallStatus === 'in_progress');
             const allP    = newBets.every(b => !b.overallStatus || b.overallStatus === 'pending');
-            return { ...t, bets: newBets, week: allP ? 'P' : anyWon ? 'W' : anyLost ? 'L' : 'P' };
+            return { ...t, bets: newBets, week: allP ? 'P' : anyWon ? 'W' : anyLost ? 'L' : anyLive ? 'IP' : 'P' };
           }));
-          const settled = updates.filter(l => l.status !== 'pending').length;
-          if (settled) setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${settled} leg(s) updated for ${team.team}`, teamName: team.team }, ...prev.slice(0, 19)]);
+          const changedCount = updates.filter(l => l.status !== 'pending').length;
+          if (changedCount) setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${changedCount} leg(s) updated for ${team.team}`, teamName: team.team }, ...prev.slice(0, 19)]);
         }
       }
     } catch(err) { console.error('Result check error:', err); }
@@ -692,21 +729,64 @@ export default function PuntingClub() {
         total: t.totalWonFormatted, color: colors[i % colors.length], members: t.memberCount,
         weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
         bets: (t.bets || []).map(b => ({
-          type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
+          id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
           estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
           submittedAt: new Date(b.submitted_at).toLocaleString(),
-          legs: (b.bet_legs||[]).map(l => ({ legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+          legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
         })),
       })));
     }).catch(console.error);
   }, [currentUser?.competitionCode, activeCompetitions]);
 
-  // Polling interval for result checks
+  // Smart auto-check: fire every 3 hours from the first event's start time
   useEffect(() => {
-    const id = setInterval(() => setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; }), 2 * 60 * 60 * 1000);
-    intervalRef.current = id;
-    return () => clearInterval(id);
-  }, [reviewBetResults]);
+    if (!leaderboardTeams.length) return;
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+    // Find the earliest event start across all pending/in-progress legs
+    let firstEventMs = null;
+    for (const team of leaderboardTeams) {
+      for (const bet of team.bets || []) {
+        for (const leg of bet.legs || []) {
+          if (leg.eventDate && ['pending', 'in_progress'].includes(leg.status)) {
+            const timeStr = leg.startTime ? leg.startTime.substring(0, 5) : '00:00';
+            const dt = new Date(`${leg.eventDate}T${timeStr}`);
+            if (!isNaN(dt.getTime()) && (!firstEventMs || dt.getTime() < firstEventMs)) {
+              firstEventMs = dt.getTime();
+            }
+          }
+        }
+      }
+    }
+
+    // Calculate milliseconds until next 3-hour check boundary from first event
+    const now = Date.now();
+    let delay;
+    if (!firstEventMs) {
+      delay = THREE_HOURS; // no event dates stored — fall back to 3h from now
+    } else if (now < firstEventMs) {
+      delay = firstEventMs - now; // wait until first event starts
+    } else {
+      const elapsed = now - firstEventMs;
+      const nextCount = Math.ceil(elapsed / THREE_HOURS) || 1;
+      delay = firstEventMs + nextCount * THREE_HOURS - now;
+      if (delay < 30000) delay += THREE_HOURS; // avoid firing within 30s
+    }
+
+    // Schedule first check, then repeat every 3 hours
+    const tid = setTimeout(() => {
+      setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+      intervalRef.current = setInterval(() => {
+        setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+      }, THREE_HOURS);
+    }, delay);
+
+    return () => {
+      clearTimeout(tid);
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaderboardTeams.length, reviewBetResults]);
 
   const checkResultsNow = () => setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
 
@@ -1171,7 +1251,7 @@ export default function PuntingClub() {
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
               <div>
                 <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-                <p className="text-gray-500 text-sm">Week 3 of 8 · Auto-checks results every 2 hours</p>
+                <p className="text-gray-500 text-sm">Week 3 of 8 · Auto-checks results every 3 hours from first event start</p>
                 {lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
                 {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
               </div>
@@ -1226,9 +1306,10 @@ export default function PuntingClub() {
                 const isOpen = selectedTeamIdx === idx;
                 const rowBg = isMe
                   ? 'border-amber-400/40 bg-amber-500/5'
-                  : weekBet?.overallStatus === 'won'   ? 'border-green-500/20 bg-green-950/10'
-                  : weekBet?.overallStatus === 'lost'  ? 'border-red-500/20 bg-red-950/10'
-                  : weekBet?.overallStatus === 'pending' && weekBet?.legs?.some(l => l.status === 'won') ? 'border-orange-500/20 bg-orange-950/10'
+                  : weekBet?.overallStatus === 'won'         ? 'border-green-500/20 bg-green-950/10'
+                  : weekBet?.overallStatus === 'lost'        ? 'border-red-500/20 bg-red-950/10'
+                  : weekBet?.overallStatus === 'in_progress' ? 'border-orange-500/20 bg-orange-950/10'
+                  : weekBet?.legs?.some(l => l.status === 'in_progress') ? 'border-orange-500/20 bg-orange-950/10'
                   : 'border-white/5 bg-white/2';
 
                 return (
@@ -1625,7 +1706,7 @@ export default function PuntingClub() {
                 { n:'1', t:'Create or Join a Team', d:'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets:['Captain pays $1,000 buy-in or split among members','Invite up to 10+ members via your unique team code','Members must be approved by the captain before joining'] },
                 { n:'2', t:'Confirm Buy-In', d:'Before the season starts all team members must confirm their deposit contribution.', bullets:['Captain can track who has and hasn\'t paid','Competition doesn\'t officially start until all deposits confirmed','Special arrangements can be made via admin'] },
                 { n:'3', t:'Submit Your Weekly Bet', d:'Place your bet on any platform, then submit the screenshot via the website.', bullets:['$50 max per week (split how you like)','Must submit before first leg starts','Last week of competition: $200 bet','You keep all your winnings!'] },
-                { n:'4', t:'Track Results', d:'AI reads your bet slip and updates leg-by-leg results every 2 hours automatically.', bullets:['Green ticks = won, red crosses = lost, orange = in progress','Team leaderboard updates in real-time','Click any team to see their full bet slip'] },
+                { n:'4', t:'Track Results', d:'AI reads your bet slip and updates leg-by-leg results every 3 hours from the first event start.', bullets:['Green = won, Red = lost, Orange = in progress (live)','Team leaderboard updates in real-time','Click any team to see their full bet slip'] },
                 { n:'5', t:'Win the Jackpot', d:'Highest total winnings at season end takes the prize pool.', bullets:['Payout depends on number of teams','Final week has $200 bet for big finish','Top 2-3 teams paid depending on competition size'] },
               ].map(s => (
                 <div key={s.n} className="bg-white/3 border border-white/8 rounded-xl p-5 flex gap-4">
