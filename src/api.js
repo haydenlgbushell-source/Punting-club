@@ -30,6 +30,7 @@ export const apiUpdateCompStatus = (id, status, adminRole) => call('data', { act
 // ── TEAMS ────────────────────────────────────────────────────
 export const apiGetTeam                = (teamId)                    => call('data', { action: 'get_team', teamId });
 export const apiCreateAdditionalTeam   = (payload)                   => call('data', { action: 'create_additional_team', ...payload });
+export const apiJoinExistingTeam       = (userId, teamCode)           => call('data', { action: 'join_existing_team', userId, teamCode });
 export const apiGetAllTeams   = ()              => call('data', { action: 'get_all_teams' });
 export const apiUpdateTeam    = (teamId, updates, adminRole) => call('data', { action: 'update_team', teamId, updates, adminRole });
 export const apiFinaliseTeam  = (teamId, depositPerMember) => call('data', { action: 'finalise_team', teamId, depositPerMember });

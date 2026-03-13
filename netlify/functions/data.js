@@ -280,6 +280,44 @@ exports.handler = async (event) => {
         return json({ ...newTeam, teamCode: teamCodeGen });
       }
 
+      case 'join_existing_team': {
+        const { userId, teamCode } = payload;
+        if (!userId)   return error('Not logged in');
+        if (!teamCode?.trim()) return error('Team code is required');
+
+        // Find the team
+        const { data: team } = await supabase
+          .from('teams')
+          .select('*, competitions(name, code, status)')
+          .eq('team_code', teamCode.trim().toUpperCase())
+          .maybeSingle();
+        if (!team) return error('Team code not found. Please check and try again.');
+
+        // Check user isn't already a member (any role)
+        const { data: existing } = await supabase
+          .from('team_members')
+          .select('id, role')
+          .eq('team_id', team.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (existing) {
+          if (existing.role === 'pending') return error('You have already requested to join this team and are awaiting captain approval.');
+          return error('You are already a member of this team.');
+        }
+
+        // Add as pending member
+        const { error: memberErr } = await supabase.from('team_members').insert({
+          team_id:      team.id,
+          user_id:      userId,
+          role:         'pending',
+          can_bet:      false,
+          deposit_paid: false,
+        });
+        if (memberErr) return error(memberErr.message);
+
+        return json({ teamName: team.team_name, teamCode: team.team_code, teamId: team.id, competitionName: team.competitions?.name || null });
+      }
+
       // ══════════════════════════════════════════════════════
       //  BETS
       // ══════════════════════════════════════════════════════

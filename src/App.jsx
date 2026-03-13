@@ -4,7 +4,7 @@ import {
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
-  apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet,
+  apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog,
   apiCreateAdditionalTeam,
 } from './api.js';
@@ -185,11 +185,16 @@ export default function PuntingClub() {
   const [apiError, setApiError]     = useState(null);
   const [signupMode, setSignupMode] = useState(null); // 'create' | 'join'
 
-  // Create additional team (logged-in users)
+  // Create / join additional team (logged-in users)
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [teamModalTab, setTeamModalTab]               = useState('create'); // 'create' | 'join'
   const [createTeamForm, setCreateTeamForm]           = useState({ teamName: '', competitionCode: '', buyInMode: 'split' });
   const [createTeamLoading, setCreateTeamLoading]     = useState(false);
   const [createTeamError, setCreateTeamError]         = useState(null);
+  const [joinTeamCode, setJoinTeamCode]               = useState('');
+  const [joinTeamLoading, setJoinTeamLoading]         = useState(false);
+  const [joinTeamError, setJoinTeamError]             = useState(null);
+  const [joinTeamSuccess, setJoinTeamSuccess]         = useState(null);
 
   // Active competitions from Supabase (for signup dropdown)
   const [activeCompetitions, setActiveCompetitions] = useState([]);
@@ -363,6 +368,25 @@ export default function PuntingClub() {
       setCreateTeamError(err.message);
     } finally {
       setCreateTeamLoading(false);
+    }
+  };
+
+  // ── JOIN EXISTING TEAM (logged-in user) ──────────────────────────────────
+  const handleJoinExistingTeam = async (e) => {
+    e.preventDefault();
+    const code = joinTeamCode.trim().toUpperCase();
+    if (!code) { setJoinTeamError('Please enter a team code.'); return; }
+    setJoinTeamLoading(true);
+    setJoinTeamError(null);
+    setJoinTeamSuccess(null);
+    try {
+      const result = await apiJoinExistingTeam(currentUser.id, code);
+      setJoinTeamSuccess(`Request sent to join "${result.teamName}"${result.competitionName ? ` (${result.competitionName})` : ''}. The captain needs to approve your request.`);
+      setJoinTeamCode('');
+    } catch (err) {
+      setJoinTeamError(err.message);
+    } finally {
+      setJoinTeamLoading(false);
     }
   };
 
@@ -1108,7 +1132,7 @@ export default function PuntingClub() {
                     <p className="text-amber-400 text-xs font-bold leading-tight">{currentUser?.teamName}{currentUser?.role === 'captain' && <span className="ml-1">👑</span>}</p>
                     <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName} · <PermissionBadge role={currentUser?.role} /></p>
                   </div>
-                  <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setShowCreateTeamModal(true); }} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">+ New Team</button>
+                  <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setShowCreateTeamModal(true); }} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">+ New Team</button>
                   <button onClick={handleLogout} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">Logout</button>
                 </div>
               ) : (
@@ -2836,88 +2860,142 @@ export default function PuntingClub() {
         </Modal>
       )}
 
-      {/* ── CREATE ADDITIONAL TEAM MODAL ──────────────────────────────────── */}
+      {/* ── CREATE / JOIN TEAM MODAL ──────────────────────────────────────── */}
       {showCreateTeamModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
+            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <h2 className="text-lg font-bold text-white">Create Another Team</h2>
+              <h2 className="text-lg font-bold text-white">New Team</h2>
               <button onClick={() => setShowCreateTeamModal(false)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleCreateAdditionalTeam} className="px-6 py-5 space-y-4">
-              {createTeamError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-red-400 text-sm">{createTeamError}</div>
-              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-amber-400 mb-1">Team Name *</label>
-                <input
-                  type="text"
-                  value={createTeamForm.teamName}
-                  onChange={e => setCreateTeamForm(p => ({ ...p, teamName: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
-                  placeholder="e.g. The Golden Eagles"
-                  maxLength={50}
-                  required
-                />
-              </div>
+            {/* Tabs */}
+            <div className="flex border-b border-white/5">
+              {[['create','Create New'],['join','Join Existing']].map(([tab, label]) => (
+                <button key={tab} onClick={() => { setTeamModalTab(tab); setCreateTeamError(null); setJoinTeamError(null); setJoinTeamSuccess(null); }}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors ${teamModalTab === tab ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >{label}</button>
+              ))}
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-amber-400 mb-1">Competition <span className="text-gray-600 font-normal">(optional)</span></label>
-                {activeCompetitions.length > 0 ? (
-                  <>
-                    <select
-                      value={createTeamForm.competitionCode}
-                      onChange={e => setCreateTeamForm(p => ({ ...p, competitionCode: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
-                      style={{ backgroundColor: '#111827' }}
-                    >
-                      <option value="">— No competition (register team only) —</option>
-                      {activeCompetitions.map(c => (
-                        <option key={c.code} value={c.code}>
-                          {c.name} · {c.pub} · {c.weeks}wks · ${c.buy_in?.toLocaleString()} buy-in
-                        </option>
-                      ))}
-                    </select>
-                    {createTeamForm.competitionCode && (() => {
-                      const sel = activeCompetitions.find(c => c.code === createTeamForm.competitionCode);
-                      return sel ? (
-                        <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                          <p className="text-amber-400 text-xs font-semibold">✓ Joining: {sel.name}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">{sel.pub} · {sel.weeks} weeks · Buy-in: ${sel.buy_in?.toLocaleString()}</p>
-                        </div>
-                      ) : null;
-                    })()}
-                  </>
-                ) : (
-                  <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No active competitions available</div>
+            {/* ── Create tab ── */}
+            {teamModalTab === 'create' && (
+              <form onSubmit={handleCreateAdditionalTeam} className="px-6 py-5 space-y-4">
+                {createTeamError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-red-400 text-sm">{createTeamError}</div>
                 )}
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-amber-400 mb-1">Buy-In Mode</label>
-                <div className="flex gap-2">
-                  {[['split','Members split equally'],['captain','Captain pays all']].map(([val, label]) => (
-                    <button key={val} type="button"
-                      onClick={() => setCreateTeamForm(p => ({ ...p, buyInMode: val }))}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border transition-all ${createTeamForm.buyInMode === val ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}
-                    >{label}</button>
-                  ))}
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Team Name *</label>
+                  <input
+                    type="text"
+                    value={createTeamForm.teamName}
+                    onChange={e => setCreateTeamForm(p => ({ ...p, teamName: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                    placeholder="e.g. The Golden Eagles"
+                    maxLength={50}
+                    required
+                  />
                 </div>
-              </div>
 
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
-                You can be in up to <span className="text-white font-semibold">3 teams</span> per competition (as captain or member). Team names must be unique within each competition.
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Competition <span className="text-gray-600 font-normal">(optional)</span></label>
+                  {activeCompetitions.length > 0 ? (
+                    <>
+                      <select
+                        value={createTeamForm.competitionCode}
+                        onChange={e => setCreateTeamForm(p => ({ ...p, competitionCode: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                        style={{ backgroundColor: '#111827' }}
+                      >
+                        <option value="">— No competition (register team only) —</option>
+                        {activeCompetitions.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.name} · {c.pub} · {c.weeks}wks · ${c.buy_in?.toLocaleString()} buy-in
+                          </option>
+                        ))}
+                      </select>
+                      {createTeamForm.competitionCode && (() => {
+                        const sel = activeCompetitions.find(c => c.code === createTeamForm.competitionCode);
+                        return sel ? (
+                          <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                            <p className="text-amber-400 text-xs font-semibold">✓ Joining: {sel.name}</p>
+                            <p className="text-gray-500 text-xs mt-0.5">{sel.pub} · {sel.weeks} weeks · Buy-in: ${sel.buy_in?.toLocaleString()}</p>
+                          </div>
+                        ) : null;
+                      })()}
+                    </>
+                  ) : (
+                    <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No active competitions available</div>
+                  )}
+                </div>
 
-              <button
-                type="submit"
-                disabled={createTeamLoading}
-                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-black font-bold py-3 rounded-xl text-sm transition-all"
-              >
-                {createTeamLoading ? 'Creating…' : 'Create Team'}
-              </button>
-            </form>
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Buy-In Mode</label>
+                  <div className="flex gap-2">
+                    {[['split','Members split equally'],['captain','Captain pays all']].map(([val, label]) => (
+                      <button key={val} type="button"
+                        onClick={() => setCreateTeamForm(p => ({ ...p, buyInMode: val }))}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border transition-all ${createTeamForm.buyInMode === val ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
+                  You can be in up to <span className="text-white font-semibold">3 teams</span> per competition. Team names must be unique within each competition.
+                </div>
+
+                <button type="submit" disabled={createTeamLoading}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-black font-bold py-3 rounded-xl text-sm transition-all">
+                  {createTeamLoading ? 'Creating…' : 'Create Team'}
+                </button>
+              </form>
+            )}
+
+            {/* ── Join tab ── */}
+            {teamModalTab === 'join' && (
+              <form onSubmit={handleJoinExistingTeam} className="px-6 py-5 space-y-4">
+                {joinTeamError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-red-400 text-sm">{joinTeamError}</div>
+                )}
+                {joinTeamSuccess && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2 text-green-400 text-sm">✓ {joinTeamSuccess}</div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Team Code *</label>
+                  <input
+                    type="text"
+                    value={joinTeamCode}
+                    onChange={e => setJoinTeamCode(e.target.value.toUpperCase())}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                    placeholder="e.g. ABC123"
+                    maxLength={8}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <p className="text-gray-600 text-xs mt-1">Ask the team captain for their 6-character team code.</p>
+                </div>
+
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
+                  Your request will be <span className="text-amber-400 font-semibold">pending captain approval</span> before you can bet. You can be in up to <span className="text-white font-semibold">3 teams</span> per competition.
+                </div>
+
+                <button type="submit" disabled={joinTeamLoading || !!joinTeamSuccess}
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all">
+                  {joinTeamLoading ? 'Sending request…' : joinTeamSuccess ? 'Request sent ✓' : 'Request to Join'}
+                </button>
+
+                {joinTeamSuccess && (
+                  <button type="button" onClick={() => setShowCreateTeamModal(false)}
+                    className="w-full border border-white/10 text-gray-400 hover:text-white py-2 rounded-xl text-sm transition-colors">
+                    Close
+                  </button>
+                )}
+              </form>
+            )}
           </div>
         </div>
       )}
