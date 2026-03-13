@@ -237,13 +237,13 @@ exports.handler = async (event) => {
 
       // Step 1: Supabase auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password });
-      if (authError) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password.', step: '1-auth' }) };
-      if (!authData) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'Auth returned null', step: '1-auth-null' }) };
+      if (authError) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password.' }) };
+      if (!authData) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'Auth returned null' }) };
 
       // Step 2: Fetch user profile
       const { data: user, error: userErr } = await supabase.from('users').select('*').eq('phone', cleanPhone).maybeSingle();
-      if (userErr) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: userErr.message, step: '2-user-fetch-err' }) };
-      if (!user) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'User profile not found. Please contact support.', step: '2-user-null' }) };
+      if (userErr) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: userErr.message }) };
+      if (!user) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'User profile not found. Please contact support.' }) };
 
       // Step 3: Resolve teams
       const teams = await resolveUserTeams(user.id);
@@ -285,6 +285,6 @@ exports.handler = async (event) => {
 
   } catch (err) {
     console.error('Auth function error:', err);
-    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message, step: 'catch', at: err.stack?.split('\n').slice(0,3).join(' | ') || 'no-stack', v: 'v9' }) };
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message }) };
   }
 };
