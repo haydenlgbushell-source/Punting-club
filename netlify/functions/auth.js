@@ -159,9 +159,15 @@ exports.handler = async (event) => {
           if (!ex) break;
         } while (++attempts < 10);
 
+        // Enforce team name uniqueness within competition (case-insensitive)
+        const nameQuery = supabase.from('teams').select('id').ilike('team_name', teamName.trim());
+        if (compId) nameQuery.eq('competition_id', compId);
+        const { data: nameDup } = await nameQuery.maybeSingle();
+        if (nameDup) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Team name "${teamName.trim()}" is already taken in this competition. Please choose a different name.` }) };
+
         const { data: newTeam, error: teamError } = await supabase.from('teams').insert({
           team_code:      teamCodeGen,
-          team_name:      teamName,
+          team_name:      teamName.trim(),
           captain_id:     user.id,
           competition_id: compId,
           buy_in_mode:    buyInMode || 'split',

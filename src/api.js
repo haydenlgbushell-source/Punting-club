@@ -28,7 +28,8 @@ export const apiCreateCompetition = (comp, adminRole) => call('data', { action: 
 export const apiUpdateCompStatus = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
 
 // ── TEAMS ────────────────────────────────────────────────────
-export const apiGetTeam       = (teamId)        => call('data', { action: 'get_team', teamId });
+export const apiGetTeam                = (teamId)                    => call('data', { action: 'get_team', teamId });
+export const apiCreateAdditionalTeam   = (payload)                   => call('data', { action: 'create_additional_team', ...payload });
 export const apiGetAllTeams   = ()              => call('data', { action: 'get_all_teams' });
 export const apiUpdateTeam    = (teamId, updates, adminRole) => call('data', { action: 'update_team', teamId, updates, adminRole });
 export const apiFinaliseTeam  = (teamId, depositPerMember) => call('data', { action: 'finalise_team', teamId, depositPerMember });

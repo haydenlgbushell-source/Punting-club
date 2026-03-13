@@ -207,6 +207,80 @@ exports.handler = async (event) => {
         return json({ success: true });
       }
 
+      case 'create_additional_team': {
+        const { userId, teamName, competitionCode, buyInMode } = payload;
+        if (!userId)   return error('Not logged in');
+        if (!teamName?.trim()) return error('Team name is required');
+
+        // Resolve competition
+        let compId = null;
+        if (competitionCode) {
+          const { data: comp } = await supabase.from('competitions').select('id').eq('code', competitionCode).eq('status', 'active').maybeSingle();
+          compId = comp?.id || null;
+        }
+
+        // Enforce team name uniqueness within competition (case-insensitive)
+        const nameQuery = supabase.from('teams').select('id').ilike('team_name', teamName.trim());
+        if (compId) nameQuery.eq('competition_id', compId);
+        const { data: nameDup } = await nameQuery.maybeSingle();
+        if (nameDup) return error(`Team name "${teamName.trim()}" is already taken in this competition. Please choose a different name.`);
+
+        // Enforce max 3 teams per user per competition
+        const countQuery = supabase
+          .from('team_members')
+          .select('teams!inner(competition_id)', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('role', 'captain');
+        if (compId) countQuery.eq('teams.competition_id', compId);
+        const { count: teamCount } = await countQuery;
+        if (teamCount >= 3) return error('You can only captain up to 3 teams in the same competition.');
+
+        // Generate unique team code
+        let teamCodeGen, attempts = 0;
+        do {
+          teamCodeGen = Array.from({ length: 6 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+          const { data: ex } = await supabase.from('teams').select('id').eq('team_code', teamCodeGen).maybeSingle();
+          if (!ex) break;
+        } while (++attempts < 10);
+
+        // Create team
+        const { data: newTeam, error: teamErr } = await supabase.from('teams').insert({
+          team_code:      teamCodeGen,
+          team_name:      teamName.trim(),
+          captain_id:     userId,
+          competition_id: compId,
+          buy_in_mode:    buyInMode || 'split',
+          status:         'pending',
+          finalised:      false,
+        }).select().single();
+        if (teamErr) return error(teamErr.message);
+
+        // Add as captain in team_members
+        const { error: memberErr } = await supabase.from('team_members').insert({
+          team_id:       newTeam.id,
+          user_id:       userId,
+          role:          'captain',
+          can_bet:       true,
+          deposit_paid:  false,
+          betting_order: 1,
+        });
+        if (memberErr) {
+          // Retry without betting_order if column missing
+          await supabase.from('team_members').insert({ team_id: newTeam.id, user_id: userId, role: 'captain', can_bet: true, deposit_paid: false });
+        }
+
+        // Increment competition team count
+        if (compId) {
+          const { error: rpcErr } = await supabase.rpc('increment_competition_teams', { comp_id: compId });
+          if (rpcErr) {
+            const { data: cd } = await supabase.from('competitions').select('teams_count').eq('id', compId).maybeSingle();
+            if (cd) await supabase.from('competitions').update({ teams_count: (cd.teams_count || 0) + 1 }).eq('id', compId);
+          }
+        }
+
+        return json({ ...newTeam, teamCode: teamCodeGen });
+      }
+
       // ══════════════════════════════════════════════════════
       //  BETS
       // ══════════════════════════════════════════════════════
