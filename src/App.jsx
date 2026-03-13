@@ -851,6 +851,11 @@ export default function PuntingClub() {
         ...uploadedImages.map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
+      if (!res.ok || data.error || data.type === 'error') {
+        const errMsg = data.error?.message || data.error || `API error ${res.status}`;
+        alert(`Analysis failed: ${errMsg}`);
+        return;
+      }
       if (data.content?.[0]?.text) {
         const parsed = parseAnalysisJSON(data.content[0].text);
         if (!parsed) { alert('Could not read bet slip. Try a clearer image.'); return; }
@@ -861,8 +866,11 @@ export default function PuntingClub() {
         setAnalyzedBet(enrichedBet);
         // Auto-select the user's own team
         if (myTeamName) setSelectedTeamForBet(myTeamName);
+      } else {
+        alert('Analysis failed: no response from AI. Check browser console for details.');
+        console.error('Claude response:', data);
       }
-    } catch(err) { console.error(err); alert('Error analyzing bet slip. Please try again.'); }
+    } catch(err) { console.error(err); alert(`Error analyzing bet slip: ${err.message}`); }
     finally { setAnalyzing(false); }
   };
 
