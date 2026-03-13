@@ -846,7 +846,7 @@ export default function PuntingClub() {
     if (!uploadedImages.length) { alert('Please upload at least one bet slip image.'); return; }
     setAnalyzing(true);
     try {
-      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1200, messages:[{ role:'user', content:[
+      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1200, messages:[{ role:'user', content:[
         { type:'text', text:`You are a sports betting expert. Analyze this bet slip and return ONLY valid JSON:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Event","selection":"Selection","market":"Win","odds":"2.10","status":"pending"}]\n}\nRules: dollar signs on money, decimal odds, status ∈ {pending,won,lost,void}, submissionValid = placed before first leg. Return ONLY JSON.` },
         ...uploadedImages.map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
@@ -859,6 +859,8 @@ export default function PuntingClub() {
         if (stakeNum > WEEK_BUDGET) { alert(`Stake $${stakeNum} exceeds the $${WEEK_BUDGET} weekly limit.`); return; }
         const enrichedBet = { ...parsed, betType: parsed.betType || 'Multi', legs: parsed.legs || [], timestamp: new Date().toLocaleTimeString(), images: uploadedImages.length };
         setAnalyzedBet(enrichedBet);
+        // Auto-select the user's own team
+        if (myTeamName) setSelectedTeamForBet(myTeamName);
       }
     } catch(err) { console.error(err); alert('Error analyzing bet slip. Please try again.'); }
     finally { setAnalyzing(false); }
@@ -870,7 +872,8 @@ export default function PuntingClub() {
     // Optimistic UI update
     setLeaderboardTeams(prev => prev.map(t => t.team === selectedTeamForBet ? { ...t, bets: [...t.bets, newBet] } : t));
     setShowBetAnalyzer(false);
-    setShowBetResults(true);
+    resetBetAnalyzer();
+    setActiveNav('team');
     // Persist to Supabase
     try {
       const team = leaderboardTeams.find(t => t.team === selectedTeamForBet);
@@ -2648,6 +2651,13 @@ export default function PuntingClub() {
               </>
             ) : (
               <>
+                <div className="bg-green-950/40 border border-green-500/40 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">✓</div>
+                  <div>
+                    <p className="text-green-400 font-bold text-sm">Analysis Complete</p>
+                    <p className="text-green-300/60 text-xs">Review the details below, then submit.</p>
+                  </div>
+                </div>
                 <BetSlipCard bet={{ ...analyzedBet, type: analyzedBet.betType, overallStatus: 'pending' }} />
                 <div>
                   <label className="block text-xs font-semibold text-amber-400 mb-1.5">Submit for team *</label>
