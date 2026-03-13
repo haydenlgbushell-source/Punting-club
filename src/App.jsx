@@ -621,7 +621,7 @@ export default function PuntingClub() {
           id: b.id, team: b.teams?.team_name, status: b.overall_status,
           stake: `$${b.stake || 0}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
           flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
-          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note })),
+          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
         })));
       }
       if (comps.status === 'fulfilled' && comps.value) {
@@ -659,7 +659,7 @@ export default function PuntingClub() {
           type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
           estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
           submittedAt: new Date(b.submitted_at).toLocaleString(),
-          legs: (b.bet_legs||[]).map(l => ({ legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note })),
+          legs: (b.bet_legs||[]).map(l => ({ legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
         })),
       })));
     }).catch(console.error);
@@ -848,7 +848,7 @@ export default function PuntingClub() {
     setAnalyzing(true);
     try {
       const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1200, messages:[{ role:'user', content:[
-        { type:'text', text:`You are a sports betting expert. Analyze this bet slip and return ONLY valid JSON:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Event","selection":"Selection","market":"Win","odds":"2.10","status":"pending"}]\n}\nRules: dollar signs on money, decimal odds, status ∈ {pending,won,lost,void}, submissionValid = placed before first leg. Return ONLY JSON.` },
+        { type:'text', text:`You are a sports betting expert. Analyze this bet slip and return ONLY valid JSON:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Event","selection":"Selection","market":"Win","odds":"2.10","eventDate":"2025-03-15","startTime":"19:30","status":"pending"}]\n}\nRules: dollar signs on money, decimal odds, status ∈ {pending,won,lost,void}, submissionValid = placed before first leg, eventDate in YYYY-MM-DD format, startTime in HH:MM 24h format (null if not visible). Return ONLY JSON.` },
         ...uploadedImages.map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();

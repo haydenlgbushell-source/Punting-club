@@ -237,6 +237,8 @@ exports.handler = async (event) => {
             selection:  leg.selection,
             market:     leg.market,
             odds:       parseFloat(leg.odds) || null,
+            event_date: leg.eventDate || null,
+            start_time: leg.startTime || null,
             status:     'pending',
           }));
           const { error: legsError } = await supabase.from('bet_legs').insert(legRows);
