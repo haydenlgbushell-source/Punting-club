@@ -71,13 +71,14 @@ const resolveUserTeams = async (userId) => {
   // If user is captain of a team but has no team_members record, auto-insert it
   for (const m of missingMemberships) {
     console.log('Repairing missing team_members record for captain', userId, 'team', m.teams.id);
-    await supabase.from('team_members').insert({
+    const { error: repairErr } = await supabase.from('team_members').insert({
       team_id:      m.teams.id,
       user_id:      userId,
       role:         'captain',
       can_bet:      true,
       deposit_paid: false,
-    }).catch(e => console.error('Auto-repair insert failed:', e.message));
+    });
+    if (repairErr) console.error('Auto-repair insert failed:', repairErr.message);
   }
 
   const allMemberships = [
@@ -219,10 +220,11 @@ exports.handler = async (event) => {
       }
 
       // Sign in to get a session token so frontend can persist the session
-      const { data: sessionData } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password,
-      }).catch(() => ({ data: null }));
+      let sessionData = null;
+      try {
+        const { data: sd, error: signInErr } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+        if (!signInErr) sessionData = sd;
+      } catch(e) {}
 
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, team, session: sessionData?.session || null }) };
     }
