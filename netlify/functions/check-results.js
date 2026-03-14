@@ -73,7 +73,7 @@ exports.handler = async () => {
         return `Leg ${l.leg_number}: ${l.selection} — ${l.event} — ${l.market} — @ ${l.odds} — status: ${l.status}${eventDateStr}`;
       }).join('\n');
 
-      const prompt = `Today: ${todayStr}. Current time: ${now.toLocaleTimeString('en-AU')}.\n\nBet legs:\n${desc}\n\nFor each unsettled leg (pending or in_progress) determine its current state:\n- "won" if the selection won\n- "lost" if the selection lost\n- "void" if the bet was voided/cancelled\n- "in_progress" if the event has started but not yet concluded (live right now)\n- "pending" if the event hasn't started yet\n\nReturn ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"in_progress"|"pending","result":"brief note"}]\nOnly mark won/lost/void if fully confident the event is concluded. Return all legs.`;
+      const prompt = `Today: ${todayStr}. Current time: ${now.toLocaleTimeString('en-AU')}.\nIMPORTANT: Only use results from the year ${now.getFullYear()}. Do not use results from any previous year.\n\nBet legs:\n${desc}\n\nFor each unsettled leg (pending or in_progress) determine its current state:\n- "won" if the selection won\n- "lost" if the selection lost\n- "void" if the bet was voided/cancelled\n- "in_progress" if the event has started but not yet concluded (live right now)\n- "pending" if the event hasn't started yet\n\nReturn ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"in_progress"|"pending","result":"brief note"}]\nOnly mark won/lost/void if fully confident the event is concluded. Return all legs.`;
 
       let responseText;
       try { responseText = await callClaude(prompt); } catch(e) { console.error('[check-results] Claude error:', e.message); continue; }
