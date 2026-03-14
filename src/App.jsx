@@ -1104,7 +1104,7 @@ export default function PuntingClub() {
       )}
 
       {/* ── NAV ─────────────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 w-full border-b border-amber-500/20 z-50">
+      <nav className="fixed top-0 w-full bg-gray-950 border-b border-amber-500/20 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveNav('home')}>
@@ -1147,7 +1147,7 @@ export default function PuntingClub() {
             </button>
           </div>
           {mobileMenuOpen && (
-            <div className="md:hidden pb-4 space-y-1 border-t border-white/5 pt-3">
+            <div className="md:hidden pb-4 space-y-1 border-t border-amber-500/20 pt-3 bg-gray-950">
               {[['home','Home'],['competition','Competition'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team'],['howto','How To']].map(([key, label]) => (
                 <button key={key} onClick={() => { setActiveNav(key); setMobileMenuOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">{label}</button>
               ))}
