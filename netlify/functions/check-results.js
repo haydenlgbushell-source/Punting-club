@@ -89,12 +89,12 @@ exports.handler = async () => {
     // Fetch all bets with unsettled legs
     const { data: bets, error: betsErr } = await supabase
       .from('bets')
-      .select('id, overall_status, teams(team_name), bet_legs(*)')
+      .select('id, overall_status, team_id, bet_legs(*)')
       .in('overall_status', [...UNSETTLED, 'partial'])
       .order('submitted_at', { ascending: false });
 
-    if (betsErr) { console.error('[check-results] DB fetch error:', betsErr.message); return { statusCode: 500 }; }
-    if (!bets?.length) { console.log('[check-results] No unsettled bets found'); return { statusCode: 200 }; }
+    if (betsErr) { console.error('[check-results] DB fetch error:', betsErr.message); return { statusCode: 500, body: JSON.stringify({ error: betsErr.message }) }; }
+    if (!bets?.length) { console.log('[check-results] No unsettled bets found'); return { statusCode: 200, body: JSON.stringify({ legsUpdated: 0, betsUpdated: 0 }) }; }
 
     let totalLegsUpdated = 0;
     let totalBetsUpdated = 0;
@@ -185,7 +185,7 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
         if (betErr) console.error('[check-results] Bet update error:', betErr.message);
         else {
           totalBetsUpdated++;
-          console.log(`[check-results] Bet ${bet.id} (${bet.teams?.team_name}) updated to "${newOverall}"`);
+          console.log(`[check-results] Bet ${bet.id} updated to "${newOverall}"`);
         }
       }
     }
