@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   apiSignUp, apiLogin, apiVerifySession,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
@@ -60,7 +60,7 @@ const Modal = ({ onClose, title, children, maxWidth = 'max-w-md' }) => (
       <div className={`bg-gray-950 border-2 border-amber-500 rounded-xl w-full ${maxWidth} flex flex-col shadow-2xl shadow-amber-900/20`}>
         <div className="sticky top-0 bg-gray-950 border-b border-amber-500/30 p-4 flex justify-between items-center z-10 rounded-t-xl">
           <h2 className="text-lg font-bold text-white">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-amber-400 transition-colors"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-amber-400 transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <div>{children}</div>
       </div>
@@ -258,6 +258,19 @@ export default function PuntingClub() {
   const [resultLog, setResultLog] = useState([]);
   const intervalRef = useRef(null);
 
+  // Toast notifications
+  const [toasts, setToasts] = useState([]);
+  const showToast = useCallback((message, type = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3800);
+  }, []);
+
+  // Scroll to top on page navigation
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeNav]);
+
   // Landscape hint (mobile)
   const [showLandscapeHint, setShowLandscapeHint] = useState(false);
   useEffect(() => {
@@ -275,13 +288,13 @@ export default function PuntingClub() {
   // ── AUTH ──────────────────────────────────────────────────────────────────
   const handleLogin = useCallback(async (e) => {
     e.preventDefault();
-    if (!loginPhone.trim()) { alert('Please enter your mobile number.'); return; }
+    if (!loginPhone.trim()) { setApiError('Please enter your mobile number.'); return; }
     const loginPhoneCheck = validatePhone(loginPhone);
     if (!loginPhoneCheck.valid) {
-      alert('Please enter a valid Australian mobile number.\nExample: 0412 345 678');
+      setApiError('Please enter a valid Australian mobile number. Example: 0412 345 678');
       return;
     }
-    if (!loginPassword.trim()) { alert('Please enter your password.'); return; }
+    if (!loginPassword.trim()) { setApiError('Please enter your password.'); return; }
     setApiLoading(true);
     setApiError(null);
 
@@ -322,7 +335,7 @@ export default function PuntingClub() {
       }
     } catch (err) {
       // Show the actual server error so we know what went wrong
-      alert('Login failed: ' + (err.message || 'Unknown error'));
+      setApiError('Login failed: ' + (err.message || 'Unknown error'));
     } finally {
       setApiLoading(false);
     }
@@ -395,21 +408,21 @@ export default function PuntingClub() {
     e.preventDefault();
 
     // Basic validation
-    if (!formData.firstName?.trim()) { alert('Please enter your first name.'); return; }
-    if (!formData.lastName?.trim())  { alert('Please enter your last name.'); return; }
-    if (!formData.phone?.trim()) { alert('Please enter your mobile number.'); return; }
+    if (!formData.firstName?.trim()) { setApiError('Please enter your first name.'); return; }
+    if (!formData.lastName?.trim())  { setApiError('Please enter your last name.'); return; }
+    if (!formData.phone?.trim()) { setApiError('Please enter your mobile number.'); return; }
     const phoneValidation = validatePhone(formData.phone);
     if (!phoneValidation.valid) {
-      alert('Please enter a valid Australian mobile number.\nExamples: 0412 345 678 or +61 412 345 678');
       setPhoneError('Enter a valid Australian mobile (e.g. 0412 345 678)');
+      setApiError('Please enter a valid Australian mobile number. Examples: 0412 345 678 or +61 412 345 678');
       return;
     }
     setPhoneError('');
-    if (!formData.password)          { alert('Please enter a password.'); return; }
-    if (formData.password !== formData.confirmPassword) { alert('Passwords do not match.'); return; }
-    if (formData.password.length < 6) { alert('Password must be at least 6 characters.'); return; }
-    if (signupMode === 'create' && !formData.teamName?.trim()) { alert('Please enter a team name.'); return; }
-    if (signupMode === 'join'   && !formData.teamCode?.trim()) { alert('Please enter a team code.'); return; }
+    if (!formData.password)          { setApiError('Please enter a password.'); return; }
+    if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
+    if (formData.password.length < 6) { setApiError('Password must be at least 6 characters.'); return; }
+    if (signupMode === 'create' && !formData.teamName?.trim()) { setApiError('Please enter a team name.'); return; }
+    if (signupMode === 'join'   && !formData.teamCode?.trim()) { setApiError('Please enter a team code.'); return; }
 
     setApiLoading(true);
     setApiError(null);
@@ -476,7 +489,7 @@ export default function PuntingClub() {
           depositsPaid: 0, compCode: formData.competitionCode || '', teamCode,
           createdAt: new Date().toLocaleDateString('en-AU'), totalBet: '$0', flagged: false,
         }, ...prev]);
-        alert('\ud83d\udc51 Team Created! You are the Captain.\n\nTeam: ' + teamName + '\nTeam Code: ' + teamCode + '\nLogin (mobile): ' + formData.phone + '\n\nShare your Team Code with friends to join!');
+        showToast(`👑 Team "${teamName}" created! Code: ${teamCode} — share with your mates.`, 'success');
       } else if (result?.user && result?.team) {
         // Joined existing team — log in immediately
         const joinedUser = { ...result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', firstName: formData.firstName.trim(), lastName: formData.lastName.trim(), competitionCode: result.team.competition_id || null };
@@ -485,11 +498,11 @@ export default function PuntingClub() {
         setIsLoggedIn(true);
         setActiveNav('team');
         try { localStorage.setItem('pc_session', JSON.stringify({ user: result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', competitionCode: null, token: result.session?.access_token || 'ok' })); } catch(e) {}
-        alert('✅ Request sent!\n\nYou\'re now pending captain approval.\n\nTeam: ' + result.team.team_name + '\nTeam Code: ' + result.team.team_code);
+        showToast(`Request sent to join "${result.team.team_name}" — waiting for captain approval.`, 'info');
       }
 
     } catch (apiErr) {
-      alert('Sign up failed: ' + (apiErr.message || 'Unknown error'));
+      setApiError('Sign up failed: ' + (apiErr.message || 'Unknown error'));
     } finally {
       setApiLoading(false);
     }
@@ -503,21 +516,22 @@ export default function PuntingClub() {
       // Reload members from DB
       const members = await apiGetTeamMembers(currentTeamId);
       setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
-    } catch (err) { alert(`Failed to approve member: ${err.message}`); }
+      showToast('Member approved!', 'success');
+    } catch (err) { showToast(`Failed to approve member: ${err.message}`, 'error'); }
   };
 
   const rejectMember = async (userId) => {
     try {
       await apiRejectMember(currentTeamId, userId);
       setPendingMembers(prev => prev.filter(m => m.user_id !== userId));
-    } catch (err) { alert(`Failed to reject member: ${err.message}`); }
+    } catch (err) { showToast(`Failed to reject member: ${err.message}`, 'error'); }
   };
 
   const updateMemberRole = async (userId, role) => {
     try {
       setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role, can_bet: role !== 'view-only', canBet: role !== 'view-only' } : m));
       await apiUpdateMember(currentTeamId, userId, { role, can_bet: role !== 'view-only' });
-    } catch (err) { alert(`Failed to update role: ${err.message}`); }
+    } catch (err) { showToast(`Failed to update role: ${err.message}`, 'error'); }
   };
 
   const toggleCanBet = async (userId) => {
@@ -526,7 +540,7 @@ export default function PuntingClub() {
     const newVal = !member?.can_bet;
     setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, can_bet: newVal, canBet: newVal } : m));
     try { await apiUpdateMember(currentTeamId, userId, { can_bet: newVal }); }
-    catch (err) { alert(`Failed to update betting permission: ${err.message}`); }
+    catch (err) { showToast(`Failed to update betting permission: ${err.message}`, 'error'); }
   };
 
   const toggleDepositPaid = async (userId) => {
@@ -534,7 +548,7 @@ export default function PuntingClub() {
     const newVal = !(member?.deposit_paid ?? member?.depositPaid);
     setTeamMembers(prev => prev.map(m => (m.user_id || m.phone) === userId ? { ...m, deposit_paid: newVal, depositPaid: newVal } : m));
     try { await apiUpdateMember(currentTeamId, userId, { deposit_paid: newVal }); }
-    catch (err) { alert(`Failed to update deposit: ${err.message}`); }
+    catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
   };
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
@@ -545,20 +559,52 @@ export default function PuntingClub() {
     setCheckingResults(true);
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
+    const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
     try {
       for (const team of teamsWithPending) {
         for (let bi = 0; bi < team.bets.length; bi++) {
           const bet = team.bets[bi];
           if (!bet.legs?.some(l => UNSETTLED.includes(l.status))) continue;
           const desc = bet.legs.map(l => {
-            const eventDateStr = l.eventDate ? ` — date: ${l.eventDate}${l.startTime ? ' ' + l.startTime : ''}` : '';
-            return `Leg ${l.legNumber}: ${l.selection} — ${l.event} — ${l.market} — @ ${l.odds} — status: ${l.status}${eventDateStr}`;
+            const datePart = l.eventDate ? ` on ${l.eventDate}${l.startTime ? ' at ' + l.startTime + ' AEST' : ''}` : '';
+            return `Leg ${l.legNumber}: "${l.selection}" — ${l.event} — ${l.market} @ ${l.odds}${datePart} — current status: ${l.status}`;
           }).join('\n');
-          const prompt = `Today: ${todayStr}. Current time: ${now.toLocaleTimeString('en-AU')}.\n\nBet legs:\n${desc}\n\nFor each unsettled leg (pending or in_progress) determine its current state:\n- "won" if the selection won\n- "lost" if the selection lost\n- "void" if the bet was voided/cancelled\n- "in_progress" if the event has started but not yet concluded (live right now)\n- "pending" if the event hasn't started yet\n\nReturn ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"in_progress"|"pending","result":"brief note"}]\nOnly mark won/lost/void if fully confident the event is concluded. Return all legs.`;
-          const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:600, messages:[{ role:'user', content: prompt }] }) });
+          const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
+
+You must determine the outcome of the following Australian sports bet legs. Use web search to look up the actual match results for any events that should have already taken place.
+
+Bet legs:
+${desc}
+
+Instructions:
+- Search the web for the actual result of each event/match by name and date
+- Mark "won" if the selection won
+- Mark "lost" if the selection lost
+- Mark "void" if the match was cancelled, postponed, or abandoned
+- Mark "in_progress" if the event has started but is still ongoing right now
+- Mark "pending" only if the event clearly hasn't started yet
+
+Return ONLY a valid JSON array — no other text, no markdown:
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note"}]`;
+
+          const res = await fetch('/api/claude', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-5',
+              max_tokens: 1024,
+              tools,
+              messages: [{ role: 'user', content: prompt }],
+            }),
+          });
+          if (!res.ok) { console.error('Claude API error', res.status); continue; }
           const data = await res.json();
-          if (!data.content?.[0]?.text) continue;
-          const updates = parseAnalysisJSON(data.content[0].text);
+          if (data.error) { console.error('Claude error:', data.error); continue; }
+          // Extract text from response (may be direct or after tool use)
+          const text = data.content?.find(b => b.type === 'text')?.text;
+          if (!text) continue;
+          const updates = parseAnalysisJSON(text);
           if (!Array.isArray(updates)) continue;
 
           // Persist each changed leg to DB
@@ -608,8 +654,14 @@ export default function PuntingClub() {
         }
       }
     } catch(err) { console.error('Result check error:', err); }
-    finally { setCheckingResults(false); setLastChecked(new Date()); }
-  }, []);
+    finally {
+      setCheckingResults(false);
+      setLastChecked(new Date());
+      // Re-fetch from DB so any updates from the scheduled check-results function
+      // (and the ones just persisted above) are reflected in the UI.
+      refreshLeaderboard();
+    }
+  }, [refreshLeaderboard]);
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -738,29 +790,47 @@ export default function PuntingClub() {
     refreshAdminData();
   }, [isAdminLoggedIn, refreshAdminData]);
 
-  // Load leaderboard when competition is known
-  useEffect(() => {
-    if (!currentUser?.competitionCode) return;
-    // Find competition id from active competitions
-    const comp = activeCompetitions.find(c => c.code === currentUser.competitionCode);
+  // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
+  const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
+
+  const mapLeaderboardData = useCallback((data) => data.map((t, i) => ({
+    rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
+    total: t.totalWonFormatted, color: LEADERBOARD_COLORS[i % LEADERBOARD_COLORS.length], members: t.memberCount,
+    weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
+    bets: (t.bets || []).map(b => ({
+      id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
+      estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
+      submittedAt: new Date(b.submitted_at).toLocaleString(),
+      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+    })),
+  })), []);
+
+  const refreshLeaderboard = useCallback(async (compCode, comps) => {
+    const code = compCode || currentUser?.competitionCode;
+    const competitions = comps || activeCompetitions;
+    if (!code) return;
+    const comp = competitions.find(c => c.code === code);
     if (!comp?.id) return;
     const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
-    apiGetLeaderboard(comp.id, weekNum).then(data => {
-      if (!data?.length) return;
-      const colors = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
-      setLeaderboardTeams(data.map((t, i) => ({
-        rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
-        total: t.totalWonFormatted, color: colors[i % colors.length], members: t.memberCount,
-        weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
-        bets: (t.bets || []).map(b => ({
-          id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
-          estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
-          submittedAt: new Date(b.submitted_at).toLocaleString(),
-          legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
-        })),
-      })));
-    }).catch(console.error);
+    try {
+      const data = await apiGetLeaderboard(comp.id, weekNum);
+      if (data?.length) setLeaderboardTeams(mapLeaderboardData(data));
+    } catch(e) { console.error('Leaderboard refresh failed:', e); }
+  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
+
+  // Load leaderboard when competition is known
+  useEffect(() => {
+    if (!currentUser?.competitionCode || !activeCompetitions.length) return;
+    refreshLeaderboard(currentUser.competitionCode, activeCompetitions);
   }, [currentUser?.competitionCode, activeCompetitions]);
+
+  // Re-fetch leaderboard from DB when user navigates to leaderboard tab
+  // (picks up results updated by the scheduled check-results function)
+  useEffect(() => {
+    if (activeNav === 'leaderboard' && currentUser?.competitionCode) {
+      refreshLeaderboard();
+    }
+  }, [activeNav]);
 
   // Smart auto-check: fire every 3 hours from the first event's start time
   useEffect(() => {
@@ -841,7 +911,7 @@ export default function PuntingClub() {
   const handleAdminLogin = (e) => {
     e.preventDefault();
     const a = ADMIN_USERS[adminLoginId.trim()];
-    if (!a || a.password !== adminLoginPw) { alert('Invalid admin credentials.'); return; }
+    if (!a || a.password !== adminLoginPw) { showToast('Invalid admin credentials.', 'error'); return; }
     setIsAdminLoggedIn(true);
     setAdminUser(a);
     setShowAdminLogin(false);
@@ -892,7 +962,7 @@ export default function PuntingClub() {
   const resetPassword = (phone) => {
     const u = adminUsers.find(x => x.phone === phone);
     addAuditEntry(adminUser?.role, 'Password Reset', u?.name || phone, 'Temporary password issued');
-    alert(`Password reset link sent to ${u?.name || phone} via SMS.`);
+    showToast(`Password reset SMS sent to ${u?.name || phone}.`, 'info');
   };
 
   // ── ADMIN BET ACTIONS ─────────────────────────────────────────────────────
@@ -918,8 +988,8 @@ export default function PuntingClub() {
 
   // ── ADMIN COMPETITION ACTIONS ─────────────────────────────────────────────
   const createCompetition = async (comp) => {
-    if (!comp.name?.trim()) { alert('Please enter a competition name.'); return; }
-    if (!comp.pub?.trim())  { alert('Please enter a pub/club name.'); return; }
+    if (!comp.name?.trim()) { showToast('Please enter a competition name.', 'warning'); return; }
+    if (!comp.pub?.trim())  { showToast('Please enter a pub/club name.', 'warning'); return; }
 
     // Generate code and build competition object locally first
     const code = genCode(6);
@@ -945,7 +1015,7 @@ export default function PuntingClub() {
     setAdminComps(prev => [...prev, localComp]);
     setActiveCompetitions(prev => status === 'active' ? [...prev, localComp] : prev);
     addAuditEntry(adminUser?.role, 'Competition Created', localComp.name, `Code: ${code}`);
-    alert(`Competition created!\n\nName: ${localComp.name}\nCode: ${code}\nStatus: ${status}\n\nNow appears in the signup dropdown.`);
+    showToast(`Competition "${localComp.name}" created! Code: ${code}`, 'success');
 
     // Also try to save to Supabase in background (won't block if it fails)
     try {
@@ -984,7 +1054,7 @@ export default function PuntingClub() {
   };
 
   const analyzeBetSlips = async () => {
-    if (!uploadedImages.length) { alert('Please upload at least one bet slip image.'); return; }
+    if (!uploadedImages.length) { showToast('Please upload at least one bet slip image.', 'warning'); return; }
     setAnalyzing(true);
     try {
       const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1200, messages:[{ role:'user', content:[
@@ -994,29 +1064,29 @@ export default function PuntingClub() {
       const data = await res.json();
       if (!res.ok || data.error || data.type === 'error') {
         const errMsg = data.error?.message || data.error || `API error ${res.status}`;
-        alert(`Analysis failed: ${errMsg}`);
+        showToast(`Analysis failed: ${errMsg}`, 'error');
         return;
       }
       if (data.content?.[0]?.text) {
         const parsed = parseAnalysisJSON(data.content[0].text);
-        if (!parsed) { alert('Could not read bet slip. Try a clearer image.'); return; }
+        if (!parsed) { showToast('Could not read bet slip. Try a clearer image.', 'error'); return; }
         // Validate stake doesn't exceed weekly budget
         const stakeNum = parseFloat((parsed.stake || '0').replace(/[^0-9.]/g,''));
-        if (stakeNum > WEEK_BUDGET) { alert(`Stake $${stakeNum} exceeds the $${WEEK_BUDGET} weekly limit.`); return; }
+        if (stakeNum > WEEK_BUDGET) { showToast(`Stake $${stakeNum} exceeds the $${WEEK_BUDGET}/week limit.`, 'warning'); return; }
         const enrichedBet = { ...parsed, betType: parsed.betType || 'Multi', legs: parsed.legs || [], timestamp: new Date().toLocaleTimeString(), images: uploadedImages.length };
         setAnalyzedBet(enrichedBet);
         // Auto-select the user's own team
         if (myTeamName) setSelectedTeamForBet(myTeamName);
       } else {
-        alert('Analysis failed: no response from AI. Check browser console for details.');
+        showToast('Analysis failed: no response from AI.', 'error');
         console.error('Claude response:', data);
       }
-    } catch(err) { console.error(err); alert(`Error analyzing bet slip: ${err.message}`); }
+    } catch(err) { console.error(err); showToast(`Error analyzing bet slip: ${err.message}`, 'error'); }
     finally { setAnalyzing(false); }
   };
 
   const submitBet = async () => {
-    if (!selectedTeamForBet) { alert('Please select a team.'); return; }
+    if (!selectedTeamForBet) { showToast('Please select a team before submitting.', 'warning'); return; }
     const newBet = { type: analyzedBet.betType, stake: analyzedBet.stake, combinedOdds: analyzedBet.combinedOdds, estimatedReturn: analyzedBet.estimatedReturn, submissionValid: analyzedBet.submissionValid, legs: analyzedBet.legs, overallStatus: 'pending', submittedAt: analyzedBet.timestamp };
     // Optimistic UI update
     setLeaderboardTeams(prev => prev.map(t => t.team === selectedTeamForBet ? { ...t, bets: [...t.bets, newBet] } : t));
@@ -1041,7 +1111,7 @@ export default function PuntingClub() {
       }
     } catch (err) {
       console.error('Bet save failed:', err.message);
-      alert(`Bet could not be saved: ${err.message}`);
+      showToast(`Bet could not be saved: ${err.message}`, 'error');
     }
   };
 
@@ -1142,7 +1212,7 @@ export default function PuntingClub() {
                 </div>
               )}
             </div>
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-amber-500 p-1">
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-amber-500 p-1" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}>
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
@@ -1280,7 +1350,7 @@ export default function PuntingClub() {
                 {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button onClick={checkResultsNow} disabled={checkingResults} className="flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-50">
+                <button onClick={checkResultsNow} disabled={checkingResults} aria-label="Check results now" className="flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-50">
                   {checkingResults ? <><span className="animate-spin w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full inline-block" />Checking…</> : <><RotateCcw className="w-3 h-3" />Check Results</>}
                 </button>
                 <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
@@ -2432,11 +2502,36 @@ export default function PuntingClub() {
             <div className="flex items-center gap-2 mb-3"><Sparkles className="w-5 h-5 text-amber-500" /><span className="font-black text-amber-400">PUNTING CLUB</span></div>
             <p className="text-gray-600 text-xs">The ultimate sports betting league for teams and friends.</p>
           </div>
-          {[['Competition',['How It Works','Leaderboards','Payouts','Competition Rules']],['Features',['Team Management','AI Bet Analysis','Result Tracking','Season History']],['Contact',['support@puntingclub.com','WhatsApp: +61 XXX XXX XXX','FAQ']]].map(([h, items]) => (
+          {[
+            ['Competition',[
+              { label:'How It Works', nav:'howto' },
+              { label:'Leaderboards', nav:'leaderboard' },
+              { label:'Competition Rules', nav:'competition' },
+              { label:'Weekly Summary', nav:'weekly' },
+            ]],
+            ['Features',[
+              { label:'Team Management', nav:'team' },
+              { label:'AI Bet Analysis', action:() => setShowBetAnalyzer(true) },
+              { label:'Result Tracking', nav:'leaderboard' },
+              { label:'Season History', nav:'leaderboard' },
+            ]],
+            ['Contact',[
+              { label:'support@puntingclub.com' },
+              { label:'WhatsApp: +61 XXX XXX XXX' },
+              { label:'FAQ', nav:'howto' },
+            ]],
+          ].map(([h, items]) => (
             <div key={h}>
               <h4 className="font-bold text-amber-400/80 text-sm mb-3">{h}</h4>
               <ul className="space-y-1.5">
-                {items.map(i => <li key={i} className="text-gray-600 text-xs hover:text-amber-400/70 cursor-pointer transition-colors">{i}</li>)}
+                {items.map(item => (
+                  <li key={item.label}>
+                    <button
+                      onClick={() => { if (item.nav) setActiveNav(item.nav); else if (item.action) item.action(); }}
+                      className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-amber-400/70 cursor-pointer' : 'cursor-default'}`}
+                    >{item.label}</button>
+                  </li>
+                ))}
               </ul>
             </div>
           ))}
@@ -2450,11 +2545,16 @@ export default function PuntingClub() {
 
       {/* LOGIN */}
       {showLoginModal && (
-        <Modal title="Login" onClose={() => { setShowLoginModal(false); setLoginPhone(''); setLoginPassword(''); }}>
+        <Modal title="Login" onClose={() => { setShowLoginModal(false); setLoginPhone(''); setLoginPassword(''); setApiError(null); }}>
           <form onSubmit={handleLogin} className="p-5 space-y-4">
+            {apiError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm flex items-start gap-2">
+                <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-amber-400 mb-1.5">Mobile Number</label>
-              <input type="tel" required value={loginPhone} onChange={e => setLoginPhone(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="+61 412 345 678" />
+              <input type="tel" required value={loginPhone} onChange={e => { setLoginPhone(e.target.value); setApiError(null); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="+61 412 345 678" />
               <p className="text-gray-600 text-xs mt-1">The mobile number you registered with</p>
             </div>
             <div>
@@ -2472,8 +2572,13 @@ export default function PuntingClub() {
 
       {/* SIGNUP */}
       {showSignupModal && (
-        <Modal title={signupMode === 'create' ? '🏆 Create a Team' : '👋 Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); }}>
+        <Modal title={signupMode === 'create' ? '🏆 Create a Team' : '👋 Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
           <form onSubmit={handleSubmitSignup} className="p-5 space-y-3">
+            {apiError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm flex items-start gap-2">
+                <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
+              </div>
+            )}
             {/* Toggle */}
             <div className="flex gap-2 p-1 bg-black/30 rounded-lg">
               {[['create','Create Team'],['join','Join Team']].map(([m,l]) => (
@@ -2610,7 +2715,12 @@ export default function PuntingClub() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-amber-400 mb-1">Confirm Password *</label>
-                <input type="password" required minLength={6} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="Re-enter password" />
+                <input type="password" required minLength={6} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-amber-500/50'}`} placeholder="Re-enter password" />
+                {formData.confirmPassword && (
+                  formData.password === formData.confirmPassword
+                    ? <p className="text-green-400 text-xs mt-1">✓ Passwords match</p>
+                    : <p className="text-red-400 text-xs mt-1">✗ Passwords don't match</p>
+                )}
               </div>
             </div>
 
@@ -2635,12 +2745,12 @@ export default function PuntingClub() {
             <div className="bg-green-500/10 border-2 border-green-500/40 rounded-xl p-5 text-center">
               <p className="text-gray-400 text-xs mb-2">Team Code</p>
               <p className="text-4xl font-black text-green-400 tracking-[0.3em]">{currentUser?.teamCode || 'XXXXXX'}</p>
-              <button onClick={() => { navigator.clipboard?.writeText(currentUser?.teamCode || ''); alert('Copied!'); }} className="mt-3 bg-green-500/20 hover:bg-green-500/30 text-green-400 px-3 py-1.5 rounded-lg text-xs font-semibold">Copy Code</button>
+              <button onClick={() => { navigator.clipboard?.writeText(currentUser?.teamCode || ''); showToast('Team code copied!', 'success'); }} className="mt-3 bg-green-500/20 hover:bg-green-500/30 text-green-400 px-3 py-1.5 rounded-lg text-xs font-semibold">Copy Code</button>
             </div>
             <div className="bg-white/3 border border-white/8 rounded-xl p-4">
               <p className="text-gray-400 text-xs font-semibold mb-2">Shareable Link</p>
               <p className="text-amber-300 text-xs break-all mb-2">{shareableLink}</p>
-              <button onClick={() => { navigator.clipboard?.writeText(shareableLink); alert('Link copied!'); }} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold w-full">Copy Invite Link</button>
+              <button onClick={() => { navigator.clipboard?.writeText(shareableLink); showToast('Invite link copied!', 'success'); }} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold w-full">Copy Invite Link</button>
             </div>
             <div className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-4">
               <p className="text-blue-400 text-xs font-semibold mb-2">How to invite:</p>
@@ -2650,7 +2760,7 @@ export default function PuntingClub() {
                 ))}
               </ol>
             </div>
-            <button onClick={() => { navigator.clipboard?.writeText(`Join my Punting Club team "${currentUser?.teamName || 'The Legends'}"!\n\nTeam Code: ${currentUser?.teamCode || 'XXXXXX'}\nOr use this link: ${shareableLink}`); alert('Invitation message copied!'); }} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2.5 rounded-xl text-sm">Copy Full Invitation Message</button>
+            <button onClick={() => { navigator.clipboard?.writeText(`Join my Punting Club team "${currentUser?.teamName || 'The Legends'}"!\n\nTeam Code: ${currentUser?.teamCode || 'XXXXXX'}\nOr use this link: ${shareableLink}`); showToast('Invitation message copied!', 'success'); }} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2.5 rounded-xl text-sm">Copy Full Invitation Message</button>
           </div>
         </Modal>
       )}
@@ -2675,7 +2785,7 @@ export default function PuntingClub() {
             <div className="bg-blue-950/20 border border-blue-500/20 rounded-lg p-3 text-xs text-gray-400">
               <strong className="text-blue-400">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
             </div>
-            <button onClick={() => { alert('Betting order saved!'); setShowOrderModal(false); }} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2.5 rounded-xl text-sm">Save Order</button>
+            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2.5 rounded-xl text-sm">Save Order</button>
           </div>
         </Modal>
       )}
@@ -2997,6 +3107,24 @@ export default function PuntingClub() {
               </form>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── TOAST NOTIFICATIONS ───────────────────────────────────────────── */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex flex-col-reverse gap-2 items-center w-full max-w-sm px-4 pointer-events-none">
+          {toasts.map(t => (
+            <div key={t.id} className={`pointer-events-auto w-full flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold transition-all
+              ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :
+                t.type === 'error'   ? 'bg-red-950/95 border border-red-500/50 text-red-200' :
+                t.type === 'warning' ? 'bg-amber-950/95 border border-amber-500/50 text-amber-200' :
+                'bg-gray-900/95 border border-white/15 text-gray-200'}`}>
+              <span className="flex-shrink-0 mt-0.5">
+                {t.type === 'success' ? '✓' : t.type === 'error' ? '✗' : t.type === 'warning' ? '⚠' : 'ℹ'}
+              </span>
+              <span className="flex-1 leading-snug">{t.message}</span>
+            </div>
+          ))}
         </div>
       )}
 
