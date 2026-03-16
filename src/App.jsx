@@ -859,21 +859,17 @@ Return ONLY a valid JSON array — no other text, no markdown:
     refreshAdminData();
   }, [isAdminLoggedIn, refreshAdminData]);
 
-  // Load leaderboard when competition is known, then check pending results
+  // Load leaderboard when competition is known
   useEffect(() => {
     if (!currentUser?.competitionCode || !activeCompetitions.length) return;
-    refreshLeaderboard(currentUser.competitionCode, activeCompetitions).then(fresh => {
-      if (fresh?.length) reviewBetResults(fresh);
-    });
+    refreshLeaderboard(currentUser.competitionCode, activeCompetitions);
   }, [currentUser?.competitionCode, activeCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch leaderboard from DB when user navigates to leaderboard tab,
-  // then run AI result check on any pending legs so bet slips are up to date.
+  // Re-fetch leaderboard from DB when user navigates to leaderboard tab
+  // (picks up results written by the scheduled check-results function)
   useEffect(() => {
     if (activeNav === 'leaderboard' && currentUser?.competitionCode) {
-      refreshLeaderboard().then(fresh => {
-        if (fresh?.length) reviewBetResults(fresh);
-      });
+      refreshLeaderboard();
     }
   }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -914,8 +910,10 @@ Return ONLY a valid JSON array — no other text, no markdown:
 
     // Schedule first check, then repeat every 3 hours
     const runCheck = async () => {
-      const fresh = await refreshLeaderboard();
-      if (fresh?.length) reviewBetResults(fresh);
+      try {
+        await fetch('/.netlify/functions/check-results', { method: 'POST' });
+      } catch(e) { console.error('Auto check-results error:', e); }
+      refreshLeaderboard();
     };
     const tid = setTimeout(() => {
       runCheck();
@@ -929,15 +927,28 @@ Return ONLY a valid JSON array — no other text, no markdown:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
 
+  // Trigger the server-side check-results function which runs the full
+  // multi-turn Claude+web-search loop and writes results directly to the DB,
+  // then refresh the leaderboard so the UI reflects the latest data.
   const checkResultsNow = useCallback(async () => {
-    // Re-fetch latest data from DB, then run AI check on the fresh snapshot
-    const fresh = await refreshLeaderboard();
-    if (fresh?.length) await reviewBetResults(fresh);
-    else {
-      // fallback: no competition data yet — still attempt with current state
-      setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+    setCheckingResults(true);
+    try {
+      const res = await fetch('/.netlify/functions/check-results', { method: 'POST' });
+      const data = await res.json();
+      if (data.legsUpdated || data.betsUpdated) {
+        showToast(`${data.legsUpdated || 0} leg(s) updated across ${data.betsUpdated || 0} bet(s)`, 'success');
+      } else {
+        showToast('Results checked — no changes yet.', 'info');
+      }
+    } catch (e) {
+      console.error('Check results error:', e);
+      showToast('Result check failed — check console for details.', 'error');
+    } finally {
+      setCheckingResults(false);
+      setLastChecked(new Date());
+      refreshLeaderboard();
     }
-  }, [refreshLeaderboard, reviewBetResults]);
+  }, [refreshLeaderboard, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
