@@ -625,6 +625,7 @@ export default function PuntingClub() {
     const teamsWithPending = teams.filter(t => t.bets.some(b => b.legs?.some(l => UNSETTLED.includes(l.status))));
     if (!teamsWithPending.length) { setLastChecked(new Date()); return; }
     setCheckingResults(true);
+    let totalLegsChanged = 0;
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
@@ -703,19 +704,33 @@ Return ONLY a valid JSON array — no other text, no markdown:
             const allP    = newBets.every(b => !b.overallStatus || b.overallStatus === 'pending');
             return { ...t, bets: newBets, week: allP ? 'P' : anyWon ? 'W' : anyLost ? 'L' : anyLive ? 'IP' : 'P' };
           }));
-          const changedCount = updates.filter(l => l.status !== 'pending').length;
-          if (changedCount) setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${changedCount} leg(s) updated for ${team.team}`, teamName: team.team }, ...prev.slice(0, 19)]);
+          const changedCount = updates.filter(u => u.status !== 'pending').length;
+          if (changedCount) {
+            totalLegsChanged += changedCount;
+            setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${changedCount} leg(s) updated for ${team.team}`, teamName: team.team }, ...prev.slice(0, 19)]);
+            // Per-team toast: summarise what settled
+            const wonLegs  = updates.filter(u => u.status === 'won').length;
+            const lostLegs = updates.filter(u => u.status === 'lost').length;
+            const liveLegs = updates.filter(u => u.status === 'in_progress').length;
+            const parts = [];
+            if (wonLegs)  parts.push(`${wonLegs} won`);
+            if (lostLegs) parts.push(`${lostLegs} lost`);
+            if (liveLegs) parts.push(`${liveLegs} live`);
+            const toastType = lostLegs && !wonLegs ? 'error' : wonLegs ? 'success' : 'info';
+            showToast(`${team.team}: ${parts.join(', ')} — ${newOverall.toUpperCase()}`, toastType);
+          }
         }
       }
-    } catch(err) { console.error('Result check error:', err); }
+    } catch(err) { console.error('Result check error:', err); showToast('Result check failed — check console for details.', 'error'); }
     finally {
       setCheckingResults(false);
       setLastChecked(new Date());
+      if (totalLegsChanged === 0) showToast('Results checked — no changes yet.', 'info');
       // Re-fetch from DB so any updates from the scheduled check-results function
       // (and the ones just persisted above) are reflected in the UI.
       refreshLeaderboard();
     }
-  }, [refreshLeaderboard]);
+  }, [refreshLeaderboard, showToast]);
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
