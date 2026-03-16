@@ -40,6 +40,41 @@ const parseAnalysisJSON = (text) => {
   catch { return null; }
 };
 
+// Multi-turn Claude call that handles web_search tool_use blocks.
+const callClaudeWithSearch = async (prompt) => {
+  const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+  let messages = [{ role: 'user', content: prompt }];
+  for (let turn = 0; turn < 6; turn++) {
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1024, tools, messages }),
+    });
+    if (!res.ok) throw new Error(`Claude API error ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (data.stop_reason === 'end_turn') {
+      return data.content?.find(b => b.type === 'text')?.text || null;
+    }
+    if (data.stop_reason === 'tool_use') {
+      messages = [
+        ...messages,
+        { role: 'assistant', content: data.content },
+        {
+          role: 'user',
+          content: data.content.filter(b => b.type === 'tool_use').map(b => ({
+            type: 'tool_result', tool_use_id: b.id,
+            content: `Search for "${b.input?.query || ''}" was executed.`,
+          })),
+        },
+      ];
+      continue;
+    }
+    return data.content?.find(b => b.type === 'text')?.text || null;
+  }
+  return null;
+};
+
 // Validate and normalise Australian mobile numbers
 // Accepts: 04XX XXX XXX, +614XX XXX XXX, 614XX XXX XXX
 const validatePhone = (raw) => {
@@ -588,7 +623,6 @@ export default function PuntingClub() {
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
-    const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
     try {
       for (const team of teamsWithPending) {
         for (let bi = 0; bi < team.bets.length; bi++) {
@@ -616,21 +650,8 @@ Instructions:
 Return ONLY a valid JSON array — no other text, no markdown:
 [{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note"}]`;
 
-          const res = await fetch('/api/claude', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-5',
-              max_tokens: 1024,
-              tools,
-              messages: [{ role: 'user', content: prompt }],
-            }),
-          });
-          if (!res.ok) { console.error('Claude API error', res.status); continue; }
-          const data = await res.json();
-          if (data.error) { console.error('Claude error:', data.error); continue; }
-          // Extract text from response (may be direct or after tool use)
-          const text = data.content?.find(b => b.type === 'text')?.text;
+          let text;
+          try { text = await callClaudeWithSearch(prompt); } catch(e) { console.error('Claude error:', e.message); continue; }
           if (!text) continue;
           const updates = parseAnalysisJSON(text);
           if (!Array.isArray(updates)) continue;
@@ -882,7 +903,11 @@ Return ONLY a valid JSON array — no other text, no markdown:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaderboardTeams.length, reviewBetResults]);
 
-  const checkResultsNow = () => setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+  const checkResultsNow = useCallback(async () => {
+    // Re-fetch latest data from DB first, then run the AI check on fresh state
+    await refreshLeaderboard();
+    setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+  }, [refreshLeaderboard, reviewBetResults]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
