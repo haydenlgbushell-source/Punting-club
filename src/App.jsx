@@ -911,7 +911,7 @@ Return ONLY a valid JSON array — no other text, no markdown:
     // Schedule first check, then repeat every 3 hours
     const runCheck = async () => {
       try {
-        await fetch('/.netlify/functions/check-results', { method: 'POST' });
+        await fetch('/api/check-results', { method: 'POST' });
       } catch(e) { console.error('Auto check-results error:', e); }
       refreshLeaderboard();
     };
@@ -933,16 +933,20 @@ Return ONLY a valid JSON array — no other text, no markdown:
   const checkResultsNow = useCallback(async () => {
     setCheckingResults(true);
     try {
-      const res = await fetch('/.netlify/functions/check-results', { method: 'POST' });
-      const data = await res.json();
+      const res = await fetch('/api/check-results', { method: 'POST' });
+      let data;
+      try { data = await res.json(); } catch { data = {}; }
+      if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
       if (data.legsUpdated || data.betsUpdated) {
         showToast(`${data.legsUpdated || 0} leg(s) updated across ${data.betsUpdated || 0} bet(s)`, 'success');
+      } else if (data.error) {
+        throw new Error(data.error);
       } else {
         showToast('Results checked — no changes yet.', 'info');
       }
     } catch (e) {
       console.error('Check results error:', e);
-      showToast('Result check failed — check console for details.', 'error');
+      showToast(`Result check failed: ${e.message}`, 'error');
     } finally {
       setCheckingResults(false);
       setLastChecked(new Date());
