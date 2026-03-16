@@ -559,20 +559,52 @@ export default function PuntingClub() {
     setCheckingResults(true);
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
+    const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
     try {
       for (const team of teamsWithPending) {
         for (let bi = 0; bi < team.bets.length; bi++) {
           const bet = team.bets[bi];
           if (!bet.legs?.some(l => UNSETTLED.includes(l.status))) continue;
           const desc = bet.legs.map(l => {
-            const eventDateStr = l.eventDate ? ` — date: ${l.eventDate}${l.startTime ? ' ' + l.startTime : ''}` : '';
-            return `Leg ${l.legNumber}: ${l.selection} — ${l.event} — ${l.market} — @ ${l.odds} — status: ${l.status}${eventDateStr}`;
+            const datePart = l.eventDate ? ` on ${l.eventDate}${l.startTime ? ' at ' + l.startTime + ' AEST' : ''}` : '';
+            return `Leg ${l.legNumber}: "${l.selection}" — ${l.event} — ${l.market} @ ${l.odds}${datePart} — current status: ${l.status}`;
           }).join('\n');
-          const prompt = `Today: ${todayStr}. Current time: ${now.toLocaleTimeString('en-AU')}.\n\nBet legs:\n${desc}\n\nFor each unsettled leg (pending or in_progress) determine its current state:\n- "won" if the selection won\n- "lost" if the selection lost\n- "void" if the bet was voided/cancelled\n- "in_progress" if the event has started but not yet concluded (live right now)\n- "pending" if the event hasn't started yet\n\nReturn ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"in_progress"|"pending","result":"brief note"}]\nOnly mark won/lost/void if fully confident the event is concluded. Return all legs.`;
-          const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:600, messages:[{ role:'user', content: prompt }] }) });
+          const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
+
+You must determine the outcome of the following Australian sports bet legs. Use web search to look up the actual match results for any events that should have already taken place.
+
+Bet legs:
+${desc}
+
+Instructions:
+- Search the web for the actual result of each event/match by name and date
+- Mark "won" if the selection won
+- Mark "lost" if the selection lost
+- Mark "void" if the match was cancelled, postponed, or abandoned
+- Mark "in_progress" if the event has started but is still ongoing right now
+- Mark "pending" only if the event clearly hasn't started yet
+
+Return ONLY a valid JSON array — no other text, no markdown:
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note"}]`;
+
+          const res = await fetch('/api/claude', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-5',
+              max_tokens: 1024,
+              tools,
+              messages: [{ role: 'user', content: prompt }],
+            }),
+          });
+          if (!res.ok) { console.error('Claude API error', res.status); continue; }
           const data = await res.json();
-          if (!data.content?.[0]?.text) continue;
-          const updates = parseAnalysisJSON(data.content[0].text);
+          if (data.error) { console.error('Claude error:', data.error); continue; }
+          // Extract text from response (may be direct or after tool use)
+          const text = data.content?.find(b => b.type === 'text')?.text;
+          if (!text) continue;
+          const updates = parseAnalysisJSON(text);
           if (!Array.isArray(updates)) continue;
 
           // Persist each changed leg to DB
@@ -622,8 +654,14 @@ export default function PuntingClub() {
         }
       }
     } catch(err) { console.error('Result check error:', err); }
-    finally { setCheckingResults(false); setLastChecked(new Date()); }
-  }, []);
+    finally {
+      setCheckingResults(false);
+      setLastChecked(new Date());
+      // Re-fetch from DB so any updates from the scheduled check-results function
+      // (and the ones just persisted above) are reflected in the UI.
+      refreshLeaderboard();
+    }
+  }, [refreshLeaderboard]);
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -752,29 +790,47 @@ export default function PuntingClub() {
     refreshAdminData();
   }, [isAdminLoggedIn, refreshAdminData]);
 
-  // Load leaderboard when competition is known
-  useEffect(() => {
-    if (!currentUser?.competitionCode) return;
-    // Find competition id from active competitions
-    const comp = activeCompetitions.find(c => c.code === currentUser.competitionCode);
+  // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
+  const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
+
+  const mapLeaderboardData = useCallback((data) => data.map((t, i) => ({
+    rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
+    total: t.totalWonFormatted, color: LEADERBOARD_COLORS[i % LEADERBOARD_COLORS.length], members: t.memberCount,
+    weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
+    bets: (t.bets || []).map(b => ({
+      id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
+      estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
+      submittedAt: new Date(b.submitted_at).toLocaleString(),
+      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+    })),
+  })), []);
+
+  const refreshLeaderboard = useCallback(async (compCode, comps) => {
+    const code = compCode || currentUser?.competitionCode;
+    const competitions = comps || activeCompetitions;
+    if (!code) return;
+    const comp = competitions.find(c => c.code === code);
     if (!comp?.id) return;
     const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
-    apiGetLeaderboard(comp.id, weekNum).then(data => {
-      if (!data?.length) return;
-      const colors = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
-      setLeaderboardTeams(data.map((t, i) => ({
-        rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
-        total: t.totalWonFormatted, color: colors[i % colors.length], members: t.memberCount,
-        weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
-        bets: (t.bets || []).map(b => ({
-          id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
-          estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
-          submittedAt: new Date(b.submitted_at).toLocaleString(),
-          legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
-        })),
-      })));
-    }).catch(console.error);
+    try {
+      const data = await apiGetLeaderboard(comp.id, weekNum);
+      if (data?.length) setLeaderboardTeams(mapLeaderboardData(data));
+    } catch(e) { console.error('Leaderboard refresh failed:', e); }
+  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
+
+  // Load leaderboard when competition is known
+  useEffect(() => {
+    if (!currentUser?.competitionCode || !activeCompetitions.length) return;
+    refreshLeaderboard(currentUser.competitionCode, activeCompetitions);
   }, [currentUser?.competitionCode, activeCompetitions]);
+
+  // Re-fetch leaderboard from DB when user navigates to leaderboard tab
+  // (picks up results updated by the scheduled check-results function)
+  useEffect(() => {
+    if (activeNav === 'leaderboard' && currentUser?.competitionCode) {
+      refreshLeaderboard();
+    }
+  }, [activeNav]);
 
   // Smart auto-check: fire every 3 hours from the first event's start time
   useEffect(() => {

@@ -11,24 +11,67 @@ const supabase = createClient(
 
 const UNSETTLED = ['pending', 'in_progress'];
 
-async function callClaude(prompt) {
+/**
+ * Call Claude with web search enabled.
+ * Uses a multi-turn loop to handle any tool_use blocks the model may emit
+ * before it produces a final text response.
+ */
+async function callClaudeWithSearch(prompt) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model:      'claude-sonnet-4-20250514',
-      max_tokens: 600,
-      messages:   [{ role: 'user', content: prompt }],
-    }),
-  });
-  const data = await res.json();
-  return data?.content?.[0]?.text || null;
+
+  const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+  let messages = [{ role: 'user', content: prompt }];
+
+  for (let turn = 0; turn < 6; turn++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta':    'web-search-2025-03-05',
+      },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-5',
+        max_tokens: 1024,
+        tools,
+        messages,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
+
+    // Final answer — extract the text block
+    if (data.stop_reason === 'end_turn') {
+      return data.content?.find(b => b.type === 'text')?.text || null;
+    }
+
+    // Model wants to use a tool — feed tool_results back and continue
+    if (data.stop_reason === 'tool_use') {
+      messages = [
+        ...messages,
+        { role: 'assistant', content: data.content },
+        {
+          role: 'user',
+          content: data.content
+            .filter(b => b.type === 'tool_use')
+            .map(b => ({
+              type:        'tool_result',
+              tool_use_id: b.id,
+              content:     `Search for "${b.input?.query || ''}" was executed.`,
+            })),
+        },
+      ];
+      continue;
+    }
+
+    // Any other stop reason — still try to return a text block if present
+    return data.content?.find(b => b.type === 'text')?.text || null;
+  }
+
+  return null; // gave up after max turns
 }
 
 function parseJSON(text) {
@@ -39,7 +82,8 @@ function parseJSON(text) {
 exports.handler = async () => {
   console.log('[check-results] Starting scheduled bet result check');
   const now = new Date();
-  const todayStr = now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const todayStr  = now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr   = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
 
   try {
     // Fetch all bets with unsettled legs
@@ -59,7 +103,7 @@ exports.handler = async () => {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
       if (!unsettledLegs.length) continue;
 
-      // Only check bets whose earliest event has started
+      // Only check bets where at least one event should have started
       const hasStartedEvent = unsettledLegs.some(l => {
         if (!l.event_date) return true; // no date stored — always check
         const timeStr = l.start_time ? l.start_time.substring(0, 5) : '00:00';
@@ -69,18 +113,42 @@ exports.handler = async () => {
       if (!hasStartedEvent) continue;
 
       const desc = (bet.bet_legs || []).map(l => {
-        const eventDateStr = l.event_date ? ` — date: ${l.event_date}${l.start_time ? ' ' + l.start_time : ''}` : '';
-        return `Leg ${l.leg_number}: ${l.selection} — ${l.event} — ${l.market} — @ ${l.odds} — status: ${l.status}${eventDateStr}`;
+        const datePart = l.event_date ? ` on ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
+        return `Leg ${l.leg_number}: "${l.selection}" — ${l.event} — ${l.market} @ ${l.odds}${datePart} — current status: ${l.status}`;
       }).join('\n');
 
-      const prompt = `Today: ${todayStr}. Current time: ${now.toLocaleTimeString('en-AU')}.\n\nBet legs:\n${desc}\n\nFor each unsettled leg (pending or in_progress) determine its current state:\n- "won" if the selection won\n- "lost" if the selection lost\n- "void" if the bet was voided/cancelled\n- "in_progress" if the event has started but not yet concluded (live right now)\n- "pending" if the event hasn't started yet\n\nReturn ONLY a JSON array:\n[{"legNumber":1,"status":"won"|"lost"|"void"|"in_progress"|"pending","result":"brief note"}]\nOnly mark won/lost/void if fully confident the event is concluded. Return all legs.`;
+      const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
+
+You must determine the outcome of the following Australian sports bet legs. Use web search to look up the actual match results for any events that should have already taken place.
+
+Bet legs:
+${desc}
+
+Instructions:
+- Search the web for the actual result of each event/match by name and date
+- Mark "won" if the selection won (team won, scored over line, etc.)
+- Mark "lost" if the selection lost
+- Mark "void" if the match was cancelled, postponed, or abandoned
+- Mark "in_progress" if the event has started but is still ongoing right now
+- Mark "pending" only if the event clearly hasn't started yet
+
+Return ONLY a valid JSON array — no other text, no markdown fences:
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note e.g. 'Team A won 24-18'"}]`;
 
       let responseText;
-      try { responseText = await callClaude(prompt); } catch(e) { console.error('[check-results] Claude error:', e.message); continue; }
+      try {
+        responseText = await callClaudeWithSearch(prompt);
+      } catch(e) {
+        console.error('[check-results] Claude error:', e.message);
+        continue;
+      }
       if (!responseText) continue;
 
       const updates = parseJSON(responseText);
-      if (!Array.isArray(updates)) continue;
+      if (!Array.isArray(updates)) {
+        console.warn('[check-results] Could not parse Claude response:', responseText?.slice(0, 200));
+        continue;
+      }
 
       // Update each changed leg in DB
       for (const u of updates) {
@@ -91,7 +159,10 @@ exports.handler = async () => {
           .update({ status: u.status, result_note: u.result || '', updated_at: now.toISOString() })
           .eq('id', origLeg.id);
         if (legErr) console.error('[check-results] Leg update error:', legErr.message);
-        else totalLegsUpdated++;
+        else {
+          totalLegsUpdated++;
+          console.log(`[check-results] Leg ${u.legNumber} updated to "${u.status}": ${u.result}`);
+        }
       }
 
       // Recalculate overall bet status from updated legs
@@ -99,11 +170,11 @@ exports.handler = async () => {
         const u = updates.find(x => x.legNumber === l.leg_number);
         return u ? { ...l, status: u.status } : l;
       });
-      const settled = ['won', 'lost', 'void'];
-      const allDone  = updatedLegs.every(l => settled.includes(l.status));
-      const allWon   = updatedLegs.every(l => l.status === 'won');
-      const anyLost  = updatedLegs.some(l => l.status === 'lost');
-      const anyLive  = updatedLegs.some(l => l.status === 'in_progress');
+      const settled   = ['won', 'lost', 'void'];
+      const allDone   = updatedLegs.every(l => settled.includes(l.status));
+      const allWon    = updatedLegs.every(l => l.status === 'won');
+      const anyLost   = updatedLegs.some(l => l.status === 'lost');
+      const anyLive   = updatedLegs.some(l => l.status === 'in_progress');
       const newOverall = allDone ? (allWon ? 'won' : anyLost ? 'lost' : 'partial') : anyLive ? 'in_progress' : 'pending';
 
       if (newOverall !== bet.overall_status) {
@@ -112,7 +183,10 @@ exports.handler = async () => {
           .update({ overall_status: newOverall })
           .eq('id', bet.id);
         if (betErr) console.error('[check-results] Bet update error:', betErr.message);
-        else totalBetsUpdated++;
+        else {
+          totalBetsUpdated++;
+          console.log(`[check-results] Bet ${bet.id} (${bet.teams?.team_name}) updated to "${newOverall}"`);
+        }
       }
     }
 
