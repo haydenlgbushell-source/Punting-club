@@ -610,8 +610,13 @@ export default function PuntingClub() {
     const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
     try {
       const data = await apiGetLeaderboard(comp.id, weekNum);
-      if (data?.length) setLeaderboardTeams(mapLeaderboardData(data));
+      if (data?.length) {
+        const mapped = mapLeaderboardData(data);
+        setLeaderboardTeams(mapped);
+        return mapped;
+      }
     } catch(e) { console.error('Leaderboard refresh failed:', e); }
+    return null;
   }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
@@ -839,19 +844,23 @@ Return ONLY a valid JSON array — no other text, no markdown:
     refreshAdminData();
   }, [isAdminLoggedIn, refreshAdminData]);
 
-  // Load leaderboard when competition is known
+  // Load leaderboard when competition is known, then check pending results
   useEffect(() => {
     if (!currentUser?.competitionCode || !activeCompetitions.length) return;
-    refreshLeaderboard(currentUser.competitionCode, activeCompetitions);
-  }, [currentUser?.competitionCode, activeCompetitions]);
+    refreshLeaderboard(currentUser.competitionCode, activeCompetitions).then(fresh => {
+      if (fresh?.length) reviewBetResults(fresh);
+    });
+  }, [currentUser?.competitionCode, activeCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch leaderboard from DB when user navigates to leaderboard tab
-  // (picks up results updated by the scheduled check-results function)
+  // Re-fetch leaderboard from DB when user navigates to leaderboard tab,
+  // then run AI result check on any pending legs so bet slips are up to date.
   useEffect(() => {
     if (activeNav === 'leaderboard' && currentUser?.competitionCode) {
-      refreshLeaderboard();
+      refreshLeaderboard().then(fresh => {
+        if (fresh?.length) reviewBetResults(fresh);
+      });
     }
-  }, [activeNav]);
+  }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Smart auto-check: fire every 3 hours from the first event's start time
   useEffect(() => {
@@ -889,11 +898,13 @@ Return ONLY a valid JSON array — no other text, no markdown:
     }
 
     // Schedule first check, then repeat every 3 hours
+    const runCheck = async () => {
+      const fresh = await refreshLeaderboard();
+      if (fresh?.length) reviewBetResults(fresh);
+    };
     const tid = setTimeout(() => {
-      setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
-      intervalRef.current = setInterval(() => {
-        setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
-      }, THREE_HOURS);
+      runCheck();
+      intervalRef.current = setInterval(runCheck, THREE_HOURS);
     }, delay);
 
     return () => {
@@ -901,12 +912,16 @@ Return ONLY a valid JSON array — no other text, no markdown:
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leaderboardTeams.length, reviewBetResults]);
+  }, [leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
 
   const checkResultsNow = useCallback(async () => {
-    // Re-fetch latest data from DB first, then run the AI check on fresh state
-    await refreshLeaderboard();
-    setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+    // Re-fetch latest data from DB, then run AI check on the fresh snapshot
+    const fresh = await refreshLeaderboard();
+    if (fresh?.length) await reviewBetResults(fresh);
+    else {
+      // fallback: no competition data yet — still attempt with current state
+      setLeaderboardTeams(curr => { reviewBetResults(curr); return curr; });
+    }
   }, [refreshLeaderboard, reviewBetResults]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
