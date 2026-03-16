@@ -551,6 +551,34 @@ export default function PuntingClub() {
     catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
   };
 
+  // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
+  const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
+
+  const mapLeaderboardData = useCallback((data) => data.map((t, i) => ({
+    rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
+    total: t.totalWonFormatted, color: LEADERBOARD_COLORS[i % LEADERBOARD_COLORS.length], members: t.memberCount,
+    weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
+    bets: (t.bets || []).map(b => ({
+      id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
+      estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
+      submittedAt: new Date(b.submitted_at).toLocaleString(),
+      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+    })),
+  })), []);
+
+  const refreshLeaderboard = useCallback(async (compCode, comps) => {
+    const code = compCode || currentUser?.competitionCode;
+    const competitions = comps || activeCompetitions;
+    if (!code) return;
+    const comp = competitions.find(c => c.code === code);
+    if (!comp?.id) return;
+    const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
+    try {
+      const data = await apiGetLeaderboard(comp.id, weekNum);
+      if (data?.length) setLeaderboardTeams(mapLeaderboardData(data));
+    } catch(e) { console.error('Leaderboard refresh failed:', e); }
+  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
+
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
   const reviewBetResults = useCallback(async (teams) => {
     const UNSETTLED = ['pending', 'in_progress'];
@@ -789,34 +817,6 @@ Return ONLY a valid JSON array — no other text, no markdown:
     if (!isAdminLoggedIn) return;
     refreshAdminData();
   }, [isAdminLoggedIn, refreshAdminData]);
-
-  // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
-  const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
-
-  const mapLeaderboardData = useCallback((data) => data.map((t, i) => ({
-    rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
-    total: t.totalWonFormatted, color: LEADERBOARD_COLORS[i % LEADERBOARD_COLORS.length], members: t.memberCount,
-    weekHistory: t.weekHistory || [], id: t.id, teamCode: t.team_code,
-    bets: (t.bets || []).map(b => ({
-      id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
-      estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
-      submittedAt: new Date(b.submitted_at).toLocaleString(),
-      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
-    })),
-  })), []);
-
-  const refreshLeaderboard = useCallback(async (compCode, comps) => {
-    const code = compCode || currentUser?.competitionCode;
-    const competitions = comps || activeCompetitions;
-    if (!code) return;
-    const comp = competitions.find(c => c.code === code);
-    if (!comp?.id) return;
-    const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
-    try {
-      const data = await apiGetLeaderboard(comp.id, weekNum);
-      if (data?.length) setLeaderboardTeams(mapLeaderboardData(data));
-    } catch(e) { console.error('Leaderboard refresh failed:', e); }
-  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
 
   // Load leaderboard when competition is known
   useEffect(() => {
