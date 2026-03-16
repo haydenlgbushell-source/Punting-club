@@ -1,8 +1,16 @@
 // netlify/functions/check-results.js
 // Scheduled function — runs every 3 hours to auto-check pending bet results via Claude AI.
+// Also callable manually via POST /api/check-results from the frontend.
 // Netlify schedule is configured in netlify.toml: schedule = "0 */3 * * *"
 
 const { createClient } = require('@supabase/supabase-js');
+
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -79,7 +87,8 @@ function parseJSON(text) {
   catch { return null; }
 }
 
-exports.handler = async () => {
+exports.handler = async (event) => {
+  if (event?.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
   console.log('[check-results] Starting scheduled bet result check');
   const now = new Date();
   const todayStr  = now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -93,8 +102,8 @@ exports.handler = async () => {
       .in('overall_status', [...UNSETTLED, 'partial'])
       .order('submitted_at', { ascending: false });
 
-    if (betsErr) { console.error('[check-results] DB fetch error:', betsErr.message); return { statusCode: 500, body: JSON.stringify({ error: betsErr.message }) }; }
-    if (!bets?.length) { console.log('[check-results] No unsettled bets found'); return { statusCode: 200, body: JSON.stringify({ legsUpdated: 0, betsUpdated: 0 }) }; }
+    if (betsErr) { console.error('[check-results] DB fetch error:', betsErr.message); return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: betsErr.message }) }; }
+    if (!bets?.length) { console.log('[check-results] No unsettled bets found'); return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ legsUpdated: 0, betsUpdated: 0 }) }; }
 
     let totalLegsUpdated = 0;
     let totalBetsUpdated = 0;
@@ -191,9 +200,9 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
     }
 
     console.log(`[check-results] Done — ${totalLegsUpdated} legs updated, ${totalBetsUpdated} bets updated`);
-    return { statusCode: 200, body: JSON.stringify({ legsUpdated: totalLegsUpdated, betsUpdated: totalBetsUpdated }) };
+    return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ legsUpdated: totalLegsUpdated, betsUpdated: totalBetsUpdated }) };
   } catch (err) {
     console.error('[check-results] Unexpected error:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message }) };
   }
 };
