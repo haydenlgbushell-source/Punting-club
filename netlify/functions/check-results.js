@@ -25,7 +25,7 @@ async function callClaudeWithSearch(prompt) {
 
   let messages = [{ role: 'user', content: prompt }];
 
-  for (let turn = 0; turn < 8; turn++) {
+  for (let turn = 0; turn < 10; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -44,43 +44,61 @@ async function callClaudeWithSearch(prompt) {
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
+    if (!res.ok) {
+      console.error(`[check-results] API error ${res.status}:`, JSON.stringify(data).slice(0, 300));
+      throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
+    }
 
     const contentTypes = (data.content || []).map(b => b.type).join(', ');
     console.log(`[check-results] Turn ${turn + 1}: stop_reason=${data.stop_reason}, content=[${contentTypes}]`);
 
+    // Final answer — extract text and return
     if (data.stop_reason === 'end_turn') {
       const text = data.content?.find(b => b.type === 'text')?.text || null;
-      console.log('[check-results] Final text:', text?.slice(0, 500));
+      console.log('[check-results] Final text:', text?.slice(0, 800));
       return text;
     }
 
+    // Claude called web_search — server executed it and returned tool_result blocks in
+    // the same response. We must re-attach them as a user turn so Claude sees the results.
     if (data.stop_reason === 'tool_use') {
       const toolUseBlocks    = (data.content || []).filter(b => b.type === 'tool_use');
       const toolResultBlocks = (data.content || []).filter(b => b.type === 'tool_result');
-      // web_search_20250305: Anthropic executes the search server-side and returns the
-      // results as tool_result blocks inside data.content. Strip them from the assistant
-      // turn and re-attach as the user turn so Claude can read the real search data.
+      // Keep text + tool_use in the assistant turn; strip tool_result (moves to user turn)
       const assistantContent = (data.content || []).filter(b => b.type !== 'tool_result');
-      console.log('[check-results] Tool calls:', toolUseBlocks.map(b => `${b.name}(${JSON.stringify(b.input)?.slice(0, 100)})`).join(', '));
-      if (toolResultBlocks.length) console.log(`[check-results] Passing ${toolResultBlocks.length} search result block(s) to Claude`);
+
+      console.log('[check-results] Tool calls:', toolUseBlocks.map(b =>
+        `${b.name}(${JSON.stringify(b.input)?.slice(0, 120)})`).join(', '));
+      console.log(`[check-results] ${toolResultBlocks.length} search result block(s) returned by server`);
+
+      // Build clean tool_result blocks (only the fields the API accepts in user turns)
+      const userToolResults = toolUseBlocks.map(b => {
+        const found = toolResultBlocks.find(r => r.tool_use_id === b.id);
+        if (found) {
+          // Sanitize: only pass fields valid in a client-submitted tool_result
+          return { type: 'tool_result', tool_use_id: b.id, content: found.content ?? '' };
+        }
+        return { type: 'tool_result', tool_use_id: b.id, content: 'No search results returned.' };
+      });
+
       messages = [
         ...messages,
         { role: 'assistant', content: assistantContent },
-        {
-          role: 'user',
-          content: toolUseBlocks.map(b => {
-            const found = toolResultBlocks.find(r => r.tool_use_id === b.id);
-            return found || { type: 'tool_result', tool_use_id: b.id, content: '' };
-          }),
-        },
+        { role: 'user',      content: userToolResults },
       ];
       continue;
     }
 
-    // Any other stop reason — try to extract text
+    // max_tokens hit mid-stream — grab whatever text exists and return it
+    if (data.stop_reason === 'max_tokens') {
+      const text = data.content?.find(b => b.type === 'text')?.text || null;
+      console.warn('[check-results] max_tokens reached, partial text:', text?.slice(0, 200));
+      return text;
+    }
+
+    // Unexpected stop reason — attempt to extract text before giving up
     const text = data.content?.find(b => b.type === 'text')?.text || null;
-    console.log(`[check-results] Unexpected stop_reason=${data.stop_reason}, text:`, text?.slice(0, 200));
+    console.warn(`[check-results] Unexpected stop_reason=${data.stop_reason}, text:`, text?.slice(0, 200));
     return text;
   }
 
@@ -90,11 +108,23 @@ async function callClaudeWithSearch(prompt) {
 
 function parseJSON(text) {
   if (!text) return null;
-  // Try direct parse first (handles clean JSON or markdown-fenced JSON)
-  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); } catch {}
-  // Extract a JSON array from within prose — Claude sometimes wraps it in explanation text
-  const match = text.match(/\[[\s\S]*\]/);
-  if (match) { try { return JSON.parse(match[0]); } catch {} }
+  // Strip markdown fences and try direct parse
+  const cleaned = text.replace(/```json\s*|```\s*/g, '').trim();
+  try { return JSON.parse(cleaned); } catch {}
+  // Find the FIRST '[' and walk the string counting brackets to find the matching ']'
+  // This avoids the greedy regex bug where ']' inside result strings misleads the match.
+  const start = cleaned.indexOf('[');
+  if (start !== -1) {
+    let depth = 0;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (ch === '[' || ch === '{') depth++;
+      else if (ch === ']' || ch === '}') { depth--; if (depth === 0 && ch === ']') {
+        try { return JSON.parse(cleaned.slice(start, i + 1)); } catch {}
+        break;
+      }}
+    }
+  }
   return null;
 }
 
@@ -167,34 +197,32 @@ exports.handler = async (event) => {
 
       const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
 
-You must find the verified, real-world result for each bet leg below by searching the web. Only update a leg if you can confirm the result from an authoritative source.
+Your task: search the web to find the real result for each bet leg below, then output a JSON array with the outcome of each leg.
 
 BET LEGS:
 ${desc}
 
-SEARCH INSTRUCTIONS:
-1. For each leg, search by TEAM NAMES + COMPETITION + YEAR, e.g. "Panthers vs Broncos NRL 2026 result"
-2. The stored event date may be off by ±3 days — search across that window
-3. For NRL: check nrl.com match centre first (it has official try scorers), then foxsports.com.au or leagueunlimited.com
-4. For AFL: check afl.com.au match centre for official goal scorers
-5. For scorer props (try/goal): find the COMPLETE official scorer list from the match report — do not rely on headlines alone
-6. Perform at least 2 separate searches to cross-check your answer before deciding won/lost
+STEP 1 — SEARCH
+For each leg, search: "[Team A] vs [Team B] [competition] 2026 result"
+- NRL: check nrl.com or foxsports.com.au for the final score and official try scorers
+- AFL: check afl.com.au for the final score and goal scorers
+- The stored event date can be off by ±3 days — search ±3 days around that date if needed
+- For scorer bets: you MUST find the complete official try/goal scorer list, not just headlines
 
-RESULT RULES — READ CAREFULLY:
-- When you find a match result from any credible source (nrl.com, afl.com.au, foxsports, ESPN, etc.), mark it "won" or "lost" immediately — do not second-guess confirmed data
-- For scorer bets: if the official match scorer list or multiple match reports agree the player scored/didn't score, mark won/lost confidently
-- Mark "pending" ONLY if you searched but could find NO match data at all (e.g. match hasn't been played yet, or no results found in multiple searches)
-- Do NOT mark pending just because you are uncertain — if a major sports source confirms the final score, that is sufficient
-- Mark "void" if the match was cancelled/postponed or the player was a late scratching
-- Mark "in_progress" ONLY if the match is live right now
+STEP 2 — DECIDE
+Once you have the final score and/or scorer list from your search:
+- Match winner bet: if the selected team won → "won"; if they lost → "lost"
+- Try/goal scorer bet: if the player appears in the official scorer list → "won"; if not → "lost"
+- Handicap/margin bet: compare the actual margin against the selection
+- Mark "pending" ONLY if your searches found ZERO match data (e.g. the game hasn't been played yet)
+- Mark "void" only if the match was cancelled or the player was a late scratching
+- Mark "in_progress" only if the match is happening RIGHT NOW
 
-RESULT NOTE must always include:
-- The confirmed FINAL SCORE (e.g. "Panthers 28 def Broncos 14")
-- For scorer bets: the COMPLETE list of try/goal scorers and their counts from the official match report
-- The source URL where you confirmed the result (e.g. "Source: nrl.com/draw/nrl-premiership/2026/round-2/panthers-v-broncos/")
+IMPORTANT: As soon as your search returns the final score from any sports website (nrl.com, afl.com.au, foxsports, espn, etc.), that is sufficient — use it to determine won or lost. Do not keep searching for a "better" source.
 
-Return ONLY a valid JSON array — no other text, no markdown fences:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"Final score + scorer list + source URL"}]`;
+STEP 3 — OUTPUT
+Return ONLY this JSON array (no other text, no markdown):
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"Final score, scorer list if relevant, and source URL"}]`;
 
       let responseText;
       try {
