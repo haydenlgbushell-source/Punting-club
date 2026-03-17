@@ -24,7 +24,7 @@ async function callClaudeWithSearch(prompt) {
       },
       body: JSON.stringify({
         model:      'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 2048,
         tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
         messages,
       }),
@@ -43,18 +43,23 @@ async function callClaudeWithSearch(prompt) {
     }
 
     if (data.stop_reason === 'tool_use') {
-      const toolUseBlocks = (data.content || []).filter(b => b.type === 'tool_use');
+      const toolUseBlocks   = (data.content || []).filter(b => b.type === 'tool_use');
+      const toolResultBlocks = (data.content || []).filter(b => b.type === 'tool_result');
+      // web_search_20250305: Anthropic executes the search server-side and returns the
+      // results as tool_result blocks inside data.content. Strip them from the assistant
+      // turn and re-attach as the user turn so Claude can read the real search data.
+      const assistantContent = (data.content || []).filter(b => b.type !== 'tool_result');
       console.log('[check-results-bg] Tool calls:', toolUseBlocks.map(b => `${b.name}(${JSON.stringify(b.input)?.slice(0, 100)})`).join(', '));
+      if (toolResultBlocks.length) console.log(`[check-results-bg] Passing ${toolResultBlocks.length} search result block(s) to Claude`);
       messages = [
         ...messages,
-        { role: 'assistant', content: data.content },
+        { role: 'assistant', content: assistantContent },
         {
           role: 'user',
-          content: toolUseBlocks.map(b => ({
-            type: 'tool_result',
-            tool_use_id: b.id,
-            content: '',
-          })),
+          content: toolUseBlocks.map(b => {
+            const found = toolResultBlocks.find(r => r.tool_use_id === b.id);
+            return found || { type: 'tool_result', tool_use_id: b.id, content: '' };
+          }),
         },
       ];
       continue;
@@ -173,7 +178,7 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
       }
 
       for (const u of updates) {
-        const origLeg = (bet.bet_legs || []).find(l => l.leg_number === u.legNumber);
+        const origLeg = (bet.bet_legs || []).find(l => Number(l.leg_number) === Number(u.legNumber));
         if (!origLeg || origLeg.status === u.status) continue;
         const { error: legErr } = await supabase
           .from('bet_legs')
@@ -186,7 +191,7 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
       }
 
       const updatedLegs = (bet.bet_legs || []).map(l => {
-        const u = updates.find(x => x.legNumber === l.leg_number);
+        const u = updates.find(x => Number(x.legNumber) === Number(l.leg_number));
         return u ? { ...l, status: u.status } : l;
       });
       const settled    = ['won', 'lost', 'void'];
