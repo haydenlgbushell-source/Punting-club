@@ -1463,12 +1463,26 @@ export default function PuntingClub() {
                 const isMe = isLoggedIn && team.team === myTeamName;
                 const weekBet = team.bets[0] || null;
                 const isOpen = selectedTeamIdx === idx;
+
+                // Derive status from legs (same logic as BetSlipCard) so row colour
+                // updates as soon as individual legs settle, even before DB overall_status syncs
+                const computedStatus = (() => {
+                  const legs = weekBet?.legs || [];
+                  if (!legs.length) return weekBet?.overallStatus || 'pending';
+                  if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
+                  if (legs.some(l => l.status === 'pending'))     return 'pending';
+                  if (!legs.every(l => ['won','lost','void'].includes(l.status))) return 'pending';
+                  if (legs.every(l => l.status === 'won'))  return 'won';
+                  if (legs.some(l => l.status === 'lost'))  return 'lost';
+                  return 'partial';
+                })();
+
                 const rowBg = isMe
                   ? 'border-amber-400/40 bg-amber-500/5'
-                  : weekBet?.overallStatus === 'won'         ? 'border-green-500/20 bg-green-950/10'
-                  : weekBet?.overallStatus === 'lost'        ? 'border-red-500/20 bg-red-950/10'
-                  : weekBet?.overallStatus === 'in_progress' ? 'border-orange-500/20 bg-orange-950/10'
-                  : weekBet?.legs?.some(l => l.status === 'in_progress') ? 'border-orange-500/20 bg-orange-950/10'
+                  : computedStatus === 'won'         ? 'border-green-500/20 bg-green-950/10'
+                  : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-950/10'
+                  : computedStatus === 'partial'     ? 'border-yellow-500/20 bg-yellow-950/10'
+                  : computedStatus === 'in_progress' ? 'border-orange-500/20 bg-orange-950/10'
                   : 'border-white/5 bg-white/2';
 
                 return (
@@ -1496,7 +1510,7 @@ export default function PuntingClub() {
                         {leaderboardView === 'current' ? (
                           weekBet ? (
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge status={weekBet.overallStatus || 'pending'} />
+                              <Badge status={computedStatus} />
                               <span className="text-white text-xs font-semibold">{weekBet.type}</span>
                               <span className="text-gray-500 text-xs">·</span>
                               <span className="text-green-400 text-xs font-semibold">{weekBet.stake}</span>
