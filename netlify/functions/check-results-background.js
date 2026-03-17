@@ -227,22 +227,37 @@ Return ONLY a valid JSON array, no other text:
       }
       if (!responseText) continue;
 
+      console.log('[check-results-bg] Full Claude response:', responseText?.slice(0, 2000));
+
       const updates = parseJSON(responseText);
       if (!Array.isArray(updates)) {
-        console.warn('[check-results-bg] Could not parse Claude response:', responseText?.slice(0, 300));
+        console.warn('[check-results-bg] Could not parse Claude response as JSON array. Raw text:', responseText?.slice(0, 500));
         continue;
       }
+      console.log('[check-results-bg] Parsed updates:', JSON.stringify(updates));
 
       for (const u of updates) {
-        const origLeg = (bet.bet_legs || []).find(l => Number(l.leg_number) === Number(u.legNumber));
-        if (!origLeg || origLeg.status === u.status) continue;
+        // Accept both legNumber and leg_number from Claude
+        const legNum = u.legNumber ?? u.leg_number;
+        const origLeg = (bet.bet_legs || []).find(l => Number(l.leg_number) === Number(legNum));
+        if (!origLeg) {
+          console.warn(`[check-results-bg] No matching leg found for legNumber=${legNum}. DB legs:`, (bet.bet_legs||[]).map(l=>l.leg_number));
+          continue;
+        }
+        if (origLeg.status === u.status) {
+          console.log(`[check-results-bg] Leg ${legNum} status unchanged (${u.status}) — skipping`);
+          continue;
+        }
+        console.log(`[check-results-bg] Updating leg ${legNum} from "${origLeg.status}" to "${u.status}"`);
         const { error: legErr } = await supabase
           .from('bet_legs')
           .update({ status: u.status, result_note: u.result || '', updated_at: now.toISOString() })
           .eq('id', origLeg.id);
         if (!legErr) {
           totalLegsUpdated++;
-          console.log(`[check-results-bg] Leg ${u.legNumber} → "${u.status}": ${u.result}`);
+          console.log(`[check-results-bg] Leg ${legNum} → "${u.status}": ${u.result}`);
+        } else {
+          console.error(`[check-results-bg] DB error updating leg ${legNum}:`, legErr.message, legErr);
         }
       }
 
@@ -258,12 +273,17 @@ Return ONLY a valid JSON array, no other text:
       const newOverall = allDone ? (allWon ? 'won' : anyLost ? 'lost' : 'partial') : anyLive ? 'in_progress' : 'pending';
 
       if (newOverall !== bet.overall_status) {
+        console.log(`[check-results-bg] Updating bet ${bet.id} overall_status from "${bet.overall_status}" to "${newOverall}"`);
         const { error: betErr } = await supabase
           .from('bets').update({ overall_status: newOverall }).eq('id', bet.id);
         if (!betErr) {
           totalBetsUpdated++;
           console.log(`[check-results-bg] Bet ${bet.id} → "${newOverall}"`);
+        } else {
+          console.error(`[check-results-bg] DB error updating bet ${bet.id}:`, betErr.message, betErr);
         }
+      } else {
+        console.log(`[check-results-bg] Bet ${bet.id} overall_status already "${newOverall}" — no change`);
       }
     }
 

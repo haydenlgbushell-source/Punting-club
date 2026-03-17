@@ -244,31 +244,47 @@ Return ONLY a valid JSON array, no other text:
       }
       if (!responseText) { debugResponses.push({ betId: bet.id, error: 'no text from Claude' }); continue; }
 
-      debugResponses.push({ betId: bet.id, response: responseText.slice(0, 500) });
+      debugResponses.push({ betId: bet.id, response: responseText.slice(0, 2000) });
+      console.log('[check-results] Full Claude response:', responseText?.slice(0, 2000));
+
       const updates = parseJSON(responseText);
       if (!Array.isArray(updates)) {
-        console.warn('[check-results] Could not parse Claude response:', responseText?.slice(0, 300));
+        console.warn('[check-results] Could not parse Claude response as JSON array. Raw:', responseText?.slice(0, 500));
+        debugResponses[debugResponses.length - 1].parseError = 'not a JSON array';
         continue;
       }
+      console.log('[check-results] Parsed updates:', JSON.stringify(updates));
+      debugResponses[debugResponses.length - 1].parsed = updates;
 
       // Update each changed leg in DB
       for (const u of updates) {
-        const origLeg = (bet.bet_legs || []).find(l => Number(l.leg_number) === Number(u.legNumber));
-        if (!origLeg || origLeg.status === u.status) continue;
+        // Accept both legNumber and leg_number from Claude
+        const legNum = u.legNumber ?? u.leg_number;
+        const origLeg = (bet.bet_legs || []).find(l => Number(l.leg_number) === Number(legNum));
+        if (!origLeg) {
+          console.warn(`[check-results] No matching leg for legNumber=${legNum}. DB legs:`, (bet.bet_legs||[]).map(l=>l.leg_number));
+          continue;
+        }
+        if (origLeg.status === u.status) {
+          console.log(`[check-results] Leg ${legNum} status unchanged (${u.status}) — skipping`);
+          continue;
+        }
+        console.log(`[check-results] Updating leg ${legNum} from "${origLeg.status}" to "${u.status}"`);
         const { error: legErr } = await supabase
           .from('bet_legs')
           .update({ status: u.status, result_note: u.result || '', updated_at: now.toISOString() })
           .eq('id', origLeg.id);
-        if (legErr) console.error('[check-results] Leg update error:', legErr.message);
-        else {
+        if (legErr) {
+          console.error('[check-results] Leg update DB error:', legErr.message, legErr);
+        } else {
           totalLegsUpdated++;
-          console.log(`[check-results] Leg ${u.legNumber} updated to "${u.status}": ${u.result}`);
+          console.log(`[check-results] Leg ${legNum} updated to "${u.status}": ${u.result}`);
         }
       }
 
       // Recalculate overall bet status from updated legs
       const updatedLegs = (bet.bet_legs || []).map(l => {
-        const u = updates.find(x => Number(x.legNumber) === Number(l.leg_number));
+        const u = updates.find(x => Number(x.legNumber ?? x.leg_number) === Number(l.leg_number));
         return u ? { ...l, status: u.status } : l;
       });
       const settled   = ['won', 'lost', 'void'];
