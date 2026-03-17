@@ -35,9 +35,10 @@ async function callClaudeWithSearch(prompt) {
         'anthropic-beta':    'web-search-2025-03-05',
       },
       body: JSON.stringify({
-        model:      'claude-sonnet-4-6',
-        max_tokens: 2048,
-        tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
+        model:       'claude-sonnet-4-6',
+        max_tokens:  4096,
+        tools:       [{ type: 'web_search_20250305', name: 'web_search' }],
+        tool_choice: turn === 0 ? { type: 'any' } : { type: 'auto' },
         messages,
       }),
     });
@@ -180,12 +181,12 @@ SEARCH INSTRUCTIONS:
 6. Perform at least 2 separate searches to cross-check your answer before deciding won/lost
 
 RESULT RULES — READ CAREFULLY:
-- ONLY mark "won" or "lost" if you have found a CONFIRMED final result from an official or major sports news source
-- If you CANNOT find a confirmed result, mark "pending" — it is MUCH better to leave as pending than to guess wrong
-- Do NOT assume a result — if searches return no clear match data, mark "pending"
+- When you find a match result from any credible source (nrl.com, afl.com.au, foxsports, ESPN, etc.), mark it "won" or "lost" immediately — do not second-guess confirmed data
+- For scorer bets: if the official match scorer list or multiple match reports agree the player scored/didn't score, mark won/lost confidently
+- Mark "pending" ONLY if you searched but could find NO match data at all (e.g. match hasn't been played yet, or no results found in multiple searches)
+- Do NOT mark pending just because you are uncertain — if a major sports source confirms the final score, that is sufficient
 - Mark "void" if the match was cancelled/postponed or the player was a late scratching
 - Mark "in_progress" ONLY if the match is live right now
-- For scorer bets: the player must appear in the OFFICIAL match scorer list — do not infer from match summaries
 
 RESULT NOTE must always include:
 - The confirmed FINAL SCORE (e.g. "Panthers 28 def Broncos 14")
