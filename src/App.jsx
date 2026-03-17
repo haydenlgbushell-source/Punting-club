@@ -144,101 +144,54 @@ const PermissionBadge = ({ role }) => {
 };
 
 // ─── BET SLIP DISPLAY ─────────────────────────────────────────────────────────
-const BC = "'Barlow Condensed', 'Inter', sans-serif"; // sports-display font shorthand
-
 const BetSlipCard = ({ bet, compact = false }) => {
-  const [openLegs, setOpenLegs] = useState({});
   if (!bet) return null;
-
-  const toggleLeg = (i) => setOpenLegs(prev => ({ ...prev, [i]: !prev[i] }));
-
-  const legs = bet.legs || [];
-  const wonCount     = legs.filter(l => l.status === 'won').length;
-  const totalLegs    = legs.length;
-
-  const statusCfg = {
-    won:         { headline: '🏆 WINNER!',  color: '#22c55e', border: 'border-green-500/30',  bg: 'bg-green-950/20'  },
-    lost:        { headline: '❌ BUST',      color: '#ef4444', border: 'border-red-500/30',    bg: 'bg-red-950/20'    },
-    partial:     { headline: '⚡ PARTIAL',  color: '#eab308', border: 'border-yellow-500/30', bg: 'bg-yellow-950/20' },
-    in_progress: { headline: '🔴 LIVE',     color: '#f97316', border: 'border-orange-500/30', bg: 'bg-orange-950/20' },
-    pending:     { headline: '⏳ PENDING',  color: '#f59e0b', border: 'border-amber-500/20',  bg: 'bg-black/40'      },
+  const statusBg = {
+    won:         'border-green-500/40 bg-green-950/30',
+    lost:        'border-red-500/40 bg-red-950/30',
+    partial:     'border-yellow-500/40 bg-yellow-950/20',
+    pending:     'border-amber-500/20 bg-black/40',
+    in_progress: 'border-orange-500/40 bg-orange-950/20',
   };
-  const { headline, color, border, bg } = statusCfg[bet.overallStatus] || statusCfg.pending;
-
   return (
-    <div className={`rounded-xl border overflow-hidden ${border} ${bg}`}>
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-white/5">
-        <div className="flex justify-between items-center mb-1.5">
-          <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
-            {(bet.type || 'MULTI').toUpperCase()} BET
-          </span>
-          {bet.submittedAt && <span className="text-gray-600 text-xs">⌛ {bet.submittedAt}</span>}
+    <div className={`rounded-xl border overflow-hidden ${statusBg[bet.overallStatus] || statusBg.pending}`}>
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <span className="text-white font-bold text-sm">{bet.type}</span>
+          <Badge status={bet.overallStatus || 'pending'} />
         </div>
-        <div style={{ fontFamily: BC, fontWeight: 800, fontSize: compact ? 28 : 36, lineHeight: 1, color, marginBottom: 2 }}>
-          {headline}
-        </div>
-        <p className="text-gray-500 text-xs">{wonCount} of {totalLegs} leg{totalLegs !== 1 ? 's' : ''} won</p>
+        {bet.submittedAt && <span className="text-gray-600 text-xs">{bet.submittedAt}</span>}
       </div>
-
       {/* Stats row */}
-      <div className="grid grid-cols-3 divide-x divide-white/5 border-b border-white/5">
-        {[
-          ['STAKE',  bet.stake,                                '#e2e8f0'],
-          ['ODDS',   bet.combinedOdds || bet.odds || 'N/A',   '#f59e0b'],
-          ['TO WIN', bet.estimatedReturn || bet.return || 'N/A',
-            bet.overallStatus === 'won' ? '#22c55e' : bet.overallStatus === 'lost' ? '#ef4444' : '#22c55e'],
-        ].map(([label, value, clr]) => (
-          <div key={label} className="px-3 py-2.5 text-center bg-black/30">
-            <p style={{ fontFamily: BC, letterSpacing: '0.12em', fontSize: 10, color: '#6b7280', marginBottom: 2 }}>{label}</p>
-            <p style={{ fontFamily: BC, fontWeight: 700, fontSize: compact ? 16 : 20, color: clr }}>{value}</p>
+      <div className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-3'} divide-x divide-white/5`}>
+        {[['Stake', bet.stake, 'text-white'], ['Odds', bet.combinedOdds || bet.odds || 'N/A', 'text-amber-300'], ['To Win', bet.estimatedReturn || bet.return || 'N/A', 'text-green-400']].map(([l, v, c]) => (
+          <div key={l} className="px-3 py-2 text-center">
+            <p className="text-gray-500 text-xs">{l}</p>
+            <p className={`font-bold text-sm ${c}`}>{v}</p>
           </div>
         ))}
       </div>
-
       {/* Legs */}
-      {totalLegs > 0 && (
-        <div className="px-3 pb-3 pt-2.5 space-y-2">
-          <p style={{ fontFamily: BC, letterSpacing: '0.14em', fontSize: 11, color: '#6b7280' }}>
-            {totalLegs} LEG{totalLegs !== 1 ? 'S' : ''}
-          </p>
-          {legs.map((leg, i) => {
-            const won  = leg.status === 'won';
-            const lost = leg.status === 'lost';
-            const live = leg.status === 'in_progress';
-            const legColor = won ? '#22c55e' : lost ? '#ef4444' : live ? '#f97316' : '#f59e0b';
-            const isOpen = openLegs[i];
+      {bet.legs?.length > 0 && (
+        <div className="px-3 pb-3 pt-2 space-y-1.5">
+          <p className="text-gray-600 text-xs uppercase tracking-wider mb-2">{bet.legs.length} Leg{bet.legs.length !== 1 ? 's' : ''}</p>
+          {bet.legs.map((leg, i) => {
+            const legBg = { won: 'bg-green-950/40 border-green-500/20', lost: 'bg-red-950/40 border-red-500/20', void: 'bg-gray-900/40 border-gray-500/20', pending: 'bg-black/30 border-white/5', in_progress: 'bg-orange-950/40 border-orange-500/20' };
             return (
-              <div key={i} className="rounded-lg overflow-hidden animate-fadeup"
-                style={{ background: '#111827', border: '1px solid #1f2937', borderLeft: `4px solid ${legColor}`, animationDelay: `${i * 0.06}s` }}>
-                <div className="flex items-start justify-between px-3 py-2.5">
-                  <div className="flex gap-2.5 items-start flex-1 min-w-0">
-                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#1f2937', border: '1px solid #374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: BC, fontWeight: 700, fontSize: 12, color: '#f59e0b', flexShrink: 0, marginTop: 2 }}>
-                      {i + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p style={{ fontFamily: BC, fontWeight: 700, fontSize: 16, color: '#f1f5f9' }} className="truncate">{leg.selection}</p>
-                      <p className="text-gray-500 text-xs truncate">{leg.event}{leg.market ? ` · ${leg.market}` : ''}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                    <p style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#f59e0b' }}>@ {leg.odds}</p>
-                    <span style={{ fontFamily: BC, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', padding: '2px 8px', borderRadius: 5, background: `${legColor}18`, color: legColor, border: `1px solid ${legColor}44` }}>
-                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '◉ LIVE' : leg.status === 'void' ? '— VOID' : '⏳'}
-                    </span>
-                    {leg.resultNote && (
-                      <button onClick={() => toggleLeg(i)} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: 11, cursor: 'pointer', padding: 0, fontFamily: "'Inter', sans-serif" }}>
-                        {isOpen ? '▲ hide' : '▼ details'}
-                      </button>
-                    )}
-                  </div>
+              <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${legBg[leg.status] || legBg.pending}`}>
+                <LegDot leg={leg} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-semibold truncate">{leg.selection}</p>
+                  <p className="text-gray-500 text-xs truncate">{leg.event}{leg.market ? ` · ${leg.market}` : ''}</p>
+                  {leg.resultNote && <p className="text-gray-400 text-xs italic mt-0.5 line-clamp-3">{leg.resultNote}</p>}
                 </div>
-                {isOpen && leg.resultNote && (
-                  <div style={{ borderTop: '1px solid #1f2937', padding: '10px 14px 12px', display: 'flex', gap: 6, fontSize: 13, color: '#9ca3af', lineHeight: 1.5 }}>
-                    <span>{won ? '🟢' : lost ? '🔴' : '🟡'}</span>
-                    <span>{leg.resultNote}</span>
-                  </div>
-                )}
+                <div className="text-right flex-shrink-0">
+                  <p className="text-amber-300 font-bold text-sm">@ {leg.odds}</p>
+                  <p className={`text-xs font-semibold ${leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : leg.status === 'in_progress' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                    {leg.status === 'won' ? '✓ Won' : leg.status === 'lost' ? '✗ Lost' : leg.status === 'void' ? '— Void' : leg.status === 'in_progress' ? '🔴 Live' : '⏳'}
+                  </p>
+                </div>
               </div>
             );
           })}
@@ -1370,29 +1323,9 @@ export default function PuntingClub() {
       )}
 
       {/* ── LEADERBOARD ───────────────────────────────────────────────────── */}
-      {activeNav === 'leaderboard' && (() => {
-        // Build ticker from settled bet legs across all teams
-        const tickerMsgs = enrichedLeaderboardTeams.flatMap(t =>
-          (t.bets || []).flatMap(b =>
-            (b.legs || [])
-              .filter(l => l.resultNote && (l.status === 'won' || l.status === 'lost' || l.status === 'in_progress'))
-              .map(l => `${l.selection} (${l.event}): ${l.resultNote}`)
-          )
-        );
-        const ticker = tickerMsgs.length > 0 ? tickerMsgs : ['Results update every 3 hours · Click "Check Results" to refresh now · Expand any team row to see full bet slip'];
-        return (
-        <section className="pt-28 pb-16 px-0 sm:px-0">
-          {/* Results ticker */}
-          <div style={{ background: '#111827', borderBottom: '1px solid #1f2937', overflow: 'hidden', whiteSpace: 'nowrap', height: 34, display: 'flex', alignItems: 'center' }}>
-            <div className="animate-ticker" style={{ display: 'inline-block' }}>
-              {[...ticker, ...ticker].map((msg, i) => (
-                <span key={i} style={{ fontFamily: "'Barlow Condensed', 'Inter', sans-serif", fontWeight: 600, fontSize: 12, letterSpacing: '0.05em', color: '#f59e0b', padding: '0 24px' }}>
-                  {msg} &nbsp;•
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="max-w-5xl mx-auto px-2 sm:px-6">
+      {activeNav === 'leaderboard' && (
+        <section className="pt-28 pb-16 px-2 sm:px-6">
+          <div className="max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
               <div>
@@ -1540,8 +1473,7 @@ export default function PuntingClub() {
             </div>
           </div>
         </section>
-        );
-      })()}
+      )}
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
       {activeNav === 'weekly' && (
