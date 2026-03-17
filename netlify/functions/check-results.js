@@ -12,74 +12,37 @@ const HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 const UNSETTLED = ['pending', 'in_progress'];
 
 /**
  * Call Claude with web search enabled.
- * Uses a multi-turn loop to handle any tool_use blocks the model may emit
- * before it produces a final text response.
+ * web_search_20250305 is a server-side tool — Anthropic executes searches internally
+ * and returns stop_reason "end_turn" with results already included in the content.
  */
 async function callClaudeWithSearch(prompt) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
-  const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
-  let messages = [{ role: 'user', content: prompt }];
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta':    'web-search-2025-03-05',
+    },
+    body: JSON.stringify({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 1024,
+      tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages:   [{ role: 'user', content: prompt }],
+    }),
+  });
 
-  for (let turn = 0; turn < 6; turn++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta':    'web-search-2025-03-05',
-      },
-      body: JSON.stringify({
-        model:      'claude-sonnet-4-5',
-        max_tokens: 1024,
-        tools,
-        messages,
-      }),
-    });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
-
-    // Final answer — extract the text block
-    if (data.stop_reason === 'end_turn') {
-      return data.content?.find(b => b.type === 'text')?.text || null;
-    }
-
-    // Model wants to use a tool — feed tool_results back and continue
-    if (data.stop_reason === 'tool_use') {
-      messages = [
-        ...messages,
-        { role: 'assistant', content: data.content },
-        {
-          role: 'user',
-          content: data.content
-            .filter(b => b.type === 'tool_use')
-            .map(b => ({
-              type:        'tool_result',
-              tool_use_id: b.id,
-              content:     `Search for "${b.input?.query || ''}" was executed.`,
-            })),
-        },
-      ];
-      continue;
-    }
-
-    // Any other stop reason — still try to return a text block if present
-    return data.content?.find(b => b.type === 'text')?.text || null;
-  }
-
-  return null; // gave up after max turns
+  return data.content?.find(b => b.type === 'text')?.text || null;
 }
 
 function parseJSON(text) {
@@ -90,6 +53,12 @@ function parseJSON(text) {
 exports.handler = async (event) => {
   if (event?.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
   console.log('[check-results] Starting scheduled bet result check');
+
+  if (!process.env.SUPABASE_URL)           return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'SUPABASE_URL not configured' }) };
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }) };
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
   const now = new Date();
   const todayStr  = now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr   = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
