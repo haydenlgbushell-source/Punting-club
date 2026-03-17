@@ -197,32 +197,43 @@ exports.handler = async (event) => {
 
       const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
 
-Your task: search the web to find the real result for each bet leg below, then output a JSON array with the outcome of each leg.
+You are settling Australian sports bet legs. Use the exact same logic a human would:
 
 BET LEGS:
 ${desc}
 
-STEP 1 — SEARCH
-For each leg, search: "[Team A] vs [Team B] [competition] 2026 result"
-- NRL: check nrl.com or foxsports.com.au for the final score and official try scorers
-- AFL: check afl.com.au for the final score and goal scorers
-- The stored event date can be off by ±3 days — search ±3 days around that date if needed
-- For scorer bets: you MUST find the complete official try/goal scorer list, not just headlines
+STEP 1 — FIND EACH UNIQUE MATCH RESULT
+The legs above may come from one or more matches. For each unique match (event), search:
+  "[Team A] vs [Team B] NRL 2026 result" or "[Team A] vs [Team B] AFL 2026 result"
+From the match report you need TWO things:
+  a) The FINAL SCORE (e.g. "Knights 36 - Sea Eagles 16")
+  b) The COMPLETE official try/goal scorer list with every player who scored (e.g. "Try scorers: Marzhew, Young, Hunt, Olakau'atu")
+Search nrl.com match centre or a match report for the official scorer list — headlines alone are not enough.
 
-STEP 2 — DECIDE
-Once you have the final score and/or scorer list from your search:
-- Match winner bet: if the selected team won → "won"; if they lost → "lost"
-- Try/goal scorer bet: if the player appears in the official scorer list → "won"; if not → "lost"
-- Handicap/margin bet: compare the actual margin against the selection
-- Mark "pending" ONLY if your searches found ZERO match data (e.g. the game hasn't been played yet)
-- Mark "void" only if the match was cancelled or the player was a late scratching
-- Mark "in_progress" only if the match is happening RIGHT NOW
+STEP 2 — SETTLE EACH LEG USING THIS EXACT LOGIC
 
-IMPORTANT: As soon as your search returns the final score from any sports website (nrl.com, afl.com.au, foxsports, espn, etc.), that is sufficient — use it to determine won or lost. Do not keep searching for a "better" source.
+For "1+ Try" / "Anytime Try Scorer" bets:
+  - Get the full try scorer list for that match
+  - Is the named player in that list? YES → "won" / NO → "lost"
+  - If the player was a confirmed late scratching (did not play) → "void"
+
+For "Match Winner" / "Head to Head" bets:
+  - Did the selected team win? YES → "won" / NO → "lost"
+
+For "Handicap" / "Line" bets:
+  - Apply the handicap to the final score. Does the selection win on handicap? YES → "won" / NO → "lost"
+
+For "Over/Under" / "Total Points" bets:
+  - Compare total points scored to the line. Over → "won" or "lost" depending on selection.
+
+General rules:
+  - "pending" ONLY if the match has not been played yet or you genuinely found zero match data
+  - "in_progress" ONLY if the match is live right now
+  - "void" ONLY if match cancelled, postponed, or player confirmed scratched before kick-off
 
 STEP 3 — OUTPUT
-Return ONLY this JSON array (no other text, no markdown):
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"Final score, scorer list if relevant, and source URL"}]`;
+Return ONLY a valid JSON array, no other text:
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"Final score + full scorer list + source URL"}]`;
 
       let responseText;
       try {
