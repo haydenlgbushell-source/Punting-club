@@ -42,7 +42,8 @@ async function searchMatchResults(apiKey, prompt) {
   return text || null;
 }
 
-// Step 2: Convert prose match summary to JSON — no web search, just text transformation.
+// Step 2: Convert prose to structured JSON using tool_use with a schema.
+// Using tool_choice forces Claude to call the tool — output is guaranteed valid JSON.
 async function convertToJSON(apiKey, summary, legs) {
   const legList = legs.map(l => `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}`).join('\n');
 
@@ -54,41 +55,67 @@ async function convertToJSON(apiKey, summary, legs) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system:     'Output ONLY valid JSON. No prose. No markdown. No explanation.',
-      messages:   [{
-        role: 'user',
-        content: `Based on this match summary, settle each bet leg.
+      model:       'claude-haiku-4-5-20251001',
+      max_tokens:  512,
+      tools: [{
+        name:        'record_settlements',
+        description: 'Record the settlement result for each bet leg',
+        input_schema: {
+          type: 'object',
+          properties: {
+            legs: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  legNumber: { type: 'number',  description: 'The leg number from the bet' },
+                  status:    { type: 'string',  enum: ['won', 'lost', 'pending', 'void', 'in_progress'] },
+                  result:    { type: 'string',  description: 'Brief reason: score, scorer list, etc.' },
+                },
+                required: ['legNumber', 'status', 'result'],
+              },
+            },
+          },
+          required: ['legs'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'record_settlements' },
+      messages: [{
+        role:    'user',
+        content: `Settle each bet leg using the match summary below.
 
 MATCH SUMMARY:
 ${summary}
 
-BET LEGS:
+BET LEGS TO SETTLE:
 ${legList}
 
-Rules:
-- "1+ Try" / anytime try scorer: player in scorer list → "won", not in list → "lost"
-- Match winner: selected team won → "won", lost → "lost"
-- Handicap: apply handicap to score → "won" or "lost"
-- If match not found or not yet played → "pending"
+Settlement rules:
+- "1+ Try" / anytime try scorer: if the named player is in the try scorer list → "won"; if not → "lost"
+- Match winner: selected team won → "won"; lost → "lost"
+- Handicap: apply handicap to the final score → "won" or "lost"
+- If the match has not been played yet, or you cannot find the result → "pending"
 
-Output ONLY this JSON array (replace ... with actual values):
-[{"legNumber":1,"status":"won|lost|pending","result":"brief reason"}]`,
+Call record_settlements with the result for every leg.`,
       }],
     }),
   });
 
   const data = await res.json();
   if (!res.ok) {
-    const msg = data.error?.message || `Anthropic API error ${res.status}`;
-    console.error(`[check-results-bg] Parse API error ${res.status}:`, msg);
-    throw new Error(msg);
+    console.error(`[check-results-bg] Haiku API error ${res.status}:`, data.error?.message);
+    throw new Error(data.error?.message || `Haiku API error ${res.status}`);
   }
 
-  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-  console.log('[check-results-bg] JSON conversion result:', text?.slice(0, 500));
-  return text || null;
+  const toolUse = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'record_settlements');
+  if (!toolUse?.input?.legs) {
+    console.error('[check-results-bg] Haiku did not call record_settlements. Content:', JSON.stringify(data.content).slice(0, 300));
+    return null;
+  }
+
+  console.log('[check-results-bg] Haiku tool result:', JSON.stringify(toolUse.input.legs));
+  // Return in the format the rest of the code expects
+  return JSON.stringify(toolUse.input.legs);
 }
 
 async function callClaudeWithSearch(prompt, legs) {
@@ -255,7 +282,7 @@ Search for each match on nrl.com, afl.com.au, or foxsports.com.au. Report the fi
       }
 
       const updatedLegs = (bet.bet_legs || []).map(l => {
-        const u = updates.find(x => Number(x.legNumber) === Number(l.leg_number));
+        const u = updates.find(x => Number(x.legNumber ?? x.leg_number) === Number(l.leg_number));
         return u ? { ...l, status: u.status } : l;
       });
       const settled    = ['won', 'lost', 'void'];
