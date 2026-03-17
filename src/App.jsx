@@ -933,24 +933,22 @@ Return ONLY a valid JSON array — no other text, no markdown:
   const checkResultsNow = useCallback(async () => {
     setCheckingResults(true);
     try {
+      // Background function returns 202 immediately and runs async — no response body.
       const res = await fetch('/api/check-results', { method: 'POST' });
-      let data;
-      try { data = await res.json(); } catch { data = {}; }
-      if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
-      if (data.legsUpdated || data.betsUpdated) {
-        showToast(`${data.legsUpdated || 0} leg(s) updated across ${data.betsUpdated || 0} bet(s)`, 'success');
-      } else if (data.error) {
-        throw new Error(data.error);
+      if (res.status === 202 || res.ok) {
+        showToast('Checking results in background — refreshing shortly…', 'info');
+        setLastChecked(new Date());
+        // Refresh leaderboard after giving the background function time to write results
+        setTimeout(() => refreshLeaderboard(), 20000);
+        setTimeout(() => refreshLeaderboard(), 45000);
       } else {
-        showToast('Results checked — no changes yet.', 'info');
+        throw new Error(`Server error ${res.status}`);
       }
     } catch (e) {
       console.error('Check results error:', e);
       showToast(`Result check failed: ${e.message}`, 'error');
     } finally {
       setCheckingResults(false);
-      setLastChecked(new Date());
-      refreshLeaderboard();
     }
   }, [refreshLeaderboard, showToast]);
 
