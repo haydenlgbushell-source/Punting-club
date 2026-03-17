@@ -184,7 +184,7 @@ const BetSlipCard = ({ bet, compact = false }) => {
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-xs font-semibold truncate">{leg.selection}</p>
                   <p className="text-gray-500 text-xs truncate">{leg.event}{leg.market ? ` · ${leg.market}` : ''}</p>
-                  {leg.resultNote && <p className="text-gray-600 text-xs italic truncate">{leg.resultNote}</p>}
+                  {leg.resultNote && <p className="text-gray-400 text-xs italic mt-0.5 line-clamp-3">{leg.resultNote}</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-amber-300 font-bold text-sm">@ {leg.odds}</p>
