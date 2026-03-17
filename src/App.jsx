@@ -48,7 +48,7 @@ const callClaudeWithSearch = async (prompt) => {
     const res = await fetch('/api/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1024, tools, messages }),
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, tools, messages }),
     });
     if (!res.ok) throw new Error(`Claude API error ${res.status}`);
     const data = await res.json();
@@ -626,6 +626,7 @@ export default function PuntingClub() {
     if (!teamsWithPending.length) { setLastChecked(new Date()); return; }
     setCheckingResults(true);
     let totalLegsChanged = 0;
+    let claudeErrors = 0;
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
@@ -647,18 +648,25 @@ ${desc}
 
 Instructions:
 - Search the web for the actual result of each event/match by name and date
-- Mark "won" if the selection won
+- For player prop bets (e.g. "X scores a try"), search for the match result and try-scorers
+- Mark "won" if the selection won (e.g. player scored the try, team won)
 - Mark "lost" if the selection lost
 - Mark "void" if the match was cancelled, postponed, or abandoned
 - Mark "in_progress" if the event has started but is still ongoing right now
 - Mark "pending" only if the event clearly hasn't started yet
 
 Return ONLY a valid JSON array — no other text, no markdown:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note"}]`;
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note e.g. Knights won 24-18, Ponga scored 2 tries"}]`;
 
           let text;
-          try { text = await callClaudeWithSearch(prompt); } catch(e) { console.error('Claude error:', e.message); continue; }
-          if (!text) continue;
+          try {
+            text = await callClaudeWithSearch(prompt);
+          } catch(e) {
+            console.error('Claude error for bet', bet.id, ':', e.message);
+            claudeErrors++;
+            continue;
+          }
+          if (!text) { claudeErrors++; continue; }
           const updates = parseAnalysisJSON(text);
           if (!Array.isArray(updates)) continue;
 
@@ -725,10 +733,15 @@ Return ONLY a valid JSON array — no other text, no markdown:
     finally {
       setCheckingResults(false);
       setLastChecked(new Date());
-      if (totalLegsChanged === 0) showToast('Results checked — no changes yet.', 'info');
-      // Re-fetch from DB so any updates from the scheduled check-results function
-      // (and the ones just persisted above) are reflected in the UI.
-      refreshLeaderboard();
+      if (totalLegsChanged === 0) {
+        if (claudeErrors > 0) {
+          showToast(`Result check timed out — try again or wait for the 3-hour auto-check`, 'error');
+        } else {
+          showToast('Results checked — all bets still pending (events may not have finished yet)', 'info');
+        }
+      }
+      // Re-fetch from DB so any updates are reflected on both leaderboard and My Team tabs.
+      await refreshLeaderboard();
     }
   }, [refreshLeaderboard, showToast]);
 
@@ -910,10 +923,8 @@ Return ONLY a valid JSON array — no other text, no markdown:
 
     // Schedule first check, then repeat every 3 hours
     const runCheck = async () => {
-      try {
-        await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
-      } catch(e) { console.error('Auto check-results error:', e); }
-      refreshLeaderboard();
+      const current = leaderboardTeams;
+      if (current.length) await reviewBetResults(current);
     };
     const tid = setTimeout(() => {
       runCheck();
@@ -927,23 +938,16 @@ Return ONLY a valid JSON array — no other text, no markdown:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
 
-  // Refresh the leaderboard to show latest result data from the DB.
-  // Full result checking (Claude + web search) runs automatically every 3 hours
-  // via the scheduled Netlify background function — HTTP invocation is not
-  // supported on this plan.
+  // Trigger a result check using client-side Claude+web-search, then persist
+  // any changes to the DB. The scheduled background function runs the same
+  // logic server-side every 3 hours as a backup.
   const checkResultsNow = useCallback(async () => {
-    setCheckingResults(true);
-    try {
-      await refreshLeaderboard();
-      setLastChecked(new Date());
-      showToast('Leaderboard refreshed — results auto-check every 3 hours', 'info');
-    } catch (e) {
-      console.error('Refresh error:', e);
-      showToast(`Refresh failed: ${e.message}`, 'error');
-    } finally {
-      setCheckingResults(false);
+    if (!leaderboardTeams.length) {
+      showToast('No leaderboard data to check', 'info');
+      return;
     }
-  }, [refreshLeaderboard, showToast]);
+    await reviewBetResults(leaderboardTeams);
+  }, [leaderboardTeams, reviewBetResults, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
