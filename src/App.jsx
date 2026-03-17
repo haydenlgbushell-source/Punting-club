@@ -687,40 +687,41 @@ export default function PuntingClub() {
     if (!hasPending) { setLastChecked(new Date()); showToast('No pending bets to check', 'info'); return; }
 
     setCheckingResults(true);
-    showToast('Checking results — this may take up to 30 seconds…', 'info');
+    showToast('Checking results — searching live sports data (up to 2 min)…', 'info');
 
-    // Snapshot current leg statuses so we can detect changes after the check
+    // Snapshot leg statuses to detect changes
     const legStatusSnapshot = {};
-    teams.forEach(t => t.bets.forEach(b => b.legs?.forEach(l => { legStatusSnapshot[l.id] = l.status; })));
+    teams.forEach(t => t.bets.forEach(b => b.legs?.forEach(l => { if (l.id) legStatusSnapshot[l.id] = l.status; })));
 
-    try {
-      // Call synchronous check-results function — returns {legsUpdated, betsUpdated}
-      const res = await fetch('/.netlify/functions/check-results', { method: 'POST' });
-      const json = res.ok ? await res.json().catch(() => ({})) : {};
-      const legsUpdated = json.legsUpdated ?? 0;
+    // Fire background function — returns 202 immediately, runs up to 15 min (no timeout)
+    // The synchronous check-results.js only gets 26s which is not enough for web search
+    try { await fetch('/.netlify/functions/check-results-background', { method: 'POST' }); }
+    catch (e) { console.warn('[check-results] trigger error (non-fatal):', e.message); }
 
-      // Refresh the leaderboard to pick up DB changes
+    // Poll refreshLeaderboard every 6s for up to 2 minutes.
+    // Use the RETURNED value (not the stale closure) for change detection.
+    let found = false;
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 6000));
       const freshTeams = await refreshLeaderboard();
-
-      setCheckingResults(false);
-      setLastChecked(new Date());
-
-      // Detect changes using fresh data (avoids stale-closure false-negative)
-      const anyChanged = legsUpdated > 0 || (freshTeams && freshTeams.some(t =>
-        t.bets.some(b => b.legs?.some(l => l.id && legStatusSnapshot[l.id] !== undefined && legStatusSnapshot[l.id] !== l.status))
-      ));
-
-      if (anyChanged) {
-        showToast(`Results updated — ${legsUpdated} leg${legsUpdated !== 1 ? 's' : ''} settled!`, 'success');
-        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${legsUpdated} leg${legsUpdated !== 1 ? 's' : ''} updated` }, ...prev.slice(0, 19)]);
-      } else {
-        showToast('Check complete — no result changes yet (events may still be pending)', 'info');
+      if (freshTeams) {
+        const anyChanged = freshTeams.some(t =>
+          t.bets.some(b => b.legs?.some(l =>
+            l.id && legStatusSnapshot[l.id] !== undefined && legStatusSnapshot[l.id] !== l.status
+          ))
+        );
+        if (anyChanged) { found = true; break; }
       }
-    } catch (err) {
-      console.warn('check-results error (non-fatal):', err.message);
-      setCheckingResults(false);
-      setLastChecked(new Date());
-      showToast('Check complete — could not reach results service', 'warning');
+    }
+
+    setCheckingResults(false);
+    setLastChecked(new Date());
+    if (found) {
+      const settled = Object.keys(legStatusSnapshot).length;
+      showToast('Results updated — leaderboard refreshed!', 'success');
+      setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: 'Leg results settled' }, ...prev.slice(0, 19)]);
+    } else {
+      showToast('Check still running in background — refresh in a minute if results don\'t appear', 'info');
     }
   }, [refreshLeaderboard, showToast]);
 
