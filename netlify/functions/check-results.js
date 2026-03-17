@@ -14,98 +14,99 @@ const HEADERS = {
 
 const UNSETTLED = ['pending', 'in_progress'];
 
-/**
- * Call Claude with web search enabled.
- * Handles multi-turn: web_search_20250305 may return stop_reason "tool_use"
- * before giving the final "end_turn" text response.
- */
-async function callClaudeWithSearch(prompt) {
+// Step 1: Search — prose result is fine here
+async function searchMatchResults(apiKey, prompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta':    'web-search-2025-03-05',
+    },
+    body: JSON.stringify({
+      model:       'claude-sonnet-4-6',
+      max_tokens:  1024,
+      tools:       [{ type: 'web_search_20250305', name: 'web_search' }],
+      tool_choice: { type: 'any' },
+      messages:    [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data.error?.message || `Anthropic API error ${res.status}`;
+    console.error(`[check-results] Search API error ${res.status}:`, msg);
+    throw new Error(msg);
+  }
+
+  const contentTypes = (data.content || []).map(b => b.type).join(', ');
+  console.log(`[check-results] Search response: stop_reason=${data.stop_reason}, content=[${contentTypes}]`);
+
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  console.log('[check-results] Search result:', text?.slice(0, 1000));
+  return text || null;
+}
+
+// Step 2: Convert prose to JSON — no web search, simple and reliable
+async function convertToJSON(apiKey, summary, legs) {
+  const legList = legs.map(l => `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}`).join('\n');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system:     'Output ONLY valid JSON. No prose. No markdown. No explanation.',
+      messages:   [{
+        role: 'user',
+        content: `Based on this match summary, settle each bet leg.
+
+MATCH SUMMARY:
+${summary}
+
+BET LEGS:
+${legList}
+
+Rules:
+- "1+ Try" / anytime try scorer: player in scorer list → "won", not in list → "lost"
+- Match winner: selected team won → "won", lost → "lost"
+- Handicap: apply handicap to score → "won" or "lost"
+- If match not found or not yet played → "pending"
+
+Output ONLY this JSON array:
+[{"legNumber":1,"status":"won|lost|pending","result":"brief reason"}]`,
+      }],
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data.error?.message || `Anthropic API error ${res.status}`;
+    console.error(`[check-results] Parse API error ${res.status}:`, msg);
+    throw new Error(msg);
+  }
+
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  console.log('[check-results] JSON conversion result:', text?.slice(0, 500));
+  return text || null;
+}
+
+async function callClaudeWithSearch(prompt, legs) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
-  let messages = [{ role: 'user', content: prompt }];
-  let lastText = null;
+  const summary = await searchMatchResults(apiKey, prompt);
+  if (!summary) return null;
 
-  for (let turn = 0; turn < 5; turn++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta':    'web-search-2025-03-05',
-      },
-      body: JSON.stringify({
-        model:       'claude-sonnet-4-6',
-        max_tokens:  1024,
-        system:      'You are a sports bet settlement assistant. You MUST respond with ONLY a valid JSON array — no prose, no markdown, no explanation. The first character of your response must be [ and the last must be ].',
-        tools:       [{ type: 'web_search_20250305', name: 'web_search' }],
-        tool_choice: turn === 0 ? { type: 'any' } : { type: 'auto' },
-        messages,
-      }),
-    });
+  if (parseJSON(summary)) return summary;
 
-    const data = await res.json();
-    if (!res.ok) {
-      console.error(`[check-results] API error ${res.status}:`, JSON.stringify(data).slice(0, 300));
-      throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
-    }
-
-    const contentTypes = (data.content || []).map(b => b.type).join(', ');
-    console.log(`[check-results] Turn ${turn + 1}: stop_reason=${data.stop_reason}, content=[${contentTypes}]`);
-
-    if (data.stop_reason === 'end_turn') {
-      // Concatenate all text blocks (Claude sometimes splits output across multiple)
-      const text = (data.content || [])
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('') || null;
-      console.log('[check-results] Final text:', text?.slice(0, 800));
-
-      if (text && parseJSON(text)) return text;
-
-      if (text) {
-        lastText = text;
-        messages = [
-          ...messages,
-          { role: 'assistant', content: data.content },
-          { role: 'user', content: 'Your response was not valid JSON. Output ONLY the JSON array now — no other text.' },
-        ];
-        continue;
-      }
-      return null;
-    }
-
-    if (data.stop_reason === 'tool_use') {
-      const toolUseBlocks    = (data.content || []).filter(b => b.type === 'tool_use');
-      const toolResultBlocks = (data.content || []).filter(b => b.type === 'tool_result');
-      const assistantContent = (data.content || []).filter(b => b.type !== 'tool_result');
-
-      console.log('[check-results] Tool calls:', toolUseBlocks.map(b =>
-        `${b.name}(${JSON.stringify(b.input)?.slice(0, 120)})`).join(', '));
-
-      const userToolResults = toolUseBlocks.map(b => {
-        const found = toolResultBlocks.find(r => r.tool_use_id === b.id);
-        return found
-          ? { type: 'tool_result', tool_use_id: b.id, content: found.content ?? '' }
-          : { type: 'tool_result', tool_use_id: b.id, content: 'No search results returned.' };
-      });
-
-      messages = [
-        ...messages,
-        { role: 'assistant', content: assistantContent },
-        { role: 'user',      content: userToolResults },
-      ];
-      continue;
-    }
-
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || null;
-    console.warn(`[check-results] stop_reason=${data.stop_reason}, text:`, text?.slice(0, 200));
-    if (text) return text;
-  }
-
-  console.warn('[check-results] Max turns reached. Last text:', lastText?.slice(0, 200));
-  return lastText;
+  return convertToJSON(apiKey, summary, legs);
 }
 
 function parseJSON(text) {
@@ -192,54 +193,24 @@ exports.handler = async (event) => {
         if (!hasStartedEvent) continue;
       }
 
-      const desc = (bet.bet_legs || []).map(l => {
-        const datePart = l.event_date ? ` — event date approx ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
-        return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market} @ ${l.odds}${datePart} | current status: ${l.status}`;
+      const legs = bet.bet_legs || [];
+      const desc = legs.map(l => {
+        const datePart = l.event_date ? ` on ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
+        return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${datePart}`;
       }).join('\n');
 
-      const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
+      const searchPrompt = `Today is ${todayStr} AEST. Search for the results of these Australian sports matches and report:
+1. The FINAL SCORE of each match
+2. The COMPLETE list of try scorers / goal scorers for each match
 
-You are settling Australian sports bet legs. Use the exact same logic a human would:
-
-BET LEGS:
+MATCHES TO FIND:
 ${desc}
 
-STEP 1 — FIND EACH UNIQUE MATCH RESULT
-The legs above may come from one or more matches. For each unique match (event), search:
-  "[Team A] vs [Team B] NRL 2026 result" or "[Team A] vs [Team B] AFL 2026 result"
-From the match report you need TWO things:
-  a) The FINAL SCORE (e.g. "Knights 36 - Sea Eagles 16")
-  b) The COMPLETE official try/goal scorer list with every player who scored (e.g. "Try scorers: Marzhew, Young, Hunt, Olakau'atu")
-Search nrl.com match centre or a match report for the official scorer list — headlines alone are not enough.
-
-STEP 2 — SETTLE EACH LEG USING THIS EXACT LOGIC
-
-For "1+ Try" / "Anytime Try Scorer" bets:
-  - Get the full try scorer list for that match
-  - Is the named player in that list? YES → "won" / NO → "lost"
-  - If the player was a confirmed late scratching (did not play) → "void"
-
-For "Match Winner" / "Head to Head" bets:
-  - Did the selected team win? YES → "won" / NO → "lost"
-
-For "Handicap" / "Line" bets:
-  - Apply the handicap to the final score. Does the selection win on handicap? YES → "won" / NO → "lost"
-
-For "Over/Under" / "Total Points" bets:
-  - Compare total points scored to the line. Over → "won" or "lost" depending on selection.
-
-General rules:
-  - "pending" ONLY if the match has not been played yet or you genuinely found zero match data
-  - "in_progress" ONLY if the match is live right now
-  - "void" ONLY if match cancelled, postponed, or player confirmed scratched before kick-off
-
-STEP 3 — OUTPUT
-Return ONLY a valid JSON array, no other text:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"Final score + full scorer list + source URL"}]`;
+Search for each match on nrl.com, afl.com.au, or foxsports.com.au. Report the final score and full scorer list for each match. If a match hasn't been played yet, say so.`;
 
       let responseText;
       try {
-        responseText = await callClaudeWithSearch(prompt);
+        responseText = await callClaudeWithSearch(searchPrompt, legs);
       } catch(e) {
         console.error('[check-results] Claude error:', e.message);
         continue;
