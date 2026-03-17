@@ -48,7 +48,7 @@ const callClaudeWithSearch = async (prompt) => {
     const res = await fetch('/api/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1024, tools, messages }),
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, tools, messages }),
     });
     if (!res.ok) throw new Error(`Claude API error ${res.status}`);
     const data = await res.json();
@@ -910,10 +910,8 @@ Return ONLY a valid JSON array — no other text, no markdown:
 
     // Schedule first check, then repeat every 3 hours
     const runCheck = async () => {
-      try {
-        await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
-      } catch(e) { console.error('Auto check-results error:', e); }
-      refreshLeaderboard();
+      const current = leaderboardTeams;
+      if (current.length) await reviewBetResults(current);
     };
     const tid = setTimeout(() => {
       runCheck();
@@ -927,23 +925,16 @@ Return ONLY a valid JSON array — no other text, no markdown:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
 
-  // Refresh the leaderboard to show latest result data from the DB.
-  // Full result checking (Claude + web search) runs automatically every 3 hours
-  // via the scheduled Netlify background function — HTTP invocation is not
-  // supported on this plan.
+  // Trigger a result check using client-side Claude+web-search, then persist
+  // any changes to the DB. The scheduled background function runs the same
+  // logic server-side every 3 hours as a backup.
   const checkResultsNow = useCallback(async () => {
-    setCheckingResults(true);
-    try {
-      await refreshLeaderboard();
-      setLastChecked(new Date());
-      showToast('Leaderboard refreshed — results auto-check every 3 hours', 'info');
-    } catch (e) {
-      console.error('Refresh error:', e);
-      showToast(`Refresh failed: ${e.message}`, 'error');
-    } finally {
-      setCheckingResults(false);
+    if (!leaderboardTeams.length) {
+      showToast('No leaderboard data to check', 'info');
+      return;
     }
-  }, [refreshLeaderboard, showToast]);
+    await reviewBetResults(leaderboardTeams);
+  }, [leaderboardTeams, reviewBetResults, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
