@@ -6,6 +6,9 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."claude"]
+  timeout = 26
+
 [functions."check-results-background"]
   schedule = "0 */3 * * *"
 

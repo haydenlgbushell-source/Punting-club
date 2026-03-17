@@ -626,6 +626,7 @@ export default function PuntingClub() {
     if (!teamsWithPending.length) { setLastChecked(new Date()); return; }
     setCheckingResults(true);
     let totalLegsChanged = 0;
+    let claudeErrors = 0;
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
@@ -647,18 +648,25 @@ ${desc}
 
 Instructions:
 - Search the web for the actual result of each event/match by name and date
-- Mark "won" if the selection won
+- For player prop bets (e.g. "X scores a try"), search for the match result and try-scorers
+- Mark "won" if the selection won (e.g. player scored the try, team won)
 - Mark "lost" if the selection lost
 - Mark "void" if the match was cancelled, postponed, or abandoned
 - Mark "in_progress" if the event has started but is still ongoing right now
 - Mark "pending" only if the event clearly hasn't started yet
 
 Return ONLY a valid JSON array — no other text, no markdown:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note"}]`;
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note e.g. Knights won 24-18, Ponga scored 2 tries"}]`;
 
           let text;
-          try { text = await callClaudeWithSearch(prompt); } catch(e) { console.error('Claude error:', e.message); continue; }
-          if (!text) continue;
+          try {
+            text = await callClaudeWithSearch(prompt);
+          } catch(e) {
+            console.error('Claude error for bet', bet.id, ':', e.message);
+            claudeErrors++;
+            continue;
+          }
+          if (!text) { claudeErrors++; continue; }
           const updates = parseAnalysisJSON(text);
           if (!Array.isArray(updates)) continue;
 
@@ -725,10 +733,15 @@ Return ONLY a valid JSON array — no other text, no markdown:
     finally {
       setCheckingResults(false);
       setLastChecked(new Date());
-      if (totalLegsChanged === 0) showToast('Results checked — no changes yet.', 'info');
-      // Re-fetch from DB so any updates from the scheduled check-results function
-      // (and the ones just persisted above) are reflected in the UI.
-      refreshLeaderboard();
+      if (totalLegsChanged === 0) {
+        if (claudeErrors > 0) {
+          showToast(`Result check timed out — try again or wait for the 3-hour auto-check`, 'error');
+        } else {
+          showToast('Results checked — all bets still pending (events may not have finished yet)', 'info');
+        }
+      }
+      // Re-fetch from DB so any updates are reflected on both leaderboard and My Team tabs.
+      await refreshLeaderboard();
     }
   }, [refreshLeaderboard, showToast]);
 
