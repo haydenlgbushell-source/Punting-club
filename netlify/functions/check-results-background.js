@@ -1,6 +1,7 @@
 // netlify/functions/check-results-background.js
 // Background function — Netlify returns 202 immediately; this runs up to 15 min.
-// Triggered on schedule (every 3 hours) and manually via POST /api/check-results.
+// Triggered on schedule (every 3 hours) via netlify.toml — NOT via HTTP
+// (HTTP invocation of background functions is unreliable on this plan).
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -38,7 +39,7 @@ function parseJSON(text) {
 }
 
 exports.handler = async () => {
-  console.log('[check-results] Starting bet result check (background)');
+  console.log('[check-results] Starting bet result check (scheduled background)');
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.error('[check-results] Missing Supabase env vars');

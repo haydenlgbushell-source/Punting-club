@@ -25,11 +25,6 @@
   status = 200
 
 [[redirects]]
-  from = "/api/check-results"
-  to = "/.netlify/functions/check-results-background"
-  status = 200
-
-[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
