@@ -53,7 +53,7 @@ async function callClaudeWithSearch(prompt) {
           content: toolUseBlocks.map(b => ({
             type: 'tool_result',
             tool_use_id: b.id,
-            content: 'Search executed.',
+            content: '',
           })),
         },
       ];
@@ -119,37 +119,40 @@ exports.handler = async () => {
       if (!hasStartedEvent) continue;
 
       const desc = (bet.bet_legs || []).map(l => {
-        const datePart = l.event_date ? ` on ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
+        const datePart = l.event_date ? ` around ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
         return `Leg ${l.leg_number}: "${l.selection}" — ${l.event} — ${l.market} @ ${l.odds}${datePart} — current status: ${l.status}`;
       }).join('\n');
 
       const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
 
-The following Australian sports bet legs need their results determined. All events listed are from the past — search the web to find the actual result for each one.
+The following Australian sports bet legs need their results determined. All events listed are from the recent past — search the web to find the actual result for each one.
 
 Bet legs:
 ${desc}
 
-Search strategy:
-- For each leg, search "[Team A] vs [Team B] result [date] NRL" or "[event] [date] result"
-- For try-scorer props (e.g. "Player X 1+ Try Scorer"), search "[match name] try scorers [date]" and "[player name] try [match name]"
-- For goal-scorer props (AFL, soccer), search "[player name] goal [match name] [date]"
-- Check sites like nrl.com, foxsports.com.au, afl.com.au, espn.com.au, or Google Sports
+IMPORTANT — Search strategy:
+- Search primarily by TEAM NAMES and COMPETITION (e.g. "Manly Sea Eagles vs Newcastle Knights NRL 2026 result"), NOT just by the stored date.
+- The stored date may be off by 1-3 days (it could be the bet submission date rather than the actual match date). Search ±3 days around the stored date.
+- For NRL: search "[Team A] vs [Team B] NRL 2026 try scorers result" and check nrl.com, foxsports.com.au, leagueunlimited.com, espn.com.au
+- For try-scorer props: search "[player name] try [Team A] vs [Team B] NRL 2026" — confirm by checking official match scorecards
+- For AFL: search "[Team A] vs [Team B] AFL 2026 goal scorers result" and check afl.com.au
+- For soccer/football: search "[Team A] vs [Team B] [competition] 2026 result scorers"
+- Always verify the FINAL SCORE and COMPLETE list of scorers before deciding won/lost
 
 Rules:
-- If the event date has already passed, it MUST be marked won, lost, void, or in_progress — NOT pending
+- If the event was in the recent past, it MUST be marked won, lost, void, or in_progress — NOT pending
 - Mark "won" if the selection was correct (team won, player scored the try/goal, etc.)
 - Mark "lost" if the selection was incorrect
-- Mark "void" if the match was cancelled/postponed/abandoned
+- Mark "void" if the match was cancelled, postponed, or the player was a late scratching
 - Mark "in_progress" ONLY if the match is literally happening right now
-- Mark "pending" ONLY if the event is scheduled for the future and has NOT started
+- Mark "pending" ONLY if the event is definitely scheduled for the future
 
-Result note format — include as much detail as possible:
-- For match winner bets: final score and scoreline (e.g. "Broncos won 28-14 over Knights")
-- For try-scorer bets: confirm if the player scored a try and list ALL try scorers for the match (e.g. "Ponga scored 2 tries. All try scorers: Ponga (2), Walsh (1), Luai (1)")
-- For goal-scorer bets: confirm if the player scored and list ALL goal scorers (e.g. "Oliver scored 3 goals. Goal scorers: Oliver (3), Bontempelli (2), Treloar (1)")
-- For any prop bet: state the final outcome relevant to the selection with key stats
-- Always include the final score when available
+Result note format:
+- For try-scorer bets: state whether player scored AND list ALL try scorers with counts (e.g. "Ponga scored 1 try. All try scorers: Ponga (1), Young (2), Marzhew (1). Knights won 36-16.")
+- For match winner bets: final score (e.g. "Knights won 36-16 over Sea Eagles")
+- For goal-scorer bets: confirm score and list all goal scorers with counts
+- For any prop: state the exact outcome with key stats
+- Always include the final score
 
 Return ONLY a valid JSON array — no other text, no markdown fences:
 [{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"e.g. Broncos won 28-14. Try scorers: Cobbo (2), Staggs (1), Selwyn (1)"}]`;
