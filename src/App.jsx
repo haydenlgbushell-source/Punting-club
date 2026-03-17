@@ -154,41 +154,31 @@ const BetSlipCard = ({ bet, compact = false }) => {
 
   const legs = bet.legs || [];
   const wonCount     = legs.filter(l => l.status === 'won').length;
-  const lostCount    = legs.filter(l => l.status === 'lost').length;
-  const pendingCount = legs.filter(l => l.status === 'pending' || l.status === 'in_progress').length;
   const totalLegs    = legs.length;
 
-  // Compute status from legs directly (mirrors reference implementation)
-  const computedStatus = totalLegs === 0
-    ? (bet.overallStatus || 'pending')
-    : pendingCount > 0 && legs.some(l => l.status === 'in_progress') ? 'in_progress'
-    : pendingCount > 0 ? 'pending'
-    : lostCount > 0 ? (wonCount > 0 ? 'partial' : 'lost')
-    : 'won';
-
   const statusCfg = {
-    won:         { border: 'border-green-500/30',  bg: 'bg-green-950/20'  },
-    lost:        { border: 'border-red-500/30',    bg: 'bg-red-950/20'    },
-    partial:     { border: 'border-yellow-500/30', bg: 'bg-yellow-950/20' },
-    in_progress: { border: 'border-orange-500/30', bg: 'bg-orange-950/20' },
-    pending:     { border: 'border-amber-500/20',  bg: 'bg-black/40'      },
+    won:         { headline: '🏆 WINNER!',  color: '#22c55e', border: 'border-green-500/30',  bg: 'bg-green-950/20'  },
+    lost:        { headline: '❌ BUST',      color: '#ef4444', border: 'border-red-500/30',    bg: 'bg-red-950/20'    },
+    partial:     { headline: '⚡ PARTIAL',  color: '#eab308', border: 'border-yellow-500/30', bg: 'bg-yellow-950/20' },
+    in_progress: { headline: '🔴 LIVE',     color: '#f97316', border: 'border-orange-500/30', bg: 'bg-orange-950/20' },
+    pending:     { headline: '⏳ PENDING',  color: '#f59e0b', border: 'border-amber-500/20',  bg: 'bg-black/40'      },
   };
-  const { border, bg } = statusCfg[computedStatus] || statusCfg.pending;
+  const { headline, color, border, bg } = statusCfg[bet.overallStatus] || statusCfg.pending;
 
   return (
     <div className={`rounded-xl border overflow-hidden ${border} ${bg}`}>
       {/* Header */}
-      <div className="px-4 pt-3 pb-3 border-b border-white/5">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
-              {(bet.type || 'MULTI').toUpperCase()} BET
-            </span>
-            <Badge status={computedStatus} />
-          </div>
+      <div className="px-4 pt-4 pb-3 border-b border-white/5">
+        <div className="flex justify-between items-center mb-1.5">
+          <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
+            {(bet.type || 'MULTI').toUpperCase()} BET
+          </span>
           {bet.submittedAt && <span className="text-gray-600 text-xs">⌛ {bet.submittedAt}</span>}
         </div>
-        <p className="text-gray-500 text-xs mt-1">{wonCount} of {totalLegs} leg{totalLegs !== 1 ? 's' : ''} won</p>
+        <div style={{ fontFamily: BC, fontWeight: 800, fontSize: compact ? 28 : 36, lineHeight: 1, color, marginBottom: 2 }}>
+          {headline}
+        </div>
+        <p className="text-gray-500 text-xs">{wonCount} of {totalLegs} leg{totalLegs !== 1 ? 's' : ''} won</p>
       </div>
 
       {/* Stats row */}
@@ -197,7 +187,7 @@ const BetSlipCard = ({ bet, compact = false }) => {
           ['STAKE',  bet.stake,                                '#e2e8f0'],
           ['ODDS',   bet.combinedOdds || bet.odds || 'N/A',   '#f59e0b'],
           ['TO WIN', bet.estimatedReturn || bet.return || 'N/A',
-            computedStatus === 'won' ? '#22c55e' : computedStatus === 'lost' ? '#ef4444' : '#22c55e'],
+            bet.overallStatus === 'won' ? '#22c55e' : bet.overallStatus === 'lost' ? '#ef4444' : '#22c55e'],
         ].map(([label, value, clr]) => (
           <div key={label} className="px-3 py-2.5 text-center bg-black/30">
             <p style={{ fontFamily: BC, letterSpacing: '0.12em', fontSize: 10, color: '#6b7280', marginBottom: 2 }}>{label}</p>
