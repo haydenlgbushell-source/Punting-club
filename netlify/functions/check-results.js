@@ -1,5 +1,9 @@
 // netlify/functions/check-results.js
 // Callable via POST /api/check-results from the frontend (26-second timeout).
+// Handles ONE bet at a time (betId required for production use).
+// Uses the same v9 two-step pipeline as the background function:
+//   Step 1 — Sonnet + web search → prose summary
+//   Step 2 — Haiku + forced tool_use → structured settlement JSON
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -11,109 +15,111 @@ const HEADERS = {
 };
 
 const UNSETTLED = ['pending', 'in_progress'];
-const VERSION   = 'v8-single-call';
+const VERSION   = 'v9-two-step-haiku-tool';
 
-const SETTLE_TOOL = {
-  name:        'record_settlements',
-  description: 'Record the final settlement for every bet leg after searching for match results.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      legs: {
-        type: 'array',
-        items: {
+// Step 1: Sonnet + web search → prose summary only
+async function searchForResults(apiKey, searchPrompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta':    'web-search-2025-03-05',
+    },
+    body: JSON.stringify({
+      model:       'claude-sonnet-4-6',
+      max_tokens:  1024,
+      tools:       [{ type: 'web_search_20250305', name: 'web_search' }],
+      tool_choice: { type: 'any' },
+      messages:    [{ role: 'user', content: searchPrompt }],
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Anthropic API ${res.status}`);
+
+  const types = (data.content || []).map(b => b.type).join(', ');
+  console.log(`[check-results] Search: stop_reason=${data.stop_reason}, content=[${types}]`);
+
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  console.log('[check-results] Search summary:', text?.slice(0, 600));
+  return text || null;
+}
+
+// Step 2: Haiku (separate rate limit) + forced record_settlements tool → structured JSON
+async function settleLegs(apiKey, summary, legs) {
+  const legList = legs.map(l =>
+    `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}`
+  ).join('\n');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model:       'claude-haiku-4-5-20251001',
+      max_tokens:  1024,
+      tools: [{
+        name:        'record_settlements',
+        description: 'Record the settlement result for each bet leg',
+        input_schema: {
           type: 'object',
           properties: {
-            legNumber: { type: 'number', description: 'The leg number' },
-            status:    { type: 'string', enum: ['won','lost','pending','void','in_progress'] },
-            result:    { type: 'string', description: 'Brief reason — score, scorer list, etc.' },
+            legs: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  legNumber: { type: 'number' },
+                  status:    { type: 'string', enum: ['won','lost','pending','void','in_progress'] },
+                  result:    { type: 'string' },
+                },
+                required: ['legNumber','status','result'],
+              },
+            },
           },
-          required: ['legNumber','status','result'],
+          required: ['legs'],
         },
-      },
-    },
-    required: ['legs'],
-  },
-};
+      }],
+      tool_choice: { type: 'tool', name: 'record_settlements' },
+      messages: [{
+        role:    'user',
+        content: `Settle each bet leg based on this match summary.
 
-async function settleWithClaude(apiKey, prompt) {
-  const tools = [
-    { type: 'web_search_20250305', name: 'web_search' },
-    SETTLE_TOOL,
-  ];
+MATCH SUMMARY:
+${summary}
 
-  let messages = [{ role: 'user', content: prompt }];
+BET LEGS:
+${legList}
 
-  for (let turn = 0; turn < 4; turn++) {
-    const toolChoice = turn >= 2
-      ? { type: 'tool', name: 'record_settlements' }
-      : { type: 'auto' };
+Rules:
+- Try/goal scorer: player in scorer list → won, not in list → lost
+- Match winner: selected team won → won, lost → lost
+- Not played / result not found → pending
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta':    'web-search-2025-03-05',
-      },
-      body: JSON.stringify({
-        model:       'claude-sonnet-4-6',
-        max_tokens:  1024,
-        tools,
-        tool_choice: toolChoice,
-        messages,
-      }),
-    });
+Call record_settlements now.`,
+      }],
+    }),
+  });
 
-    const data = await res.json();
-    if (!res.ok) {
-      console.error(`[check-results] API error ${res.status}:`, data.error?.message);
-      throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
-    }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Haiku API ${res.status}`);
 
-    const contentTypes = (data.content || []).map(b => b.type).join(', ');
-    console.log(`[check-results] Turn ${turn+1}: stop_reason=${data.stop_reason}, content=[${contentTypes}]`);
+  const types = (data.content || []).map(b => b.type).join(', ');
+  console.log(`[check-results] Settle: stop_reason=${data.stop_reason}, content=[${types}]`);
 
-    const settleCall = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'record_settlements');
-    if (settleCall?.input?.legs?.length) {
-      console.log('[check-results] record_settlements result:', JSON.stringify(settleCall.input.legs));
-      return settleCall.input.legs;
-    }
-
-    if (data.stop_reason === 'end_turn') {
-      console.log('[check-results] end_turn without tool call, nudging...');
-      messages = [
-        ...messages,
-        { role: 'assistant', content: data.content },
-        { role: 'user',      content: 'Now call record_settlements with the settlement result for each leg.' },
-      ];
-      continue;
-    }
-
-    if (data.stop_reason === 'tool_use') {
-      const toolUseBlocks    = (data.content || []).filter(b => b.type === 'tool_use');
-      const toolResultBlocks = (data.content || []).filter(b => b.type === 'tool_result');
-      const assistantContent = (data.content || []).filter(b => b.type !== 'tool_result');
-
-      const userResults = toolUseBlocks.map(b => {
-        const found = toolResultBlocks.find(r => r.tool_use_id === b.id);
-        return found
-          ? { type: 'tool_result', tool_use_id: b.id, content: found.content ?? '' }
-          : { type: 'tool_result', tool_use_id: b.id, content: 'No results.' };
-      });
-
-      messages = [
-        ...messages,
-        { role: 'assistant', content: assistantContent },
-        { role: 'user',      content: userResults },
-      ];
-      continue;
-    }
+  const toolCall = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'record_settlements');
+  if (!toolCall?.input?.legs?.length) {
+    console.error('[check-results] Haiku did not call record_settlements:', JSON.stringify(data.content).slice(0, 300));
+    return null;
   }
 
-  console.warn('[check-results] No record_settlements call after 4 turns');
-  return null;
+  console.log('[check-results] Settled:', JSON.stringify(toolCall.input.legs));
+  return toolCall.input.legs;
 }
 
 exports.handler = async (event) => {
@@ -159,49 +165,58 @@ exports.handler = async (event) => {
 
     for (const bet of bets) {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
-      if (!unsettledLegs.length) continue;
+      if (!unsettledLegs.length) { console.log(`[check-results] Bet ${bet.id} all settled`); continue; }
 
       if (!betId) {
         const hasStarted = unsettledLegs.some(l => {
           if (!l.event_date) return true;
           const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-          const eventStart = new Date(`${l.event_date}T${t}:00+10:00`);
-          return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
+          const start = new Date(`${l.event_date}T${t}:00+10:00`);
+          return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
         });
-        if (!hasStarted) continue;
+        if (!hasStarted) { console.log(`[check-results] Bet ${bet.id} not started yet`); continue; }
       }
 
       const legs = bet.bet_legs || [];
       const legDesc = legs.map(l => {
-        const datePart = l.event_date ? ` on ${l.event_date}` : '';
-        return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${datePart} | status: ${l.status}`;
+        const d = l.event_date ? ` on ${l.event_date}` : '';
+        return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
       }).join('\n');
 
-      const prompt = `Today is ${todayStr} AEST.
+      const searchPrompt = `Today is ${todayStr} AEST. Search for the results of these Australian sports matches. For each match report: the final score AND the complete list of try scorers / goal scorers.
 
-Search for the result of each match below, then call record_settlements with the outcome of every leg.
-
-BET LEGS:
+MATCHES:
 ${legDesc}
 
-For each leg:
-- If it's a try/goal scorer bet: search for the match and find the full try/goal scorer list. Is the player named in that list? yes=won, no=lost.
-- If it's a match winner bet: did the selected team win? yes=won, no=lost.
-- If the match has not yet been played or you cannot find the result: status=pending.
+Search nrl.com or afl.com.au for each match. Report the final score and full scorer list.`;
 
-Search first, then call record_settlements.`;
-
-      let updates;
+      console.log(`[check-results] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
+      let summary;
       try {
-        updates = await settleWithClaude(apiKey, prompt);
+        summary = await searchForResults(apiKey, searchPrompt);
       } catch (e) {
-        console.error(`[check-results] Claude error bet ${bet.id}:`, e.message);
+        console.error(`[check-results] Search error bet ${bet.id}:`, e.message);
         debugLog.push({ betId: bet.id, error: e.message });
         continue;
       }
+      if (!summary) {
+        console.warn(`[check-results] No search summary for bet ${bet.id}`);
+        debugLog.push({ betId: bet.id, error: 'No search summary returned' });
+        continue;
+      }
 
-      if (!updates || !Array.isArray(updates)) {
-        debugLog.push({ betId: bet.id, error: 'No settlement returned' });
+      console.log(`[check-results] Step 2 — settling bet ${bet.id}...`);
+      let updates;
+      try {
+        updates = await settleLegs(apiKey, summary, legs);
+      } catch (e) {
+        console.error(`[check-results] Settle error bet ${bet.id}:`, e.message);
+        debugLog.push({ betId: bet.id, error: e.message });
+        continue;
+      }
+      if (!updates?.length) {
+        console.warn(`[check-results] No settlements returned for bet ${bet.id}`);
+        debugLog.push({ betId: bet.id, error: 'No settlements returned' });
         continue;
       }
 
@@ -222,7 +237,7 @@ Search first, then call record_settlements.`;
           console.error(`[check-results] DB error leg ${legNum}:`, legErr.message);
         } else {
           totalLegsUpdated++;
-          console.log(`[check-results] ✓ Leg ${legNum} → "${u.status}"`);
+          console.log(`[check-results] ✓ Leg ${legNum} → "${u.status}": ${u.result}`);
         }
       }
 
@@ -240,7 +255,7 @@ Search first, then call record_settlements.`;
       if (newOverall !== bet.overall_status) {
         const { error: betErr } = await supabase.from('bets').update({ overall_status: newOverall }).eq('id', bet.id);
         if (betErr) console.error(`[check-results] DB error bet:`, betErr.message);
-        else { totalBetsUpdated++; console.log(`[check-results] ✓ Bet ${bet.id} → "${newOverall}"`); }
+        else { totalBetsUpdated++; console.log(`[check-results] ✓ Bet ${bet.id} overall → "${newOverall}"`); }
       }
     }
 
