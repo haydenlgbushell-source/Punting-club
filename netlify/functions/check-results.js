@@ -151,19 +151,27 @@ ${desc}
 
 Search strategy:
 - For each leg, search "[Team A] vs [Team B] result [date] NRL" or "[event] [date] result"
-- For try-scorer props (e.g. "Player X 1+ Try Scorer"), also search "[match name] try scorers [date]"
+- For try-scorer props (e.g. "Player X 1+ Try Scorer"), search "[match name] try scorers [date]" and "[player name] try [match name]"
+- For goal-scorer props (AFL, soccer), search "[player name] goal [match name] [date]"
 - Check sites like nrl.com, foxsports.com.au, afl.com.au, espn.com.au, or Google Sports
 
 Rules:
 - If the event date has already passed, it MUST be marked won, lost, void, or in_progress — NOT pending
-- Mark "won" if the selection was correct (team won, player scored the try, etc.)
+- Mark "won" if the selection was correct (team won, player scored the try/goal, etc.)
 - Mark "lost" if the selection was incorrect
 - Mark "void" if the match was cancelled/postponed/abandoned
 - Mark "in_progress" ONLY if the match is literally happening right now
 - Mark "pending" ONLY if the event is scheduled for the future and has NOT started
 
+Result note format — include as much detail as possible:
+- For match winner bets: final score and scoreline (e.g. "Broncos won 28-14 over Knights")
+- For try-scorer bets: confirm if the player scored a try and list ALL try scorers for the match (e.g. "Ponga scored 2 tries. All try scorers: Ponga (2), Walsh (1), Luai (1)")
+- For goal-scorer bets: confirm if the player scored and list ALL goal scorers (e.g. "Oliver scored 3 goals. Goal scorers: Oliver (3), Bontempelli (2), Treloar (1)")
+- For any prop bet: state the final outcome relevant to the selection with key stats
+- Always include the final score when available
+
 Return ONLY a valid JSON array — no other text, no markdown fences:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"e.g. Knights won 24-18, Ponga scored 1 try"}]`;
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"e.g. Broncos won 28-14. Try scorers: Cobbo (2), Staggs (1), Selwyn (1)"}]`;
 
       let responseText;
       try {
