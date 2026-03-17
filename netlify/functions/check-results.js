@@ -119,12 +119,20 @@ exports.handler = async (event) => {
     const todayStr = aestDate.toUTCString().replace(/ GMT$/, ' AEST');
     const timeStr  = `${pad(aestDate.getUTCHours())}:${pad(aestDate.getUTCMinutes())} AEST`;
 
+    // 14-day lookback: include any bet submitted in the past 14 days so that
+    // last-week bets whose overall_status was already settled (but may still
+    // have pending legs) are not silently excluded.
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
     // When betId is supplied fetch only that bet; otherwise fetch all unsettled
+    // OR submitted in the past 14 days (to catch last-week bets)
     let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
     if (betId) {
       betsQuery = betsQuery.eq('id', betId);
     } else {
-      betsQuery = betsQuery.in('overall_status', [...UNSETTLED, 'partial']).order('submitted_at', { ascending: false });
+      betsQuery = betsQuery
+        .or(`overall_status.in.(${[...UNSETTLED, 'partial'].join(',')}),submitted_at.gte.${fourteenDaysAgo}`)
+        .order('submitted_at', { ascending: false });
     }
     const { data: bets, error: betsErr } = await betsQuery;
 
