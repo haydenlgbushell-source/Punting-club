@@ -82,8 +82,11 @@ function parseJSON(text) {
   return null;
 }
 
-exports.handler = async () => {
-  console.log('[check-results-bg] Starting bet result check');
+exports.handler = async (event) => {
+  // Optional betId in POST body — when provided, check only that single bet
+  let betId = null;
+  try { betId = event?.body ? JSON.parse(event.body)?.betId || null : null; } catch (_) {}
+  console.log(`[check-results-bg] Starting check${betId ? ` for bet ${betId}` : ' (all pending bets)'}`);
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.error('[check-results-bg] Missing Supabase env vars');
@@ -99,11 +102,13 @@ exports.handler = async () => {
     const todayStr = aestDate.toUTCString().replace(/ GMT$/, ' AEST');
     const timeStr  = `${pad(aestDate.getUTCHours())}:${pad(aestDate.getUTCMinutes())} AEST`;
 
-    const { data: bets, error: betsErr } = await supabase
-      .from('bets')
-      .select('id, overall_status, team_id, bet_legs(*)')
-      .in('overall_status', [...UNSETTLED, 'partial'])
-      .order('submitted_at', { ascending: false });
+    let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
+    if (betId) {
+      betsQuery = betsQuery.eq('id', betId);
+    } else {
+      betsQuery = betsQuery.in('overall_status', [...UNSETTLED, 'partial']).order('submitted_at', { ascending: false });
+    }
+    const { data: bets, error: betsErr } = await betsQuery;
 
     if (betsErr) { console.error('[check-results-bg] DB fetch error:', betsErr.message); return; }
     if (!bets?.length) { console.log('[check-results-bg] No unsettled bets found'); return; }
@@ -115,13 +120,15 @@ exports.handler = async () => {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
       if (!unsettledLegs.length) continue;
 
-      const hasStartedEvent = unsettledLegs.some(l => {
-        if (!l.event_date) return true;
-        const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-        const eventStart = new Date(`${l.event_date}T${t}`);
-        return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
-      });
-      if (!hasStartedEvent) continue;
+      if (!betId) {
+        const hasStartedEvent = unsettledLegs.some(l => {
+          if (!l.event_date) return true;
+          const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
+          const eventStart = new Date(`${l.event_date}T${t}`);
+          return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
+        });
+        if (!hasStartedEvent) continue;
+      }
 
       const desc = (bet.bet_legs || []).map(l => {
         const datePart = l.event_date ? ` around ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
