@@ -24,8 +24,9 @@ async function callClaudeWithSearch(prompt) {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
   let messages = [{ role: 'user', content: prompt }];
+  let lastText = null;
 
-  for (let turn = 0; turn < 10; turn++) {
+  for (let turn = 0; turn < 5; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -36,7 +37,8 @@ async function callClaudeWithSearch(prompt) {
       },
       body: JSON.stringify({
         model:       'claude-sonnet-4-6',
-        max_tokens:  4096,
+        max_tokens:  1024,
+        system:      'You are a sports bet settlement assistant. You MUST respond with ONLY a valid JSON array — no prose, no markdown, no explanation. The first character of your response must be [ and the last must be ].',
         tools:       [{ type: 'web_search_20250305', name: 'web_search' }],
         tool_choice: turn === 0 ? { type: 'any' } : { type: 'auto' },
         messages,
@@ -52,33 +54,41 @@ async function callClaudeWithSearch(prompt) {
     const contentTypes = (data.content || []).map(b => b.type).join(', ');
     console.log(`[check-results] Turn ${turn + 1}: stop_reason=${data.stop_reason}, content=[${contentTypes}]`);
 
-    // Final answer — extract text and return
     if (data.stop_reason === 'end_turn') {
-      const text = data.content?.find(b => b.type === 'text')?.text || null;
+      // Concatenate all text blocks (Claude sometimes splits output across multiple)
+      const text = (data.content || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('') || null;
       console.log('[check-results] Final text:', text?.slice(0, 800));
-      return text;
+
+      if (text && parseJSON(text)) return text;
+
+      if (text) {
+        lastText = text;
+        messages = [
+          ...messages,
+          { role: 'assistant', content: data.content },
+          { role: 'user', content: 'Your response was not valid JSON. Output ONLY the JSON array now — no other text.' },
+        ];
+        continue;
+      }
+      return null;
     }
 
-    // Claude called web_search — server executed it and returned tool_result blocks in
-    // the same response. We must re-attach them as a user turn so Claude sees the results.
     if (data.stop_reason === 'tool_use') {
       const toolUseBlocks    = (data.content || []).filter(b => b.type === 'tool_use');
       const toolResultBlocks = (data.content || []).filter(b => b.type === 'tool_result');
-      // Keep text + tool_use in the assistant turn; strip tool_result (moves to user turn)
       const assistantContent = (data.content || []).filter(b => b.type !== 'tool_result');
 
       console.log('[check-results] Tool calls:', toolUseBlocks.map(b =>
         `${b.name}(${JSON.stringify(b.input)?.slice(0, 120)})`).join(', '));
-      console.log(`[check-results] ${toolResultBlocks.length} search result block(s) returned by server`);
 
-      // Build clean tool_result blocks (only the fields the API accepts in user turns)
       const userToolResults = toolUseBlocks.map(b => {
         const found = toolResultBlocks.find(r => r.tool_use_id === b.id);
-        if (found) {
-          // Sanitize: only pass fields valid in a client-submitted tool_result
-          return { type: 'tool_result', tool_use_id: b.id, content: found.content ?? '' };
-        }
-        return { type: 'tool_result', tool_use_id: b.id, content: 'No search results returned.' };
+        return found
+          ? { type: 'tool_result', tool_use_id: b.id, content: found.content ?? '' }
+          : { type: 'tool_result', tool_use_id: b.id, content: 'No search results returned.' };
       });
 
       messages = [
@@ -89,21 +99,13 @@ async function callClaudeWithSearch(prompt) {
       continue;
     }
 
-    // max_tokens hit mid-stream — grab whatever text exists and return it
-    if (data.stop_reason === 'max_tokens') {
-      const text = data.content?.find(b => b.type === 'text')?.text || null;
-      console.warn('[check-results] max_tokens reached, partial text:', text?.slice(0, 200));
-      return text;
-    }
-
-    // Unexpected stop reason — attempt to extract text before giving up
-    const text = data.content?.find(b => b.type === 'text')?.text || null;
-    console.warn(`[check-results] Unexpected stop_reason=${data.stop_reason}, text:`, text?.slice(0, 200));
-    return text;
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || null;
+    console.warn(`[check-results] stop_reason=${data.stop_reason}, text:`, text?.slice(0, 200));
+    if (text) return text;
   }
 
-  console.warn('[check-results] Max turns reached without end_turn');
-  return null;
+  console.warn('[check-results] Max turns reached. Last text:', lastText?.slice(0, 200));
+  return lastText;
 }
 
 function parseJSON(text) {
