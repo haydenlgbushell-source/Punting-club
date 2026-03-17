@@ -425,16 +425,41 @@ exports.handler = async (event) => {
         if (e) return error(e.message);
 
         const currentWeek = payload.currentWeek || 1;
+
+        // Compute overall_status from actual leg statuses — keeps display in sync
+        // even if the DB overall_status column hasn't been written yet
+        const deriveLegStatus = (legs) => {
+          if (!legs?.length) return 'pending';
+          const settled = ['won', 'lost', 'void'];
+          if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
+          if (legs.some(l => l.status === 'pending'))     return 'pending';
+          if (!legs.every(l => settled.includes(l.status))) return 'pending';
+          if (legs.every(l => l.status === 'won'))  return 'won';
+          if (legs.some(l => l.status === 'lost'))  return 'lost';
+          return 'partial'; // all void or mixed won/void
+        };
+
         const ranked = data
           .map(team => {
-            const wonBets  = (team.bets || []).filter(b => b.overall_status === 'won');
+            // Sort bets newest week first so bets[0] in the frontend is always current
+            const sortedBets = (team.bets || [])
+              .map(b => ({
+                ...b,
+                // Re-derive status from legs so it's always accurate
+                overall_status: b.bet_legs?.length ? deriveLegStatus(b.bet_legs) : (b.overall_status || 'pending'),
+                // Sort legs by leg_number
+                bet_legs: (b.bet_legs || []).slice().sort((a, b) => (a.leg_number || 0) - (b.leg_number || 0)),
+              }))
+              .sort((a, b) => (b.week_number || 0) - (a.week_number || 0));
+
+            const wonBets  = sortedBets.filter(b => b.overall_status === 'won');
             const totalWon = wonBets.reduce((sum, b) => sum + (b.estimated_return || 0), 0);
-            const weekBet  = (team.bets || []).find(b => b.week_number === currentWeek);
+            const weekBet  = sortedBets.find(b => b.week_number === currentWeek);
             const weekHistory = Array.from({ length: currentWeek - 1 }, (_, i) => {
-              const wb = (team.bets || []).find(b => b.week_number === i + 1);
+              const wb = sortedBets.find(b => b.week_number === i + 1);
               return wb?.overall_status === 'won' ? 'W' : wb?.overall_status === 'lost' ? 'L' : wb?.overall_status === 'partial' ? 'P' : '–';
             });
-            return { ...team, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString()}`, memberCount: team.team_members?.[0]?.count || 0, currentWeekBet: weekBet || null, weekHistory };
+            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString()}`, memberCount: team.team_members?.[0]?.count || 0, currentWeekBet: weekBet || null, weekHistory };
           })
           .sort((a, b) => b.totalWon - a.totalWon)
           .map((team, i) => ({ ...team, rank: i + 1 }));
