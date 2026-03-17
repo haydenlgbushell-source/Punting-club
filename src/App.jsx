@@ -943,32 +943,60 @@ export default function PuntingClub() {
     await reviewBetResults(leaderboardTeams);
   }, [leaderboardTeams, reviewBetResults, showToast]);
 
-  // Per-bet result check — calls check-results with a specific betId so only
-  // that one bet is looked up, then refreshes the leaderboard.
+  // Per-bet result check — fires the background function (no 26s timeout risk)
+  // with a specific betId, then polls refreshLeaderboard every 6s for up to
+  // 3 minutes waiting for leg statuses to change in the DB.
   const checkSingleBet = useCallback(async (betId) => {
     if (!betId || checkingBetId) return;
     setCheckingBetId(betId);
     showToast('Checking result — searching live sports data…', 'info');
+
+    // Snapshot current leg statuses for this bet so we can detect any change
+    const targetBet = leaderboardTeams.flatMap(t => t.bets).find(b => b.id === betId);
+    const beforeStatuses = (targetBet?.legs || []).map(l => `${l.legNumber}:${l.status}`).join(',');
+
     try {
-      const res = await fetch('/.netlify/functions/check-results', {
+      await fetch('/.netlify/functions/check-results-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ betId }),
       });
-      const json = res.ok ? await res.json().catch(() => ({})) : {};
-      await refreshLeaderboard();
-      if (json.legsUpdated > 0) {
-        showToast(`Results updated — ${json.legsUpdated} leg${json.legsUpdated !== 1 ? 's' : ''} settled!`, 'success');
-        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet checked — ${json.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
-      } else {
-        showToast('Check complete — no changes yet (game may still be in progress)', 'info');
-      }
     } catch (err) {
-      showToast('Could not check results — try again shortly', 'warning');
-    } finally {
+      showToast('Could not start result check — try again shortly', 'warning');
       setCheckingBetId(null);
+      return;
     }
-  }, [checkingBetId, refreshLeaderboard, showToast]);
+
+    // Poll every 6s for up to 3 minutes (30 iterations).
+    // Stop as soon as a leg status change is detected; otherwise keep polling
+    // so we don't miss a result that lands near the end of the window.
+    // Always do one final refresh after the loop to catch any last-second updates.
+    let changed = false;
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 6000));
+      const fresh = await refreshLeaderboard();
+      if (!fresh) continue;
+      const freshBet = fresh.flatMap(t => t.bets).find(b => b.id === betId);
+      const afterStatuses = (freshBet?.legs || []).map(l => `${l.legNumber}:${l.status}`).join(',');
+      if (afterStatuses !== beforeStatuses) {
+        changed = true;
+        // Keep polling to pick up remaining legs that may still be resolving
+        // (but show the success toast immediately so the user knows it's working)
+        showToast('Result found — loading leaderboard…', 'success');
+      }
+    }
+
+    // Final refresh regardless — ensures the very latest DB state is shown
+    await refreshLeaderboard();
+
+    if (changed) {
+      showToast('Leaderboard updated!', 'success');
+      setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet ${betId} — result updated` }, ...prev.slice(0, 19)]);
+    } else {
+      showToast('No result changes yet — the game may still be in progress', 'info');
+    }
+    setCheckingBetId(null);
+  }, [checkingBetId, leaderboardTeams, refreshLeaderboard, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 

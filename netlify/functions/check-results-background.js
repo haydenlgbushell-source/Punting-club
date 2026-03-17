@@ -82,8 +82,11 @@ function parseJSON(text) {
   return null;
 }
 
-exports.handler = async () => {
-  console.log('[check-results-bg] Starting bet result check');
+exports.handler = async (event) => {
+  // Optional betId in POST body — when provided, check only that single bet
+  let betId = null;
+  try { betId = event?.body ? JSON.parse(event.body)?.betId || null : null; } catch (_) {}
+  console.log(`[check-results-bg] Starting check${betId ? ` for bet ${betId}` : ' (all pending bets)'}`);
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.error('[check-results-bg] Missing Supabase env vars');
@@ -99,11 +102,20 @@ exports.handler = async () => {
     const todayStr = aestDate.toUTCString().replace(/ GMT$/, ' AEST');
     const timeStr  = `${pad(aestDate.getUTCHours())}:${pad(aestDate.getUTCMinutes())} AEST`;
 
-    const { data: bets, error: betsErr } = await supabase
-      .from('bets')
-      .select('id, overall_status, team_id, bet_legs(*)')
-      .in('overall_status', [...UNSETTLED, 'partial'])
-      .order('submitted_at', { ascending: false });
+    // 14-day lookback: include any bet submitted in the past 14 days so that
+    // last-week bets whose overall_status was already settled (but may still
+    // have pending legs) are not silently excluded.
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
+    if (betId) {
+      betsQuery = betsQuery.eq('id', betId);
+    } else {
+      betsQuery = betsQuery
+        .or(`overall_status.in.(${[...UNSETTLED, 'partial'].join(',')}),submitted_at.gte.${fourteenDaysAgo}`)
+        .order('submitted_at', { ascending: false });
+    }
+    const { data: bets, error: betsErr } = await betsQuery;
 
     if (betsErr) { console.error('[check-results-bg] DB fetch error:', betsErr.message); return; }
     if (!bets?.length) { console.log('[check-results-bg] No unsettled bets found'); return; }
@@ -115,52 +127,52 @@ exports.handler = async () => {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
       if (!unsettledLegs.length) continue;
 
-      const hasStartedEvent = unsettledLegs.some(l => {
-        if (!l.event_date) return true;
-        const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-        const eventStart = new Date(`${l.event_date}T${t}`);
-        return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
-      });
-      if (!hasStartedEvent) continue;
+      if (!betId) {
+        const hasStartedEvent = unsettledLegs.some(l => {
+          if (!l.event_date) return true;
+          const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
+          // Append AEST offset so the time is parsed correctly (not as UTC)
+          const eventStart = new Date(`${l.event_date}T${t}:00+10:00`);
+          return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
+        });
+        if (!hasStartedEvent) continue;
+      }
 
       const desc = (bet.bet_legs || []).map(l => {
-        const datePart = l.event_date ? ` around ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
-        return `Leg ${l.leg_number}: "${l.selection}" — ${l.event} — ${l.market} @ ${l.odds}${datePart} — current status: ${l.status}`;
+        const datePart = l.event_date ? ` — event date approx ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
+        return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market} @ ${l.odds}${datePart} | current status: ${l.status}`;
       }).join('\n');
 
       const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
 
-The following Australian sports bet legs need their results determined. All events listed are from the recent past — search the web to find the actual result for each one.
+You must find the verified, real-world result for each bet leg below by searching the web. Only update a leg if you can confirm the result from an authoritative source.
 
-Bet legs:
+BET LEGS:
 ${desc}
 
-IMPORTANT — Search strategy:
-- Search primarily by TEAM NAMES and COMPETITION (e.g. "Manly Sea Eagles vs Newcastle Knights NRL 2026 result"), NOT just by the stored date.
-- The stored date may be off by 1-3 days (it could be the bet submission date rather than the actual match date). Search ±3 days around the stored date.
-- For NRL: search "[Team A] vs [Team B] NRL 2026 try scorers result" and check nrl.com, foxsports.com.au, leagueunlimited.com, espn.com.au
-- For try-scorer props: search "[player name] try [Team A] vs [Team B] NRL 2026" — confirm by checking official match scorecards
-- For AFL: search "[Team A] vs [Team B] AFL 2026 goal scorers result" and check afl.com.au
-- For soccer/football: search "[Team A] vs [Team B] [competition] 2026 result scorers"
-- Always verify the FINAL SCORE and COMPLETE list of scorers before deciding won/lost
+SEARCH INSTRUCTIONS:
+1. For each leg, search by TEAM NAMES + COMPETITION + YEAR, e.g. "Panthers vs Broncos NRL 2026 result"
+2. The stored event date may be off by ±3 days — search across that window
+3. For NRL: check nrl.com match centre first (it has official try scorers), then foxsports.com.au or leagueunlimited.com
+4. For AFL: check afl.com.au match centre for official goal scorers
+5. For scorer props (try/goal): find the COMPLETE official scorer list from the match report — do not rely on headlines alone
+6. Perform at least 2 separate searches to cross-check your answer before deciding won/lost
 
-Rules:
-- If the event was in the recent past, it MUST be marked won, lost, void, or in_progress — NOT pending
-- Mark "won" if the selection was correct (team won, player scored the try/goal, etc.)
-- Mark "lost" if the selection was incorrect
-- Mark "void" if the match was cancelled, postponed, or the player was a late scratching
-- Mark "in_progress" ONLY if the match is literally happening right now
-- Mark "pending" ONLY if the event is definitely scheduled for the future
+RESULT RULES — READ CAREFULLY:
+- ONLY mark "won" or "lost" if you have found a CONFIRMED final result from an official or major sports news source
+- If you CANNOT find a confirmed result, mark "pending" — it is MUCH better to leave as pending than to guess wrong
+- Do NOT assume a result — if searches return no clear match data, mark "pending"
+- Mark "void" if the match was cancelled/postponed or the player was a late scratching
+- Mark "in_progress" ONLY if the match is live right now
+- For scorer bets: the player must appear in the OFFICIAL match scorer list — do not infer from match summaries
 
-Result note format:
-- For try-scorer bets: state whether player scored AND list ALL try scorers with counts (e.g. "Ponga scored 1 try. All try scorers: Ponga (1), Young (2), Marzhew (1). Knights won 36-16.")
-- For match winner bets: final score (e.g. "Knights won 36-16 over Sea Eagles")
-- For goal-scorer bets: confirm score and list all goal scorers with counts
-- For any prop: state the exact outcome with key stats
-- Always include the final score
+RESULT NOTE must always include:
+- The confirmed FINAL SCORE (e.g. "Panthers 28 def Broncos 14")
+- For scorer bets: the COMPLETE list of try/goal scorers and their counts from the official match report
+- The source URL where you confirmed the result (e.g. "Source: nrl.com/draw/nrl-premiership/2026/round-2/panthers-v-broncos/")
 
 Return ONLY a valid JSON array — no other text, no markdown fences:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"e.g. Broncos won 28-14. Try scorers: Cobbo (2), Staggs (1), Selwyn (1)"}]`;
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"Final score + scorer list + source URL"}]`;
 
       let responseText;
       try {
