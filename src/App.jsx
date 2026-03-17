@@ -689,39 +689,40 @@ export default function PuntingClub() {
     setCheckingResults(true);
     showToast('Checking results — this may take up to 30 seconds…', 'info');
 
-    // Snapshot current leg statuses to detect changes during polling
+    // Snapshot current leg statuses so we can detect changes after the check
     const legStatusSnapshot = {};
     teams.forEach(t => t.bets.forEach(b => b.legs?.forEach(l => { legStatusSnapshot[l.id] = l.status; })));
 
     try {
-      // Trigger background function — returns 202 immediately
-      await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
-    } catch(e) {
-      console.warn('Trigger error (non-fatal):', e.message);
-    }
+      // Call synchronous check-results function — returns {legsUpdated, betsUpdated}
+      const res = await fetch('/.netlify/functions/check-results', { method: 'POST' });
+      const json = res.ok ? await res.json().catch(() => ({})) : {};
+      const legsUpdated = json.legsUpdated ?? 0;
 
-    // Poll every 5s for up to 90s waiting for results to land in DB
-    let found = false;
-    for (let i = 0; i < 18; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      await refreshLeaderboard();
-      // Check if any leg status changed compared to snapshot
-      const current = leaderboardTeams;
-      const anyChanged = current.some(t =>
+      // Refresh the leaderboard to pick up DB changes
+      const freshTeams = await refreshLeaderboard();
+
+      setCheckingResults(false);
+      setLastChecked(new Date());
+
+      // Detect changes using fresh data (avoids stale-closure false-negative)
+      const anyChanged = legsUpdated > 0 || (freshTeams && freshTeams.some(t =>
         t.bets.some(b => b.legs?.some(l => l.id && legStatusSnapshot[l.id] !== undefined && legStatusSnapshot[l.id] !== l.status))
-      );
-      if (anyChanged) { found = true; break; }
-    }
+      ));
 
-    setCheckingResults(false);
-    setLastChecked(new Date());
-    if (found) {
-      showToast('Results updated — leaderboard and My Team refreshed!', 'success');
-      setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: 'Results updated from background check' }, ...prev.slice(0, 19)]);
-    } else {
-      showToast('Check complete — no result changes yet (events may still be pending)', 'info');
+      if (anyChanged) {
+        showToast(`Results updated — ${legsUpdated} leg${legsUpdated !== 1 ? 's' : ''} settled!`, 'success');
+        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${legsUpdated} leg${legsUpdated !== 1 ? 's' : ''} updated` }, ...prev.slice(0, 19)]);
+      } else {
+        showToast('Check complete — no result changes yet (events may still be pending)', 'info');
+      }
+    } catch (err) {
+      console.warn('check-results error (non-fatal):', err.message);
+      setCheckingResults(false);
+      setLastChecked(new Date());
+      showToast('Check complete — could not reach results service', 'warning');
     }
-  }, [refreshLeaderboard, showToast, leaderboardTeams]);
+  }, [refreshLeaderboard, showToast]);
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
