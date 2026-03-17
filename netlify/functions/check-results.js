@@ -59,11 +59,14 @@ exports.handler = async (event) => {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  const now = new Date();
-  const todayStr  = now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr   = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
-
   try {
+    const now = new Date();
+    // AEST = UTC+10, AEDT = UTC+11 — use fixed +10 offset to avoid Intl timezone issues
+    const aestOffsetMs = 10 * 60 * 60 * 1000;
+    const aestDate = new Date(now.getTime() + aestOffsetMs);
+    const pad = n => String(n).padStart(2, '0');
+    const todayStr = aestDate.toUTCString().replace(/ GMT$/, ' AEST');
+    const timeStr  = `${pad(aestDate.getUTCHours())}:${pad(aestDate.getUTCMinutes())} AEST`;
     // Fetch all bets with unsettled legs
     const { data: bets, error: betsErr } = await supabase
       .from('bets')
@@ -171,7 +174,7 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
     console.log(`[check-results] Done — ${totalLegsUpdated} legs updated, ${totalBetsUpdated} bets updated`);
     return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ legsUpdated: totalLegsUpdated, betsUpdated: totalBetsUpdated }) };
   } catch (err) {
-    console.error('[check-results] Unexpected error:', err);
-    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message }) };
+    console.error('[check-results] Unexpected error:', err.stack || err);
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message || String(err) }) };
   }
 };
