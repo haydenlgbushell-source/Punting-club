@@ -911,7 +911,7 @@ Return ONLY a valid JSON array — no other text, no markdown:
     // Schedule first check, then repeat every 3 hours
     const runCheck = async () => {
       try {
-        await fetch('/api/check-results', { method: 'POST' });
+        await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
       } catch(e) { console.error('Auto check-results error:', e); }
       refreshLeaderboard();
     };
@@ -933,8 +933,8 @@ Return ONLY a valid JSON array — no other text, no markdown:
   const checkResultsNow = useCallback(async () => {
     setCheckingResults(true);
     try {
-      // Background function returns 202 immediately and runs async — no response body.
-      const res = await fetch('/api/check-results', { method: 'POST' });
+      // Call the background function directly (redirects don't work for background functions).
+      const res = await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
       if (res.status === 202 || res.ok) {
         showToast('Checking results in background — refreshing shortly…', 'info');
         setLastChecked(new Date());
