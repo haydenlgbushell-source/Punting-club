@@ -620,41 +620,50 @@ export default function PuntingClub() {
   }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
-  // Delegates to the server-side /api/check-results endpoint which calls Claude
-  // with web search directly (no browser timeout). After the server updates the DB,
-  // we re-fetch the leaderboard so both the Leaderboard tab and My Team tab refresh.
+  // Fires the background function (returns 202 immediately, no timeout risk),
+  // then polls refreshLeaderboard every 5s for up to 90s waiting for DB updates.
+  // Both the Leaderboard tab and My Team tab update because they read leaderboardTeams.
   const reviewBetResults = useCallback(async (teams) => {
     const UNSETTLED = ['pending', 'in_progress'];
     const hasPending = teams.some(t => t.bets.some(b => b.legs?.some(l => UNSETTLED.includes(l.status))));
     if (!hasPending) { setLastChecked(new Date()); showToast('No pending bets to check', 'info'); return; }
+
     setCheckingResults(true);
+    showToast('Checking results — this may take up to 30 seconds…', 'info');
+
+    // Snapshot current leg statuses to detect changes during polling
+    const legStatusSnapshot = {};
+    teams.forEach(t => t.bets.forEach(b => b.legs?.forEach(l => { legStatusSnapshot[l.id] = l.status; })));
+
     try {
-      const res = await fetch('/api/check-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${res.status}`);
-      }
-      const { legsUpdated, betsUpdated } = await res.json();
-      if (legsUpdated > 0) {
-        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${legsUpdated} leg(s) updated across ${betsUpdated} bet(s)` }, ...prev.slice(0, 19)]);
-        showToast(`${legsUpdated} leg${legsUpdated !== 1 ? 's' : ''} updated — leaderboard refreshing…`, 'success');
-      } else {
-        showToast('Results checked — all bets still pending (events may not have started yet)', 'info');
-      }
-    } catch(err) {
-      console.error('Result check error:', err);
-      showToast(`Result check failed: ${err.message}`, 'error');
-    } finally {
-      setCheckingResults(false);
-      setLastChecked(new Date());
-      // Re-fetch from DB — updates both the Leaderboard tab and My Team tab.
-      await refreshLeaderboard();
+      // Trigger background function — returns 202 immediately
+      await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
+    } catch(e) {
+      console.warn('Trigger error (non-fatal):', e.message);
     }
-  }, [refreshLeaderboard, showToast]);
+
+    // Poll every 5s for up to 90s waiting for results to land in DB
+    let found = false;
+    for (let i = 0; i < 18; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      await refreshLeaderboard();
+      // Check if any leg status changed compared to snapshot
+      const current = leaderboardTeams;
+      const anyChanged = current.some(t =>
+        t.bets.some(b => b.legs?.some(l => l.id && legStatusSnapshot[l.id] !== undefined && legStatusSnapshot[l.id] !== l.status))
+      );
+      if (anyChanged) { found = true; break; }
+    }
+
+    setCheckingResults(false);
+    setLastChecked(new Date());
+    if (found) {
+      showToast('Results updated — leaderboard and My Team refreshed!', 'success');
+      setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: 'Results updated from background check' }, ...prev.slice(0, 19)]);
+    } else {
+      showToast('Check complete — no result changes yet (events may still be pending)', 'info');
+    }
+  }, [refreshLeaderboard, showToast, leaderboardTeams]);
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
