@@ -147,7 +147,7 @@ const PermissionBadge = ({ role }) => {
 // Barlow Condensed — sports-display font (loaded in index.html)
 const BC = "'Barlow Condensed', 'Inter', sans-serif";
 
-const BetSlipCard = ({ bet, compact = false }) => {
+const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const [openLegs, setOpenLegs] = useState({});
   if (!bet) return null;
 
@@ -184,7 +184,20 @@ const BetSlipCard = ({ bet, compact = false }) => {
           <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
             {(bet.type || 'MULTI').toUpperCase()} BET
           </span>
-          {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280' }}>⌛ {bet.submittedAt}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280' }}>⌛ {bet.submittedAt}</span>}
+            {onCheckBet && (status === 'pending' || status === 'in_progress') && (
+              <button
+                onClick={() => onCheckBet(bet.id)}
+                disabled={isChecking}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, background: isChecking ? '#1e3a5f' : '#1e3a5f', border: '1px solid #2563eb66', borderRadius: 6, color: '#60a5fa', fontSize: 11, fontWeight: 700, fontFamily: BC, letterSpacing: '0.08em', padding: '3px 10px', cursor: isChecking ? 'not-allowed' : 'pointer', opacity: isChecking ? 0.7 : 1 }}
+              >
+                {isChecking
+                  ? <><span style={{ width: 10, height: 10, border: '2px solid #60a5fa', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />CHECKING…</>
+                  : <>↻ CHECK RESULT</>}
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ fontFamily: BC, fontWeight: 800, fontSize: compact ? 30 : 44, lineHeight: 1, color: titleColor, marginBottom: 4 }}>
           {titleText}
@@ -348,6 +361,7 @@ export default function PuntingClub() {
   // Result checking
   const [checkingResults, setCheckingResults] = useState(false);
   const [lastChecked, setLastChecked] = useState(null);
+  const [checkingBetId, setCheckingBetId] = useState(null);
   const [resultLog, setResultLog] = useState([]);
   const intervalRef = useRef(null);
 
@@ -928,6 +942,33 @@ export default function PuntingClub() {
     }
     await reviewBetResults(leaderboardTeams);
   }, [leaderboardTeams, reviewBetResults, showToast]);
+
+  // Per-bet result check — calls check-results with a specific betId so only
+  // that one bet is looked up, then refreshes the leaderboard.
+  const checkSingleBet = useCallback(async (betId) => {
+    if (!betId || checkingBetId) return;
+    setCheckingBetId(betId);
+    showToast('Checking result — searching live sports data…', 'info');
+    try {
+      const res = await fetch('/.netlify/functions/check-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ betId }),
+      });
+      const json = res.ok ? await res.json().catch(() => ({})) : {};
+      await refreshLeaderboard();
+      if (json.legsUpdated > 0) {
+        showToast(`Results updated — ${json.legsUpdated} leg${json.legsUpdated !== 1 ? 's' : ''} settled!`, 'success');
+        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet checked — ${json.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
+      } else {
+        showToast('Check complete — no changes yet (game may still be in progress)', 'info');
+      }
+    } catch (err) {
+      showToast('Could not check results — try again shortly', 'warning');
+    } finally {
+      setCheckingBetId(null);
+    }
+  }, [checkingBetId, refreshLeaderboard, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
@@ -1559,7 +1600,7 @@ export default function PuntingClub() {
                             </div>
                           </div>
                         )}
-                        {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
+                        {weekBet ? <BetSlipCard bet={weekBet} onCheckBet={checkSingleBet} isChecking={checkingBetId === weekBet.id} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
                       </div>
                     )}
                   </div>
@@ -1798,7 +1839,7 @@ export default function PuntingClub() {
               </div>
               {myTeamData?.bets?.length > 0 ? (
                 <div className="space-y-3">
-                  {myTeamData.bets.map((bet, i) => <BetSlipCard key={i} bet={bet} />)}
+                  {myTeamData.bets.map((bet, i) => <BetSlipCard key={i} bet={bet} onCheckBet={checkSingleBet} isChecking={checkingBetId === bet.id} />)}
                 </div>
               ) : (
                 <div className="text-center py-8">

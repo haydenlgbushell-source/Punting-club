@@ -99,7 +99,11 @@ function parseJSON(text) {
 
 exports.handler = async (event) => {
   if (event?.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
-  console.log('[check-results] Starting scheduled bet result check');
+
+  // Optional betId in POST body — when provided, check only that single bet
+  let betId = null;
+  try { betId = event?.body ? JSON.parse(event.body)?.betId || null : null; } catch (_) {}
+  console.log(`[check-results] Starting check${betId ? ` for bet ${betId}` : ' (all pending bets)'}`);
 
   if (!process.env.SUPABASE_URL)           return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'SUPABASE_URL not configured' }) };
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }) };
@@ -114,12 +118,15 @@ exports.handler = async (event) => {
     const pad = n => String(n).padStart(2, '0');
     const todayStr = aestDate.toUTCString().replace(/ GMT$/, ' AEST');
     const timeStr  = `${pad(aestDate.getUTCHours())}:${pad(aestDate.getUTCMinutes())} AEST`;
-    // Fetch all bets with unsettled legs
-    const { data: bets, error: betsErr } = await supabase
-      .from('bets')
-      .select('id, overall_status, team_id, bet_legs(*)')
-      .in('overall_status', [...UNSETTLED, 'partial'])
-      .order('submitted_at', { ascending: false });
+
+    // When betId is supplied fetch only that bet; otherwise fetch all unsettled
+    let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
+    if (betId) {
+      betsQuery = betsQuery.eq('id', betId);
+    } else {
+      betsQuery = betsQuery.in('overall_status', [...UNSETTLED, 'partial']).order('submitted_at', { ascending: false });
+    }
+    const { data: bets, error: betsErr } = await betsQuery;
 
     if (betsErr) { console.error('[check-results] DB fetch error:', betsErr.message); return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: betsErr.message }) }; }
     if (!bets?.length) { console.log('[check-results] No unsettled bets found'); return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ legsUpdated: 0, betsUpdated: 0 }) }; }
@@ -132,14 +139,16 @@ exports.handler = async (event) => {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
       if (!unsettledLegs.length) continue;
 
-      // Only check bets where at least one event should have started
-      const hasStartedEvent = unsettledLegs.some(l => {
-        if (!l.event_date) return true; // no date stored — always check
-        const timeStr = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-        const eventStart = new Date(`${l.event_date}T${timeStr}`);
-        return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
-      });
-      if (!hasStartedEvent) continue;
+      // Only skip the time-gate when running globally (betId check = user explicitly requested it)
+      if (!betId) {
+        const hasStartedEvent = unsettledLegs.some(l => {
+          if (!l.event_date) return true;
+          const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
+          const eventStart = new Date(`${l.event_date}T${t}`);
+          return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
+        });
+        if (!hasStartedEvent) continue;
+      }
 
       const desc = (bet.bet_legs || []).map(l => {
         const datePart = l.event_date ? ` around ${l.event_date}${l.start_time ? ' at ' + l.start_time + ' AEST' : ''}` : '';
