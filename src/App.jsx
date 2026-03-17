@@ -927,26 +927,19 @@ Return ONLY a valid JSON array — no other text, no markdown:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
 
-  // Trigger the server-side check-results function which runs the full
-  // multi-turn Claude+web-search loop and writes results directly to the DB,
-  // then refresh the leaderboard so the UI reflects the latest data.
+  // Refresh the leaderboard to show latest result data from the DB.
+  // Full result checking (Claude + web search) runs automatically every 3 hours
+  // via the scheduled Netlify background function — HTTP invocation is not
+  // supported on this plan.
   const checkResultsNow = useCallback(async () => {
     setCheckingResults(true);
     try {
-      // Call the background function directly (redirects don't work for background functions).
-      const res = await fetch('/.netlify/functions/check-results-background', { method: 'POST' });
-      if (res.status === 202 || res.ok) {
-        showToast('Checking results in background — refreshing shortly…', 'info');
-        setLastChecked(new Date());
-        // Refresh leaderboard after giving the background function time to write results
-        setTimeout(() => refreshLeaderboard(), 20000);
-        setTimeout(() => refreshLeaderboard(), 45000);
-      } else {
-        throw new Error(`Server error ${res.status}`);
-      }
+      await refreshLeaderboard();
+      setLastChecked(new Date());
+      showToast('Leaderboard refreshed — results auto-check every 3 hours', 'info');
     } catch (e) {
-      console.error('Check results error:', e);
-      showToast(`Result check failed: ${e.message}`, 'error');
+      console.error('Refresh error:', e);
+      showToast(`Refresh failed: ${e.message}`, 'error');
     } finally {
       setCheckingResults(false);
     }
