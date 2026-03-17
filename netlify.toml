@@ -9,6 +9,9 @@
 [functions."claude"]
   timeout = 26
 
+[functions."check-results"]
+  timeout = 26
+
 [functions."check-results-background"]
   schedule = "0 */3 * * *"
 
@@ -25,6 +28,11 @@
 [[redirects]]
   from = "/api/claude"
   to = "/.netlify/functions/claude"
+  status = 200
+
+[[redirects]]
+  from = "/api/check-results"
+  to = "/.netlify/functions/check-results"
   status = 200
 
 [[redirects]]

@@ -46,8 +46,13 @@ async function callClaudeWithSearch(prompt) {
 }
 
 function parseJSON(text) {
-  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
-  catch { return null; }
+  if (!text) return null;
+  // Try direct parse first (handles clean JSON or markdown-fenced JSON)
+  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); } catch {}
+  // Extract a JSON array from within prose — Claude sometimes wraps it in explanation text
+  const match = text.match(/\[[\s\S]*\]/);
+  if (match) { try { return JSON.parse(match[0]); } catch {} }
+  return null;
 }
 
 exports.handler = async (event) => {

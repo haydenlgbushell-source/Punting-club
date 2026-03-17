@@ -620,127 +620,38 @@ export default function PuntingClub() {
   }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
+  // Delegates to the server-side /api/check-results endpoint which calls Claude
+  // with web search directly (no browser timeout). After the server updates the DB,
+  // we re-fetch the leaderboard so both the Leaderboard tab and My Team tab refresh.
   const reviewBetResults = useCallback(async (teams) => {
     const UNSETTLED = ['pending', 'in_progress'];
-    const teamsWithPending = teams.filter(t => t.bets.some(b => b.legs?.some(l => UNSETTLED.includes(l.status))));
-    if (!teamsWithPending.length) { setLastChecked(new Date()); return; }
+    const hasPending = teams.some(t => t.bets.some(b => b.legs?.some(l => UNSETTLED.includes(l.status))));
+    if (!hasPending) { setLastChecked(new Date()); showToast('No pending bets to check', 'info'); return; }
     setCheckingResults(true);
-    let totalLegsChanged = 0;
-    let claudeErrors = 0;
-    const now = new Date();
-    const todayStr = now.toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-    const timeStr  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' });
     try {
-      for (const team of teamsWithPending) {
-        for (let bi = 0; bi < team.bets.length; bi++) {
-          const bet = team.bets[bi];
-          if (!bet.legs?.some(l => UNSETTLED.includes(l.status))) continue;
-          const desc = bet.legs.map(l => {
-            const datePart = l.eventDate ? ` on ${l.eventDate}${l.startTime ? ' at ' + l.startTime + ' AEST' : ''}` : '';
-            return `Leg ${l.legNumber}: "${l.selection}" — ${l.event} — ${l.market} @ ${l.odds}${datePart} — current status: ${l.status}`;
-          }).join('\n');
-          const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
-
-You must determine the outcome of the following Australian sports bet legs. Use web search to look up the actual match results for any events that should have already taken place.
-
-Bet legs:
-${desc}
-
-Instructions:
-- Search the web for the actual result of each event/match by name and date
-- For player prop bets (e.g. "X scores a try"), search for the match result and try-scorers
-- Mark "won" if the selection won (e.g. player scored the try, team won)
-- Mark "lost" if the selection lost
-- Mark "void" if the match was cancelled, postponed, or abandoned
-- Mark "in_progress" if the event has started but is still ongoing right now
-- Mark "pending" only if the event clearly hasn't started yet
-
-Return ONLY a valid JSON array — no other text, no markdown:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note e.g. Knights won 24-18, Ponga scored 2 tries"}]`;
-
-          let text;
-          try {
-            text = await callClaudeWithSearch(prompt);
-          } catch(e) {
-            console.error('Claude error for bet', bet.id, ':', e.message);
-            claudeErrors++;
-            continue;
-          }
-          if (!text) { claudeErrors++; continue; }
-          const updates = parseAnalysisJSON(text);
-          if (!Array.isArray(updates)) continue;
-
-          // Persist each changed leg to DB
-          for (const u of updates) {
-            const origLeg = bet.legs.find(l => l.legNumber === u.legNumber);
-            if (origLeg && origLeg.status !== u.status && origLeg.id) {
-              try { await apiUpdateBetLeg(origLeg.id, u.status, u.result || ''); } catch(e) { console.error('leg persist failed', e); }
-            }
-          }
-
-          // Calculate new overall bet status
-          const newLegs = bet.legs.map(leg => {
-            const u = updates.find(x => x.legNumber === leg.legNumber);
-            return u ? { ...leg, status: u.status, resultNote: u.result || leg.resultNote } : leg;
-          });
-          const settled = ['won', 'lost', 'void'];
-          const allDone  = newLegs.every(l => settled.includes(l.status));
-          const allWon   = newLegs.every(l => l.status === 'won');
-          const anyLost  = newLegs.some(l => l.status === 'lost');
-          const anyLive  = newLegs.some(l => l.status === 'in_progress');
-          const newOverall = allDone ? (allWon ? 'won' : anyLost ? 'lost' : 'partial') : anyLive ? 'in_progress' : 'pending';
-
-          // Persist overall bet status if changed
-          if (bet.id && newOverall !== bet.overallStatus) {
-            try { await apiUpdateBetResult(bet.id, newOverall, 'system'); } catch(e) { console.error('bet persist failed', e); }
-          }
-
-          setLeaderboardTeams(prev => prev.map(t => {
-            if (t.team !== team.team) return t;
-            const newBets = t.bets.map((b, idx) => {
-              if (idx !== bi) return b;
-              const updatedLegs = b.legs.map(leg => { const u = updates.find(x => x.legNumber === leg.legNumber); return u ? { ...leg, status: u.status, resultNote: u.result || leg.resultNote } : leg; });
-              const al = updatedLegs.every(l => settled.includes(l.status));
-              const aw = updatedLegs.every(l => l.status === 'won');
-              const lo = updatedLegs.some(l => l.status === 'lost');
-              const li = updatedLegs.some(l => l.status === 'in_progress');
-              return { ...b, legs: updatedLegs, overallStatus: al ? (aw ? 'won' : lo ? 'lost' : 'partial') : li ? 'in_progress' : 'pending' };
-            });
-            const anyWon  = newBets.some(b => b.overallStatus === 'won');
-            const anyLost = newBets.some(b => b.overallStatus === 'lost');
-            const anyLive = newBets.some(b => b.overallStatus === 'in_progress');
-            const allP    = newBets.every(b => !b.overallStatus || b.overallStatus === 'pending');
-            return { ...t, bets: newBets, week: allP ? 'P' : anyWon ? 'W' : anyLost ? 'L' : anyLive ? 'IP' : 'P' };
-          }));
-          const changedCount = updates.filter(u => u.status !== 'pending').length;
-          if (changedCount) {
-            totalLegsChanged += changedCount;
-            setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${changedCount} leg(s) updated for ${team.team}`, teamName: team.team }, ...prev.slice(0, 19)]);
-            // Per-team toast: summarise what settled
-            const wonLegs  = updates.filter(u => u.status === 'won').length;
-            const lostLegs = updates.filter(u => u.status === 'lost').length;
-            const liveLegs = updates.filter(u => u.status === 'in_progress').length;
-            const parts = [];
-            if (wonLegs)  parts.push(`${wonLegs} won`);
-            if (lostLegs) parts.push(`${lostLegs} lost`);
-            if (liveLegs) parts.push(`${liveLegs} live`);
-            const toastType = lostLegs && !wonLegs ? 'error' : wonLegs ? 'success' : 'info';
-            showToast(`${team.team}: ${parts.join(', ')} — ${newOverall.toUpperCase()}`, toastType);
-          }
-        }
+      const res = await fetch('/api/check-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
       }
-    } catch(err) { console.error('Result check error:', err); showToast('Result check failed — check console for details.', 'error'); }
-    finally {
+      const { legsUpdated, betsUpdated } = await res.json();
+      if (legsUpdated > 0) {
+        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${legsUpdated} leg(s) updated across ${betsUpdated} bet(s)` }, ...prev.slice(0, 19)]);
+        showToast(`${legsUpdated} leg${legsUpdated !== 1 ? 's' : ''} updated — leaderboard refreshing…`, 'success');
+      } else {
+        showToast('Results checked — all bets still pending (events may not have started yet)', 'info');
+      }
+    } catch(err) {
+      console.error('Result check error:', err);
+      showToast(`Result check failed: ${err.message}`, 'error');
+    } finally {
       setCheckingResults(false);
       setLastChecked(new Date());
-      if (totalLegsChanged === 0) {
-        if (claudeErrors > 0) {
-          showToast(`Result check timed out — try again or wait for the 3-hour auto-check`, 'error');
-        } else {
-          showToast('Results checked — all bets still pending (events may not have finished yet)', 'info');
-        }
-      }
-      // Re-fetch from DB so any updates are reflected on both leaderboard and My Team tabs.
+      // Re-fetch from DB — updates both the Leaderboard tab and My Team tab.
       await refreshLeaderboard();
     }
   }, [refreshLeaderboard, showToast]);
