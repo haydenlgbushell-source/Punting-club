@@ -131,7 +131,8 @@ exports.handler = async (event) => {
         const hasStartedEvent = unsettledLegs.some(l => {
           if (!l.event_date) return true;
           const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-          const eventStart = new Date(`${l.event_date}T${t}`);
+          // Append AEST offset so the time is parsed correctly (not as UTC)
+          const eventStart = new Date(`${l.event_date}T${t}:00+10:00`);
           return !isNaN(eventStart.getTime()) && eventStart.getTime() <= now.getTime();
         });
         if (!hasStartedEvent) continue;
