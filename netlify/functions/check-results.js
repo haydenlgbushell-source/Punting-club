@@ -16,33 +16,71 @@ const UNSETTLED = ['pending', 'in_progress'];
 
 /**
  * Call Claude with web search enabled.
- * web_search_20250305 is a server-side tool — Anthropic executes searches internally
- * and returns stop_reason "end_turn" with results already included in the content.
+ * Handles multi-turn: web_search_20250305 may return stop_reason "tool_use"
+ * before giving the final "end_turn" text response.
  */
 async function callClaudeWithSearch(prompt) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta':    'web-search-2025-03-05',
-    },
-    body: JSON.stringify({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 1024,
-      tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages:   [{ role: 'user', content: prompt }],
-    }),
-  });
+  let messages = [{ role: 'user', content: prompt }];
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
+  for (let turn = 0; turn < 8; turn++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta':    'web-search-2025-03-05',
+      },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-6',
+        max_tokens: 1024,
+        tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages,
+      }),
+    });
 
-  return data.content?.find(b => b.type === 'text')?.text || null;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `Anthropic API error ${res.status}`);
+
+    const contentTypes = (data.content || []).map(b => b.type).join(', ');
+    console.log(`[check-results] Turn ${turn + 1}: stop_reason=${data.stop_reason}, content=[${contentTypes}]`);
+
+    if (data.stop_reason === 'end_turn') {
+      const text = data.content?.find(b => b.type === 'text')?.text || null;
+      console.log('[check-results] Final text:', text?.slice(0, 500));
+      return text;
+    }
+
+    if (data.stop_reason === 'tool_use') {
+      // Continue the conversation — the search results will be incorporated on next turn
+      const toolUseBlocks = (data.content || []).filter(b => b.type === 'tool_use');
+      console.log('[check-results] Tool calls:', toolUseBlocks.map(b => `${b.name}(${JSON.stringify(b.input)?.slice(0, 100)})`).join(', '));
+      messages = [
+        ...messages,
+        { role: 'assistant', content: data.content },
+        {
+          role: 'user',
+          content: toolUseBlocks.map(b => ({
+            type: 'tool_result',
+            tool_use_id: b.id,
+            content: 'Search executed.',
+          })),
+        },
+      ];
+      continue;
+    }
+
+    // Any other stop reason — try to extract text
+    const text = data.content?.find(b => b.type === 'text')?.text || null;
+    console.log(`[check-results] Unexpected stop_reason=${data.stop_reason}, text:`, text?.slice(0, 200));
+    return text;
+  }
+
+  console.warn('[check-results] Max turns reached without end_turn');
+  return null;
 }
 
 function parseJSON(text) {
@@ -84,6 +122,7 @@ exports.handler = async (event) => {
 
     let totalLegsUpdated = 0;
     let totalBetsUpdated = 0;
+    const debugResponses = [];
 
     for (const bet of bets) {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
@@ -105,21 +144,26 @@ exports.handler = async (event) => {
 
       const prompt = `Today is ${todayStr} at ${timeStr} AEST (Australian Eastern Standard Time).
 
-You must determine the outcome of the following Australian sports bet legs. Use web search to look up the actual match results for any events that should have already taken place.
+The following Australian sports bet legs need their results determined. All events listed are from the past — search the web to find the actual result for each one.
 
 Bet legs:
 ${desc}
 
-Instructions:
-- Search the web for the actual result of each event/match by name and date
-- Mark "won" if the selection won (team won, scored over line, etc.)
-- Mark "lost" if the selection lost
-- Mark "void" if the match was cancelled, postponed, or abandoned
-- Mark "in_progress" if the event has started but is still ongoing right now
-- Mark "pending" only if the event clearly hasn't started yet
+Search strategy:
+- For each leg, search "[Team A] vs [Team B] result [date] NRL" or "[event] [date] result"
+- For try-scorer props (e.g. "Player X 1+ Try Scorer"), also search "[match name] try scorers [date]"
+- Check sites like nrl.com, foxsports.com.au, afl.com.au, espn.com.au, or Google Sports
+
+Rules:
+- If the event date has already passed, it MUST be marked won, lost, void, or in_progress — NOT pending
+- Mark "won" if the selection was correct (team won, player scored the try, etc.)
+- Mark "lost" if the selection was incorrect
+- Mark "void" if the match was cancelled/postponed/abandoned
+- Mark "in_progress" ONLY if the match is literally happening right now
+- Mark "pending" ONLY if the event is scheduled for the future and has NOT started
 
 Return ONLY a valid JSON array — no other text, no markdown fences:
-[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"brief result note e.g. 'Team A won 24-18'"}]`;
+[{"legNumber":1,"status":"won|lost|void|in_progress|pending","result":"e.g. Knights won 24-18, Ponga scored 1 try"}]`;
 
       let responseText;
       try {
@@ -128,11 +172,12 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
         console.error('[check-results] Claude error:', e.message);
         continue;
       }
-      if (!responseText) continue;
+      if (!responseText) { debugResponses.push({ betId: bet.id, error: 'no text from Claude' }); continue; }
 
+      debugResponses.push({ betId: bet.id, response: responseText.slice(0, 500) });
       const updates = parseJSON(responseText);
       if (!Array.isArray(updates)) {
-        console.warn('[check-results] Could not parse Claude response:', responseText?.slice(0, 200));
+        console.warn('[check-results] Could not parse Claude response:', responseText?.slice(0, 300));
         continue;
       }
 
@@ -177,7 +222,7 @@ Return ONLY a valid JSON array — no other text, no markdown fences:
     }
 
     console.log(`[check-results] Done — ${totalLegsUpdated} legs updated, ${totalBetsUpdated} bets updated`);
-    return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ legsUpdated: totalLegsUpdated, betsUpdated: totalBetsUpdated }) };
+    return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ legsUpdated: totalLegsUpdated, betsUpdated: totalBetsUpdated, debug: debugResponses }) };
   } catch (err) {
     console.error('[check-results] Unexpected error:', err.stack || err);
     return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message || String(err) }) };
