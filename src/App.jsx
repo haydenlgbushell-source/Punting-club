@@ -6,7 +6,8 @@ import {
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
-  apiCreateAdditionalTeam,
+  apiCreateAdditionalTeam, apiGetAllCompetitions,
+  apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
 
@@ -337,8 +338,29 @@ export default function PuntingClub() {
   const [showFinaliseModal, setShowFinaliseModal] = useState(false);
   const [depositPerMember, setDepositPerMember] = useState(null); // calculated on finalise
   const [showCreateComp, setShowCreateComp] = useState(false);
-  const [newComp, setNewComp] = useState({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
+  const [newComp, setNewComp] = useState({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false });
   const [phoneError, setPhoneError] = useState('');
+
+  // Competition request (public home page)
+  const [showRequestCompModal, setShowRequestCompModal] = useState(false);
+  const [requestCompStep, setRequestCompStep] = useState(1);
+  const [requestCompForm, setRequestCompForm] = useState({
+    contactName: '', contactPhone: '', contactEmail: '',
+    pubName: '', compName: '', estimatedTeams: '',
+    preferredStartDate: '', preferredEndDate: '',
+    buyIn: '', isPrivate: false, notes: '',
+  });
+  const [requestCompLoading, setRequestCompLoading] = useState(false);
+  const [requestCompSuccess, setRequestCompSuccess] = useState(false);
+  const [requestCompError, setRequestCompError] = useState(null);
+
+  // Admin competition requests
+  const [adminCompRequests, setAdminCompRequests] = useState([]);
+
+  // Private competition code lookup in signup
+  const [privateCompLookup, setPrivateCompLookup] = useState(null);
+  const [privateCompLookupLoading, setPrivateCompLookupLoading] = useState(false);
+  const [privateCompLookupError, setPrivateCompLookupError] = useState(null);
 
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -857,17 +879,18 @@ export default function PuntingClub() {
     };
   };
 
-  const refreshAdminData = useCallback(async () => {
+  const refreshAdminData = useCallback(async (adminRole) => {
     // mapTeam and mapUser are inlined here to avoid stale closure
     setAdminLoading(true);
     setAdminLoadError(null);
     try {
-      const [teams, users, bets, comps, audit] = await Promise.allSettled([
+      const [teams, users, bets, comps, audit, requests] = await Promise.allSettled([
         apiGetAllTeams(),
         apiGetAllUsers(),
         apiGetAllBets(),
-        apiGetActiveCompetitions(),
+        apiGetAllCompetitions(),
         apiGetAuditLog(100),
+        apiGetCompetitionRequests(adminRole || 'owner'),
       ]);
       if (teams.status === 'fulfilled' && teams.value) {
         setAdminTeams(teams.value.map(mapTeam));
@@ -893,6 +916,9 @@ export default function PuntingClub() {
       if (audit.status === 'fulfilled' && audit.value) {
         setAdminAuditLog(audit.value.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
       }
+      if (requests.status === 'fulfilled' && requests.value) {
+        setAdminCompRequests(requests.value);
+      }
     } finally {
       setAdminLoading(false);
     }
@@ -901,8 +927,8 @@ export default function PuntingClub() {
   // Load admin data when admin logs in
   useEffect(() => {
     if (!isAdminLoggedIn) return;
-    refreshAdminData();
-  }, [isAdminLoggedIn, refreshAdminData]);
+    refreshAdminData(adminUser?.role);
+  }, [isAdminLoggedIn, refreshAdminData, adminUser?.role]);
 
   // Load leaderboard when competition is known
   useEffect(() => {
@@ -1435,12 +1461,20 @@ export default function PuntingClub() {
               <p className="text-lg sm:text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
                 Create a team, place bets, compete with friends. 8, 16, or 32 week seasons. AI-powered tracking.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
                 <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2">
                   Create Team <ArrowRight className="w-5 h-5" />
                 </button>
                 <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all">
                   Join a Team
+                </button>
+              </div>
+              <div className="flex justify-center mb-12">
+                <button
+                  onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName:'', contactPhone:'', contactEmail:'', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
+                  className="border border-amber-500/40 hover:border-amber-500/70 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+                >
+                  🏟 Request a Competition for your pub/club
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
@@ -2791,13 +2825,84 @@ export default function PuntingClub() {
                               })()}
                             </div>
                           </div>
+                          {/* Private/Public toggle */}
+                          <div>
+                            <label className="block text-xs font-semibold text-amber-400 mb-2">Visibility</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[['false','🌐 Public','Visible to all users in competition list'],['true','🔒 Private','Only joinable via the competition code']].map(([v,l,d]) => (
+                                <button key={v} type="button"
+                                  onClick={() => setNewComp(p => ({...p, isPrivate: v === 'true'}))}
+                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${String(newComp.isPrivate) === v ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                >
+                                  <div className="font-bold mb-0.5">{l}</div>
+                                  <div className="text-gray-500 text-xs">{d}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-gray-400">
                             <strong className="text-amber-400">Note:</strong> Competition requires approval from Owner Admin before going live. A unique QR code and join link will be auto-generated.
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
+                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Competition Requests */}
+                      {adminCompRequests.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-bold text-amber-400">📬 Competition Requests</h3>
+                            <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{adminCompRequests.filter(r => r.status === 'requested').length}</span>
+                          </div>
+                          {adminCompRequests.map(req => (
+                            <div key={req.id} className={`bg-gray-900 border rounded-xl p-4 ${req.status === 'requested' ? 'border-amber-500/30' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <p className="font-bold text-sm">{req.comp_name}</p>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${req.status === 'requested' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : req.status === 'approved' ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
+                                      {req.status === 'requested' ? '⏳ Pending' : req.status === 'approved' ? '✓ Approved' : '✗ Declined'}
+                                    </span>
+                                    {req.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
+                                  </div>
+                                  <div className="text-xs text-gray-500 space-y-0.5">
+                                    <p>🏟 {req.pub_name}</p>
+                                    <p>👤 {req.contact_name} · 📞 {req.contact_phone} · ✉ {req.contact_email}</p>
+                                    {req.preferred_start_date && <p>📅 {req.preferred_start_date} → {req.preferred_end_date}</p>}
+                                    {req.estimated_teams && <p>👥 ~{req.estimated_teams} teams · {req.buy_in ? `$${Number(req.buy_in).toLocaleString()} buy-in` : 'buy-in TBD'}</p>}
+                                    {req.notes && <p className="text-gray-400 italic mt-1">"{req.notes}"</p>}
+                                  </div>
+                                </div>
+                                {req.status === 'requested' && canAdmin('competitions') && (
+                                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          await apiUpdateCompetitionRequest(req.id, 'approved', adminUser?.role);
+                                          setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'approved'} : r));
+                                          showToast(`Request from ${req.contact_name} approved`, 'success');
+                                        } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
+                                      }}
+                                      className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                    >✓ Approve</button>
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          await apiUpdateCompetitionRequest(req.id, 'declined', adminUser?.role);
+                                          setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'declined'} : r));
+                                          showToast(`Request declined`, 'success');
+                                        } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
+                                      }}
+                                      className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                    >✗ Decline</button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -2827,6 +2932,7 @@ export default function PuntingClub() {
                                     <p className="font-bold text-base">{c.name}</p>
                                     <StatusPill s={c.status} />
                                     <span className="font-mono text-xs bg-black/40 border border-white/10 text-amber-300 px-2 py-0.5 rounded">{c.code}</span>
+                                    {c.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
                                   </div>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
                                     <span>🏟 {c.pub}</span>
@@ -2869,7 +2975,7 @@ export default function PuntingClub() {
                                       >↩ Rollback</button>
                                     )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '' }); }} className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                   </div>
                                 )}
                               </div>
@@ -2890,9 +2996,21 @@ export default function PuntingClub() {
                                   const w = Math.round((new Date(editCompForm.endDate) - new Date(editCompForm.startDate)) / (7 * 86400000));
                                   return w > 0 ? <p className="text-xs text-gray-500 mb-3">Season length: <span className="text-white">{w} weeks</span></p> : null;
                                 })()}
+                                {/* Private toggle in edit form */}
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1.5">Visibility</label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {[['false','🌐 Public'],['true','🔒 Private']].map(([v,l]) => (
+                                      <button key={v} type="button"
+                                        onClick={() => setEditCompForm(p => ({...p, isPrivate: v === 'true'}))}
+                                        className={`py-2 rounded-lg border text-xs font-semibold transition-all ${String(editCompForm.isPrivate) === v ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                      >{l}</button>
+                                    ))}
+                                  </div>
+                                </div>
                                 <div className="flex gap-2">
                                   <button onClick={() => setEditingCompId(null)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate })} className="flex-1 bg-amber-500 text-black font-bold py-2 rounded-lg text-sm">Save Changes</button>
+                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate })} className="flex-1 bg-amber-500 text-black font-bold py-2 rounded-lg text-sm">Save Changes</button>
                                 </div>
                               </div>
                             )}
@@ -3105,6 +3223,169 @@ export default function PuntingClub() {
         </Modal>
       )}
 
+      {/* REQUEST A COMPETITION MODAL */}
+      {showRequestCompModal && (
+        <Modal title="🏟 Request a Competition" onClose={() => setShowRequestCompModal(false)} maxWidth="max-w-lg">
+          {requestCompSuccess ? (
+            <div className="p-6 text-center space-y-4">
+              <div className="text-5xl mb-2">🎉</div>
+              <h3 className="text-xl font-black text-white">Request Submitted!</h3>
+              <p className="text-gray-400 text-sm">Your competition request has been sent to our team. We'll be in touch within 1–2 business days.</p>
+              <button onClick={() => setShowRequestCompModal(false)} className="w-full bg-amber-500 text-black font-bold py-3 rounded-xl text-sm mt-2">Done</button>
+            </div>
+          ) : (
+            <div className="p-5 space-y-4">
+              {requestCompError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm">✗ {requestCompError}</div>
+              )}
+
+              {/* Step indicator */}
+              <div className="flex items-center gap-2 mb-2">
+                {[1,2,3].map(s => (
+                  <div key={s} className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${requestCompStep >= s ? 'bg-amber-500 border-amber-500 text-black' : 'border-white/20 text-gray-500'}`}>{s}</div>
+                    {s < 3 && <div className={`h-0.5 flex-1 w-8 ${requestCompStep > s ? 'bg-amber-500' : 'bg-white/10'}`} />}
+                  </div>
+                ))}
+                <span className="text-xs text-gray-500 ml-1">{requestCompStep === 1 ? 'Your Details' : requestCompStep === 2 ? 'Competition Setup' : 'Preferences'}</span>
+              </div>
+
+              {requestCompStep === 1 && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-xs">Tell us about yourself and your venue.</p>
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Your Name *</label>
+                    <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="John Smith" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1">Phone *</label>
+                      <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="0412 345 678" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1">Email *</label>
+                      <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="john@rsl.com.au" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Pub / Club Name *</label>
+                    <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!requestCompForm.contactName.trim() || !requestCompForm.contactPhone.trim() || !requestCompForm.contactEmail.trim() || !requestCompForm.pubName.trim()) {
+                        setRequestCompError('Please fill in all required fields.'); return;
+                      }
+                      setRequestCompError(null); setRequestCompStep(2);
+                    }}
+                    className="w-full bg-amber-500 text-black font-bold py-2.5 rounded-xl text-sm"
+                  >Next →</button>
+                </div>
+              )}
+
+              {requestCompStep === 2 && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-xs">Tell us about the competition you have in mind.</p>
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Competition Name *</label>
+                    <input type="text" value={requestCompForm.compName} onChange={e => setRequestCompForm(p => ({...p, compName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="RSL Summer Cup 2026" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1">Preferred Start Date</label>
+                      <input type="date" value={requestCompForm.preferredStartDate} onChange={e => setRequestCompForm(p => ({...p, preferredStartDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1">Preferred End Date</label>
+                      <input type="date" value={requestCompForm.preferredEndDate} onChange={e => setRequestCompForm(p => ({...p, preferredEndDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1">Estimated Teams</label>
+                      <input type="number" min="2" max="200" value={requestCompForm.estimatedTeams} onChange={e => setRequestCompForm(p => ({...p, estimatedTeams: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="10" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1">Buy-In Amount</label>
+                      <input type="text" value={requestCompForm.buyIn} onChange={e => setRequestCompForm(p => ({...p, buyIn: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="$1,000" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setRequestCompError(null); setRequestCompStep(1); }} className="flex-1 border border-white/10 text-gray-400 py-2.5 rounded-xl text-sm">← Back</button>
+                    <button
+                      onClick={() => {
+                        if (!requestCompForm.compName.trim()) { setRequestCompError('Please enter a competition name.'); return; }
+                        setRequestCompError(null); setRequestCompStep(3);
+                      }}
+                      className="flex-1 bg-amber-500 text-black font-bold py-2.5 rounded-xl text-sm"
+                    >Next →</button>
+                  </div>
+                </div>
+              )}
+
+              {requestCompStep === 3 && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-xs">Final details about your competition setup.</p>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-2">Competition Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[['public', '🌐 Public', 'Anyone can see and join the competition'], ['private', '🔒 Private', 'Only accessible via a secret code you share']].map(([v, label, desc]) => (
+                        <button key={v} type="button"
+                          onClick={() => setRequestCompForm(p => ({...p, isPrivate: v === 'private'}))}
+                          className={`p-3 rounded-lg border text-left text-xs transition-all ${(v === 'private') === requestCompForm.isPrivate ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                        >
+                          <div className="font-bold mb-0.5">{label}</div>
+                          <div className="text-gray-500">{desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                    {requestCompForm.isPrivate && (
+                      <p className="text-xs text-amber-400 mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                        🔑 A private access code will be generated when the competition is approved. Team captains use this code to register.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Additional Notes</label>
+                    <textarea
+                      value={requestCompForm.notes}
+                      onChange={e => setRequestCompForm(p => ({...p, notes: e.target.value}))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600 resize-none"
+                      rows={3}
+                      placeholder="Any other details, special requirements, or questions..."
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => { setRequestCompError(null); setRequestCompStep(2); }} className="flex-1 border border-white/10 text-gray-400 py-2.5 rounded-xl text-sm">← Back</button>
+                    <button
+                      disabled={requestCompLoading}
+                      onClick={async () => {
+                        setRequestCompLoading(true);
+                        setRequestCompError(null);
+                        try {
+                          await apiRequestCompetition(requestCompForm);
+                          setRequestCompSuccess(true);
+                        } catch (err) {
+                          setRequestCompError(err.message || 'Failed to submit request. Please try again.');
+                        } finally {
+                          setRequestCompLoading(false);
+                        }
+                      }}
+                      className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2.5 rounded-xl text-sm disabled:opacity-60"
+                    >
+                      {requestCompLoading ? '⏳ Submitting...' : 'Submit Request'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
+
       {/* SIGNUP */}
       {showSignupModal && (
         <Modal title={signupMode === 'create' ? '🏆 Create a Team' : '👋 Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
@@ -3204,40 +3485,81 @@ export default function PuntingClub() {
               </div>
             )}
 
-            {/* Competition dropdown — shows only active competitions from admin */}
+            {/* Competition — public dropdown + private code entry */}
             {signupMode === 'create' && (
-              <div>
-                <label className="block text-xs font-semibold text-amber-400 mb-1">
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-amber-400">
                   Competition <span className="text-gray-600 font-normal">(optional)</span>
                 </label>
-                {activeCompetitions.length > 0 ? (
-                  <>
-                    <select
-                      value={formData.competitionCode}
-                      onChange={e => setFormData(p => ({...p, competitionCode: e.target.value}))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
-                      style={{backgroundColor:'#111827'}}
-                    >
-                      <option value="">— No competition (register team only) —</option>
-                      {activeCompetitions.map(c => (
-                        <option key={c.code} value={c.code}>
-                          {c.name} · {c.pub} · {c.weeks}wks · ${c.buy_in?.toLocaleString()} buy-in
-                        </option>
-                      ))}
-                    </select>
-                    {formData.competitionCode && (() => {
-                      const sel = activeCompetitions.find(c => c.code === formData.competitionCode);
-                      return sel ? (
-                        <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                          <p className="text-amber-400 text-xs font-semibold">✓ Joining: {sel.name}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">{sel.pub} · {sel.weeks} weeks · Buy-in: ${sel.buy_in?.toLocaleString()}</p>
-                        </div>
-                      ) : null;
-                    })()}
-                  </>
-                ) : (
+                {/* Public competitions dropdown */}
+                {activeCompetitions.filter(c => !c.is_private).length > 0 && (
+                  <select
+                    value={formData.competitionCode}
+                    onChange={e => { setFormData(p => ({...p, competitionCode: e.target.value})); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                    style={{backgroundColor:'#111827'}}
+                  >
+                    <option value="">— Select a public competition —</option>
+                    {activeCompetitions.filter(c => !c.is_private).map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.name} · {c.pub} · {c.weeks}wks · ${c.buy_in?.toLocaleString()} buy-in
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {formData.competitionCode && (() => {
+                  const sel = activeCompetitions.find(c => c.code === formData.competitionCode);
+                  return sel ? (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      <p className="text-amber-400 text-xs font-semibold">✓ Joining: {sel.name}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">{sel.pub} · {sel.weeks} weeks · Buy-in: ${sel.buy_in?.toLocaleString()}</p>
+                    </div>
+                  ) : null;
+                })()}
+                {/* Private competition code entry */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Have a private competition code?</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.privateCompCode || ''}
+                      onChange={e => { setFormData(p => ({...p, privateCompCode: e.target.value.toUpperCase(), competitionCode: ''})); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600 tracking-widest"
+                      placeholder="PRIV-CODE"
+                      maxLength={10}
+                    />
+                    <button
+                      type="button"
+                      disabled={!formData.privateCompCode || privateCompLookupLoading}
+                      onClick={async () => {
+                        setPrivateCompLookupLoading(true);
+                        setPrivateCompLookupError(null);
+                        setPrivateCompLookup(null);
+                        try {
+                          const comp = await apiGetCompetitionByCode(formData.privateCompCode);
+                          if (!comp.is_private) { setPrivateCompLookupError('This is a public competition — select it from the dropdown above.'); return; }
+                          setPrivateCompLookup(comp);
+                          setFormData(p => ({...p, competitionCode: comp.code}));
+                        } catch (err) {
+                          setPrivateCompLookupError(err.message || 'Code not found');
+                        } finally {
+                          setPrivateCompLookupLoading(false);
+                        }
+                      }}
+                      className="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-40"
+                    >{privateCompLookupLoading ? '...' : 'Find'}</button>
+                  </div>
+                  {privateCompLookupError && <p className="text-red-400 text-xs mt-1">✗ {privateCompLookupError}</p>}
+                  {privateCompLookup && (
+                    <div className="mt-2 bg-purple-500/10 border border-purple-500/30 rounded-lg px-3 py-2">
+                      <p className="text-purple-400 text-xs font-semibold">🔒 Private: {privateCompLookup.name}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">{privateCompLookup.pub} · {privateCompLookup.weeks} weeks · Buy-in: ${privateCompLookup.buy_in?.toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+                {!formData.competitionCode && activeCompetitions.filter(c => !c.is_private).length === 0 && !privateCompLookup && (
                   <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">
-                    No active competitions available — contact your pub or admin
+                    No public competitions available — enter a private code above or contact your pub/admin
                   </div>
                 )}
               </div>

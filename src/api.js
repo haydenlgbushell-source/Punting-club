@@ -22,12 +22,16 @@ export const apiResetPassword  = (phone)         => call('auth', { action: 'rese
 export const apiVerifySession  = (userId)        => call('auth', { action: 'verify_session', userId });
 
 // ── COMPETITIONS ─────────────────────────────────────────────
-export const apiGetActiveCompetitions = ()      => call('data', { action: 'get_active_competitions' });
-export const apiGetAllCompetitions    = ()      => call('data', { action: 'get_all_competitions' });
-export const apiCreateCompetition = (comp, adminRole) => call('data', { action: 'create_competition', ...comp, adminRole });
-export const apiUpdateCompStatus      = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
-export const apiUpdateCompetition     = (id, fields, adminRole) => call('data', { action: 'update_competition', id, ...fields, adminRole });
-export const apiAdvanceWeek           = (id, adminRole, direction = 'forward') => call('data', { action: 'advance_week', id, adminRole, direction });
+export const apiGetActiveCompetitions   = ()      => call('data', { action: 'get_active_competitions' });
+export const apiGetAllCompetitions      = ()      => call('data', { action: 'get_all_competitions' });
+export const apiCreateCompetition       = (comp, adminRole) => call('data', { action: 'create_competition', ...comp, adminRole });
+export const apiUpdateCompStatus        = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
+export const apiUpdateCompetition       = (id, fields, adminRole) => call('data', { action: 'update_competition', id, ...fields, adminRole });
+export const apiAdvanceWeek             = (id, adminRole, direction = 'forward') => call('data', { action: 'advance_week', id, adminRole, direction });
+export const apiRequestCompetition      = (payload) => call('data', { action: 'request_competition', ...payload });
+export const apiGetCompetitionRequests  = (adminRole) => call('data', { action: 'get_competition_requests', adminRole });
+export const apiUpdateCompetitionRequest = (id, status, adminRole) => call('data', { action: 'update_competition_request', id, status, adminRole });
+export const apiGetCompetitionByCode    = (code) => call('data', { action: 'get_competition_by_code', code });
 
 // ── TEAMS ────────────────────────────────────────────────────
 export const apiGetTeam                = (teamId)                    => call('data', { action: 'get_team', teamId });
