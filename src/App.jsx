@@ -330,7 +330,7 @@ export default function PuntingClub() {
   const [showFinaliseModal, setShowFinaliseModal] = useState(false);
   const [depositPerMember, setDepositPerMember] = useState(null); // calculated on finalise
   const [showCreateComp, setShowCreateComp] = useState(false);
-  const [newComp, setNewComp] = useState({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
+  const [newComp, setNewComp] = useState({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
   const [phoneError, setPhoneError] = useState('');
 
   // Admin state
@@ -1120,13 +1120,17 @@ export default function PuntingClub() {
     const code = genCode(6);
     const status = adminUser?.role === 'owner' ? 'active' : 'pending';
     const buyInNum = parseInt(String(comp.buyIn || comp.buy_in || '1000').replace(/[^0-9]/g, '')) || 1000;
+    const weeksCalc = comp.startDate && comp.endDate
+      ? Math.round((new Date(comp.endDate) - new Date(comp.startDate)) / (7 * 86400000))
+      : null;
+    if (!weeksCalc || weeksCalc < 1) { showToast('Please set valid start and end dates.', 'warning'); return; }
     const localComp = {
       id:         code,
       code,
       name:       comp.name.trim(),
       pub:        comp.pub.trim(),
       status,
-      weeks:      parseInt(comp.weeks) || 8,
+      weeks:      weeksCalc,
       buy_in:     buyInNum,
       buyIn:      `$${buyInNum.toLocaleString()}`,
       max_teams:  parseInt(comp.maxTeams) || 20,
@@ -2519,11 +2523,16 @@ export default function PuntingClub() {
                             ))}
                             <div>
                               <label className="block text-xs font-semibold text-amber-400 mb-1">Season Length</label>
-                              <select value={newComp.weeks} onChange={e => setNewComp(prev => ({...prev, weeks: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
-                                <option value="8">8 weeks (Quarter Season)</option>
-                                <option value="16">16 weeks (Half Season)</option>
-                                <option value="32">32 weeks (Full Season)</option>
-                              </select>
+                              {(() => {
+                                const weeks = newComp.startDate && newComp.endDate
+                                  ? Math.round((new Date(newComp.endDate) - new Date(newComp.startDate)) / (7 * 86400000))
+                                  : null;
+                                return (
+                                  <div className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-400">
+                                    {weeks !== null && weeks > 0 ? <span className="text-white">{weeks} week{weeks !== 1 ? 's' : ''}</span> : <span className="text-gray-600 italic">Set start & end dates above</span>}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-gray-400">
@@ -2531,7 +2540,7 @@ export default function PuntingClub() {
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
+                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
                         </div>
                       )}
