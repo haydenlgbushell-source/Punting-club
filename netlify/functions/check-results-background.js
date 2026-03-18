@@ -214,7 +214,7 @@ Report the result for EVERY match listed above — do not skip any.`;
       console.log(`[check-results-bg] Step 2 — settling bet ${bet.id}...`);
       let updates;
       try {
-        updates = await settleLegs(apiKey, summary, legs);
+        updates = await settleLegs(apiKey, summary, unsettledLegs);
       } catch (e) {
         console.error(`[check-results-bg] Settle error bet ${bet.id}:`, e.message);
         continue;
@@ -225,6 +225,7 @@ Report the result for EVERY match listed above — do not skip any.`;
         const legNum  = u.legNumber ?? u.leg_number;
         const origLeg = legs.find(l => Number(l.leg_number) === Number(legNum));
         if (!origLeg) { console.warn(`[check-results-bg] No leg ${legNum}`); continue; }
+        if (!UNSETTLED.includes(origLeg.status)) { console.log(`[check-results-bg] Leg ${legNum} already settled as "${origLeg.status}", skipping`); continue; }
         if (origLeg.status === u.status) { console.log(`[check-results-bg] Leg ${legNum} already "${u.status}"`); continue; }
 
         console.log(`[check-results-bg] Updating leg ${legNum}: "${origLeg.status}" → "${u.status}"`);
