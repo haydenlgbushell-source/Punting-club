@@ -703,6 +703,7 @@ export default function PuntingClub() {
     bets: (t.bets || []).map(b => ({
       id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
       estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
+      weekNumber: b.week_number,
       submittedAt: new Date(b.submitted_at).toLocaleString(),
       legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
     })),
@@ -716,7 +717,7 @@ export default function PuntingClub() {
     if (!comp?.id) return;
     const weekNum = calcCurrentWeek(comp.start_date);
     try {
-      const data = await apiGetLeaderboard(comp.id, weekNum);
+      const data = await apiGetLeaderboard(comp.id, weekNum, comp.start_date);
       if (data?.length) {
         const mapped = mapLeaderboardData(data);
         setLeaderboardTeams(mapped);
@@ -1244,7 +1245,7 @@ export default function PuntingClub() {
         await apiSubmitBet({
           teamId:          team.id,
           submittedBy:     currentUser.id,
-          weekNumber:      Math.max(1, currentWeekNum),
+          weekNumber:      currentWeekNum + 1,
           betType:         newBet.type || 'Multi',
           stake:           Math.round(parseFloat((newBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
           combinedOdds:    newBet.combinedOdds,
@@ -1565,7 +1566,8 @@ export default function PuntingClub() {
               )}
               {enrichedLeaderboardTeams.map((team, idx) => {
                 const isMe = isLoggedIn && team.team === myTeamName;
-                const weekBet = team.bets[0] || null;
+                const currentWeek = currentWeekNum + 1;
+                const weekBet = team.bets.find(b => b.weekNumber === currentWeek) || null;
                 const isOpen = selectedTeamIdx === idx;
 
                 // Derive status from legs (same logic as BetSlipCard) so row colour
@@ -1899,17 +1901,20 @@ export default function PuntingClub() {
                   </button>
                 </div>
               </div>
-              {myTeamData?.bets?.length > 0 ? (
-                <div className="space-y-3">
-                  {myTeamData.bets.map((bet, i) => <BetSlipCard key={i} bet={bet} onCheckBet={checkSingleBet} isChecking={checkingBetId === bet.id} />)}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 mb-3 text-sm">No bets submitted yet this week</p>
-                  {currentBettor && <p className="text-amber-400 text-xs mb-4">It's <strong>{currentBettor}</strong>'s turn to bet</p>}
-                  <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-5 rounded-lg text-sm">Submit Bet</button>
-                </div>
-              )}
+              {(() => {
+                const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
+                return thisWeekBets.length > 0 ? (
+                  <div className="space-y-3">
+                    {thisWeekBets.map((bet, i) => <BetSlipCard key={i} bet={bet} onCheckBet={checkSingleBet} isChecking={checkingBetId === bet.id} />)}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-3 text-sm">No bets submitted yet this week</p>
+                    {currentBettor && <p className="text-amber-400 text-xs mb-4">It's <strong>{currentBettor}</strong>'s turn to bet</p>}
+                    <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-5 rounded-lg text-sm">Submit Bet</button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Pending approvals */}

@@ -53,7 +53,7 @@ export const apiRejectBet      = (betId, reason, adminRole) => call('data', { ac
 export const apiCorrectBet     = (betId, field, value, adminRole) => call('data', { action: 'correct_bet', betId, field, value, adminRole });
 
 // ── LEADERBOARD ──────────────────────────────────────────────
-export const apiGetLeaderboard = (competitionId, currentWeek) => call('data', { action: 'get_leaderboard', competitionId, currentWeek });
+export const apiGetLeaderboard = (competitionId, currentWeek, startDate) => call('data', { action: 'get_leaderboard', competitionId, currentWeek, startDate });
 
 // ── ADMIN ────────────────────────────────────────────────────
 export const apiGetAllUsers  = ()                        => call('data', { action: 'get_all_users' });
