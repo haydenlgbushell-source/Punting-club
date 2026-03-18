@@ -1705,41 +1705,177 @@ export default function PuntingClub() {
       })()}
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
-      {activeNav === 'weekly' && (
-        <section className="pt-28 pb-16 px-4 sm:px-6">
-          <div className="max-w-5xl mx-auto">
-            <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
-            <p className="text-gray-500 mb-8 text-sm">Week 3 of 8 · Updated daily</p>
-            <div className="grid md:grid-cols-2 gap-4 mb-8">
-              <div className="bg-green-950/30 border border-green-500/30 rounded-xl p-5">
-                <h3 className="font-bold text-green-400 mb-2">🎉 Big Win Alert!</h3>
-                <p className="text-gray-300 text-sm">The Legends hit a 4-leg multi for $4,250!</p>
-                <p className="text-gray-600 text-xs mt-2">2 hours ago</p>
-              </div>
-              <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-5">
-                <h3 className="font-bold text-amber-400 mb-2">⏰ Betting Reminder</h3>
-                <p className="text-gray-300 text-sm">Week 3 deadline: tomorrow 12:00PM</p>
-                <p className="text-gray-600 text-xs mt-2">Golden Odds — it's your turn!</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              {[['Bets This Week','18','text-amber-400'],['Win Rate','65%','text-green-400'],['Total Winnings','$8,450','text-blue-400']].map(([l,v,c]) => (
-                <div key={l} className="bg-white/3 border border-white/8 rounded-xl p-4 text-center">
-                  <p className="text-gray-500 text-xs mb-1">{l}</p>
-                  <p className={`text-2xl font-black ${c}`}>{v}</p>
+      {activeNav === 'weekly' && (() => {
+        const comp        = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+        const totalWeeks  = comp?.weeks || 8;
+        const thisWeek    = currentWeekNum + 1;
+
+        // All bets across every team for this week
+        const allThisWeekBets = leaderboardTeams.flatMap(t =>
+          (t.bets || []).filter(b => b.weekNumber === thisWeek)
+        );
+        // All bets ever (whole season)
+        const allBetsEver = leaderboardTeams.flatMap(t => t.bets || []);
+
+        // Win rate: settled bets this week
+        const settledThisWeek = allThisWeekBets.filter(b => ['won','lost','partial'].includes(b.overallStatus));
+        const wonThisWeek     = settledThisWeek.filter(b => b.overallStatus === 'won');
+        const winRate         = settledThisWeek.length > 0 ? Math.round((wonThisWeek.length / settledThisWeek.length) * 100) : null;
+
+        // Total prize money won across the entire season
+        const totalWinnings = leaderboardTeams.reduce((sum, t) => {
+          const raw = parseFloat((t.total || '$0').replace(/[^0-9.]/g, ''));
+          return sum + (isNaN(raw) ? 0 : raw);
+        }, 0);
+
+        // Biggest single win this week
+        const bestWinThisWeek = allThisWeekBets
+          .filter(b => b.overallStatus === 'won')
+          .sort((a, b) => parseFloat((b.estimatedReturn || '0').replace(/[^0-9.]/g, '')) - parseFloat((a.estimatedReturn || '0').replace(/[^0-9.]/g, '')))[0];
+        const bestWinTeam = bestWinThisWeek
+          ? leaderboardTeams.find(t => (t.bets || []).some(b => b.id === bestWinThisWeek.id))?.team
+          : null;
+
+        // Season leader
+        const leader = leaderboardTeams[0];
+
+        // Cutoff display
+        const cutoffStr = nextWedCutoff.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+
+        // Previous week stats for commentary
+        const prevWeekBets     = leaderboardTeams.flatMap(t => (t.bets || []).filter(b => b.weekNumber === thisWeek - 1));
+        const prevSettled      = prevWeekBets.filter(b => ['won','lost'].includes(b.overallStatus));
+        const prevWinRate      = prevSettled.length > 0 ? Math.round(prevSettled.filter(b => b.overallStatus === 'won').length / prevSettled.length * 100) : null;
+
+        // Leg count distribution for insight
+        const legCounts = allBetsEver.filter(b => b.overallStatus === 'won').map(b => (b.legs || []).length);
+        const avgWinLegs = legCounts.length > 0 ? (legCounts.reduce((a, b) => a + b, 0) / legCounts.length).toFixed(1) : null;
+
+        // Teams yet to bet this week
+        const teamsNoBet = leaderboardTeams.filter(t => !(t.bets || []).some(b => b.weekNumber === thisWeek));
+
+        return (
+          <section className="pt-28 pb-16 px-4 sm:px-6">
+            <div className="max-w-5xl mx-auto">
+              <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
+              <p className="text-gray-500 mb-8 text-sm">
+                Week {thisWeek} of {totalWeeks}
+                {comp?.name && <> · {comp.name}</>}
+                {' · '}Cutoff {cutoffStr}
+              </p>
+
+              {/* Alert cards */}
+              <div className="grid md:grid-cols-2 gap-4 mb-8">
+                {bestWinThisWeek && bestWinTeam ? (
+                  <div className="bg-green-950/30 border border-green-500/30 rounded-xl p-5">
+                    <h3 className="font-bold text-green-400 mb-2">🎉 Big Win This Week!</h3>
+                    <p className="text-gray-300 text-sm">
+                      <strong className="text-white">{bestWinTeam}</strong> landed a {(bestWinThisWeek.legs || []).length}-leg multi for <strong className="text-green-400">{bestWinThisWeek.estimatedReturn}</strong>
+                    </p>
+                    <p className="text-gray-600 text-xs mt-2">{bestWinThisWeek.submittedAt}</p>
+                  </div>
+                ) : (
+                  <div className="bg-white/3 border border-white/8 rounded-xl p-5">
+                    <h3 className="font-bold text-gray-400 mb-2">🎯 No Wins Yet This Week</h3>
+                    <p className="text-gray-500 text-sm">{allThisWeekBets.length} bet{allThisWeekBets.length !== 1 ? 's' : ''} submitted — results pending.</p>
+                    {leader && <p className="text-gray-600 text-xs mt-2">Current leader: <span className="text-amber-400">{leader.team}</span> · {leader.total}</p>}
+                  </div>
+                )}
+                <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-5">
+                  <h3 className="font-bold text-amber-400 mb-2">⏰ Betting Reminder</h3>
+                  <p className="text-gray-300 text-sm">
+                    Week {thisWeek} deadline: <strong className="text-white">{cutoffStr}</strong>
+                  </p>
+                  {currentBettor && (
+                    <p className="text-amber-400 text-xs mt-2">
+                      It's <strong>{currentBettor}</strong>'s turn to place the bet!
+                    </p>
+                  )}
+                  {teamsNoBet.length > 0 && (
+                    <p className="text-gray-600 text-xs mt-1">
+                      {teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
-            <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-6">
-              <h3 className="font-bold text-amber-400 mb-3">📊 AI Commentary</h3>
-              <div className="text-sm text-gray-300 space-y-2 leading-relaxed">
-                <p>Week 3 has been exceptional. 65% win rate across all teams with The Legends dominating via a 4-leg NRL multi.</p>
-                <p><strong className="text-white">Key insight:</strong> 2–3 leg multis outperforming 4+ leg bets. Early-week bets (Mon–Wed) showing better value before odds shift.</p>
+              </div>
+
+              {/* Key stats */}
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                {[
+                  ['Bets This Week', allThisWeekBets.length || '—', 'text-amber-400'],
+                  ['Win Rate', winRate !== null ? `${winRate}%` : '—', 'text-green-400'],
+                  ['Season Winnings', totalWinnings > 0 ? `$${totalWinnings.toLocaleString()}` : '$0', 'text-blue-400'],
+                ].map(([l, v, c]) => (
+                  <div key={l} className="bg-white/3 border border-white/8 rounded-xl p-4 text-center">
+                    <p className="text-gray-500 text-xs mb-1">{l}</p>
+                    <p className={`text-2xl font-black ${c}`}>{v}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Leaderboard snapshot */}
+              {leaderboardTeams.length > 0 && (
+                <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-6">
+                  <h3 className="font-bold text-amber-400 mb-4">🏆 Season Standings</h3>
+                  <div className="space-y-2">
+                    {leaderboardTeams.slice(0, 5).map((t, i) => {
+                      const thisWeekBet  = (t.bets || []).find(b => b.weekNumber === thisWeek);
+                      const statusColor  = thisWeekBet?.overallStatus === 'won' ? 'text-green-400' : thisWeekBet?.overallStatus === 'lost' ? 'text-red-400' : 'text-gray-500';
+                      const statusLabel  = thisWeekBet?.overallStatus === 'won' ? 'Won' : thisWeekBet?.overallStatus === 'lost' ? 'Lost' : thisWeekBet ? 'Pending' : 'No bet';
+                      return (
+                        <div key={t.id} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${i === 0 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-black/20'}`}>
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${i === 0 ? 'bg-amber-500 text-black' : 'bg-white/5 text-gray-400'}`}>{i + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{t.team}</p>
+                            <div className="flex gap-1 mt-0.5">
+                              {(t.weekHistory || []).slice(-6).map((r, wi) => (
+                                <span key={wi} className={`w-4 h-4 rounded text-xs flex items-center justify-center font-bold ${r === 'W' ? 'bg-green-500/30 text-green-400' : r === 'L' ? 'bg-red-500/30 text-red-400' : 'bg-white/5 text-gray-600'}`}>{r || '–'}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-amber-400 font-bold text-sm">{t.total}</p>
+                            <p className={`text-xs ${statusColor}`}>{statusLabel}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Commentary */}
+              <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-6">
+                <h3 className="font-bold text-amber-400 mb-3">📊 Week {thisWeek} Snapshot</h3>
+                <div className="text-sm text-gray-300 space-y-2 leading-relaxed">
+                  {allThisWeekBets.length === 0 ? (
+                    <p>No bets have been submitted yet for Week {thisWeek}. Deadline is {cutoffStr}.</p>
+                  ) : (
+                    <>
+                      <p>
+                        Week {thisWeek} of {totalWeeks}: <strong className="text-white">{allThisWeekBets.length}</strong> bet{allThisWeekBets.length !== 1 ? 's' : ''} submitted across {leaderboardTeams.filter(t => (t.bets || []).some(b => b.weekNumber === thisWeek)).length} team{leaderboardTeams.filter(t => (t.bets || []).some(b => b.weekNumber === thisWeek)).length !== 1 ? 's' : ''}.
+                        {winRate !== null && <> Current win rate: <strong className={winRate >= 50 ? 'text-green-400' : 'text-red-400'}>{winRate}%</strong>.</>}
+                      </p>
+                      {prevWinRate !== null && (
+                        <p>
+                          <strong className="text-white">vs last week:</strong> Week {thisWeek - 1} finished with a {prevWinRate}% win rate across {prevSettled.length} settled bet{prevSettled.length !== 1 ? 's' : ''}.
+                          {prevWinRate > (winRate ?? 0) ? ' This week is tracking below that pace.' : prevWinRate < (winRate ?? 0) ? ' This week is tracking ahead of that pace.' : ' Tracking at the same pace.'}
+                        </p>
+                      )}
+                      {avgWinLegs && (
+                        <p><strong className="text-white">Key insight:</strong> Winning bets this season average <strong className="text-amber-400">{avgWinLegs} legs</strong>.</p>
+                      )}
+                      {leader && (
+                        <p><strong className="text-white">Leading:</strong> {leader.team} at {leader.total} — {teamsNoBet.length > 0 ? `${teamsNoBet.length} team${teamsNoBet.length !== 1 ? 's' : ''} yet to bet this week.` : 'all teams have submitted this week.'}</p>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        );
+      })()}
 
       {/* ── MY TEAM ───────────────────────────────────────────────────────── */}
       {activeNav === 'team' && (
@@ -2178,7 +2314,7 @@ export default function PuntingClub() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-2xl font-black mb-1">Dashboard</h2>
-                        <p className="text-gray-500 text-sm">Overview · Week 3 of 8 · {new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
+                        <p className="text-gray-500 text-sm">Overview · {(() => { const ac = adminComps.find(c => c.status === 'active') || adminComps[0]; if (!ac?.start_date) return ''; const wk = calcCurrentWeek(ac.start_date); const tot = ac.weeks || '?'; return `Week ${wk} of ${tot} · `; })()}{new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-900 border border-white/8 px-3 py-2 rounded-lg">
                         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"/>
