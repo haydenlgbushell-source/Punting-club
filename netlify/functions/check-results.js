@@ -178,17 +178,29 @@ exports.handler = async (event) => {
       }
 
       const legs = bet.bet_legs || [];
-      const legDesc = legs.map(l => {
+      // Only search for unsettled legs — already won/lost legs don't need re-searching
+      const legsToSearch = unsettledLegs.map(l => {
         const d = l.event_date ? ` on ${l.event_date}` : '';
         return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
       }).join('\n');
 
-      const searchPrompt = `Today is ${todayStr} AEST. Search for the results of these Australian sports matches. For each match report: the final score AND the complete list of try scorers / goal scorers.
+      const year = aestDate.getUTCFullYear();
+      const searchPrompt = `Today is ${todayStr} AEST. The following Australian sports matches have already been played — search for the final results.
 
-MATCHES:
-${legDesc}
+For EACH match, do a separate search and report:
+1. The final score
+2. The complete try scorer list (NRL) OR goal scorer list (AFL) OR other relevant stats
 
-Search nrl.com or afl.com.au for each match. Report the final score and full scorer list.`;
+MATCHES TO SEARCH:
+${legsToSearch}
+
+Search each match individually using queries like:
+- "[Team A] vs [Team B] result ${year}"
+- "[Team A] vs [Team B] try scorers ${year}" (for NRL try scorer bets)
+- "[Team A] vs [Team B] goal scorers ${year}" (for AFL goal scorer bets)
+
+Check nrl.com, afl.com.au, foxsports.com.au, espn.com.au, or Google Sports.
+Report the result for EVERY match listed above — do not skip any.`;
 
       console.log(`[check-results] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
       let summary;
