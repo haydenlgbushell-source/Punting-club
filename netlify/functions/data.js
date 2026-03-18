@@ -455,7 +455,7 @@ exports.handler = async (event) => {
         const { competitionId, startDate } = payload;
         const { data, error: e } = await supabase
           .from('teams')
-          .select(`id, team_name, team_code, status, finalised, team_members(count), bets(id, overall_status, stake, estimated_return, week_number, bet_type, combined_odds, flagged, submitted_at, bet_legs(*))`)
+          .select(`id, team_name, team_code, status, finalised, team_members(user_id, role, users(first_name, last_name)), bets(id, overall_status, stake, estimated_return, week_number, bet_type, combined_odds, flagged, submitted_at, submitted_by, bet_legs(*))`)
           .eq('competition_id', competitionId)
           .neq('status', 'suspended');
         if (e) return error(e.message);
@@ -493,6 +493,15 @@ exports.handler = async (event) => {
 
         const ranked = data
           .map(team => {
+            // Build user_id → full name lookup from team members
+            const memberNameMap = {};
+            (team.team_members || []).forEach(m => {
+              if (m.user_id && m.users) {
+                memberNameMap[m.user_id] = `${m.users.first_name || ''} ${m.users.last_name || ''}`.trim() || 'Member';
+              }
+            });
+            const memberCount = team.team_members?.length || 0;
+
             // Sort bets newest week first so bets[0] in the frontend is always current
             const sortedBets = (team.bets || [])
               .map(b => ({
@@ -501,6 +510,8 @@ exports.handler = async (event) => {
                 week_number: (startDate && b.submitted_at)
                   ? calcWeekFromTimestamp(b.submitted_at, startDate)
                   : (b.week_number || 1),
+                // Attach submitter's name from team members lookup
+                submitted_by_name: b.submitted_by ? (memberNameMap[b.submitted_by] || null) : null,
                 // Re-derive status from legs so it's always accurate
                 overall_status: b.bet_legs?.length ? deriveLegStatus(b.bet_legs) : (b.overall_status || 'pending'),
                 // Sort legs by leg_number
@@ -515,7 +526,7 @@ exports.handler = async (event) => {
               const wb = sortedBets.find(b => b.week_number === i + 1);
               return wb?.overall_status === 'won' ? 'W' : wb?.overall_status === 'lost' ? 'L' : wb?.overall_status === 'partial' ? 'P' : '–';
             });
-            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString()}`, memberCount: team.team_members?.[0]?.count || 0, currentWeekBet: weekBet || null, weekHistory };
+            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString()}`, memberCount, currentWeekBet: weekBet || null, weekHistory };
           })
           .sort((a, b) => b.totalWon - a.totalWon)
           .map((team, i) => ({ ...team, rank: i + 1 }));
