@@ -26,6 +26,7 @@ export const apiGetActiveCompetitions = ()      => call('data', { action: 'get_a
 export const apiGetAllCompetitions    = ()      => call('data', { action: 'get_all_competitions' });
 export const apiCreateCompetition = (comp, adminRole) => call('data', { action: 'create_competition', ...comp, adminRole });
 export const apiUpdateCompStatus = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
+export const apiAdvanceWeek      = (id, adminRole, direction = 'forward') => call('data', { action: 'advance_week', id, adminRole, direction });
 
 // ── TEAMS ────────────────────────────────────────────────────
 export const apiGetTeam                = (teamId)                    => call('data', { action: 'get_team', teamId });
@@ -47,7 +48,7 @@ export const apiSubmitBet      = (payload)              => call('data', { action
 export const apiGetTeamBets    = (teamId, weekNumber)   => call('data', { action: 'get_team_bets', teamId, weekNumber });
 export const apiGetAllBets     = (weekNumber)           => call('data', { action: 'get_all_bets', weekNumber });
 export const apiUpdateBetResult = (betId, status, adminRole) => call('data', { action: 'update_bet_result', betId, overallStatus: status, adminRole });
-export const apiUpdateBetLeg   = (legId, status, resultNote) => call('data', { action: 'update_bet_leg', legId, status, resultNote });
+export const apiUpdateBetLeg   = (legId, status, resultNote, adminRole) => call('data', { action: 'update_bet_leg', legId, status, resultNote, adminRole });
 export const apiRejectBet      = (betId, reason, adminRole) => call('data', { action: 'reject_bet', betId, reason, adminRole });
 export const apiCorrectBet     = (betId, field, value, adminRole) => call('data', { action: 'correct_bet', betId, field, value, adminRole });
 

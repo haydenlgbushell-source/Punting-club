@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   apiSignUp, apiLogin, apiVerifySession,
-  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
+  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
@@ -169,7 +169,10 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
     :                                           'won';
 
   const allWon = status === 'won';
-  const payout = allWon ? (bet.estimatedReturn || bet.return || 'N/A') : '$0.00';
+  const estimatedReturn = bet.estimatedReturn || bet.return || 'N/A';
+  const payoutValue = status === 'lost' ? '$0.00' : estimatedReturn;
+  const payoutLabel = allWon ? 'WINNINGS' : 'POTENTIAL';
+  const payoutColor = allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#94a3b8';
 
   const titleText  = allWon ? '🏆 WINNER!' : status === 'lost' ? '❌ BUST' : status === 'partial' ? '⚡ PARTIAL' : status === 'in_progress' ? '🔴 LIVE' : '⏳ PENDING';
   const titleColor = allWon ? '#22c55e'    : status === 'lost' ? '#ef4444' : status === 'partial' ? '#eab308'   : status === 'in_progress' ? '#f97316'  : '#f59e0b';
@@ -208,9 +211,9 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
       {/* ── Stats row ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #ffffff0d' }}>
         {[
-          ['STAKE',  bet.stake,                              '#e2e8f0'],
-          ['ODDS',   bet.combinedOdds || bet.odds || 'N/A', '#f59e0b'],
-          ['PAYOUT', payout,                                 allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#22c55e'],
+          ['STAKE',       bet.stake,                              '#e2e8f0'],
+          ['ODDS',        bet.combinedOdds || bet.odds || 'N/A', '#f59e0b'],
+          [payoutLabel,   payoutValue,                            payoutColor],
         ].map(([label, value, color], i) => (
           <div key={label} style={{ padding: '12px 14px', textAlign: 'center', background: '#0d111780', borderRight: i < 2 ? '1px solid #ffffff0d' : 'none' }}>
             <div style={{ fontFamily: BC, letterSpacing: '0.12em', fontSize: 10, color: '#6b7280', marginBottom: 3 }}>{label}</div>
@@ -327,7 +330,7 @@ export default function PuntingClub() {
   const [showFinaliseModal, setShowFinaliseModal] = useState(false);
   const [depositPerMember, setDepositPerMember] = useState(null); // calculated on finalise
   const [showCreateComp, setShowCreateComp] = useState(false);
-  const [newComp, setNewComp] = useState({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
+  const [newComp, setNewComp] = useState({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' });
   const [phoneError, setPhoneError] = useState('');
 
   // Admin state
@@ -344,6 +347,8 @@ export default function PuntingClub() {
   const [adminSearch, setAdminSearch] = useState('');
   const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
+  const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
+  const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
   const [adminLoadError, setAdminLoadError] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -658,6 +663,36 @@ export default function PuntingClub() {
     catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
   };
 
+  // ── WEEK CALCULATION (Wednesday 12:00 AEST boundary) ─────────────────────
+  // A week ends every Wednesday at 12:00 AEST; a new one begins at 12:01.
+  const calcCurrentWeek = (startDate) => {
+    if (!startDate) return 1;
+    const AEST = 10 * 60 * 60 * 1000; // UTC+10 in ms
+    const nowAEST  = Date.now() + AEST;
+    const startAEST = new Date(startDate).getTime() + AEST;
+
+    // Find the first Wednesday 12:00 AEST that is strictly after startAEST
+    let boundary = new Date(startAEST);
+    boundary.setUTCHours(12, 0, 0, 0); // noon in AEST-shifted date
+    const daysToWed = (3 - boundary.getUTCDay() + 7) % 7; // 3 = Wednesday
+    boundary = new Date(boundary.getTime() + daysToWed * 86400000);
+    if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
+
+    if (nowAEST < boundary.getTime()) return 1;
+    return Math.floor((nowAEST - boundary.getTime()) / (7 * 86400000)) + 2;
+  };
+
+  // Next Wednesday 12:00 AEST cutoff from now (for display)
+  const nextWedCutoff = (() => {
+    const AEST = 10 * 60 * 60 * 1000;
+    let d = new Date(Date.now() + AEST);
+    d.setUTCHours(12, 0, 0, 0);
+    const daysToWed = (3 - d.getUTCDay() + 7) % 7;
+    d = new Date(d.getTime() + daysToWed * 86400000);
+    if (d.getTime() <= Date.now() + AEST) d = new Date(d.getTime() + 7 * 86400000);
+    return new Date(d.getTime() - AEST); // back to real UTC for display
+  })();
+
   // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
   const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-orange-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
 
@@ -679,7 +714,7 @@ export default function PuntingClub() {
     if (!code) return;
     const comp = competitions.find(c => c.code === code);
     if (!comp?.id) return;
-    const weekNum = comp.start_date ? Math.max(1, Math.floor((new Date() - new Date(comp.start_date)) / (7*24*60*60*1000)) + 1) : 1;
+    const weekNum = calcCurrentWeek(comp.start_date);
     try {
       const data = await apiGetLeaderboard(comp.id, weekNum);
       if (data?.length) {
@@ -1065,6 +1100,17 @@ export default function PuntingClub() {
     try { await apiRejectBet(id, reason, adminUser?.role); } catch(err) { console.error(err); }
   };
 
+  const overrideLegResult = async (betId, legId, status, resultNote) => {
+    const b = adminBets.find(x => x.id === betId);
+    const leg = b?.legs?.find(l => l.id === legId);
+    setAdminBets(prev => prev.map(bet => bet.id !== betId ? bet : {
+      ...bet,
+      legs: (bet.legs || []).map(l => l.id !== legId ? l : { ...l, status, result_note: resultNote, resultNote }),
+    }));
+    addAuditEntry(adminUser?.role, 'Leg Override', `${b?.team} — Leg ${leg?.leg_number}`, `${leg?.selection} → ${status}${resultNote ? ': ' + resultNote : ''}`);
+    try { await apiUpdateBetLeg(legId, status, resultNote, adminUser?.role); } catch(err) { console.error(err); }
+  };
+
   // ── ADMIN COMPETITION ACTIONS ─────────────────────────────────────────────
   const createCompetition = async (comp) => {
     if (!comp.name?.trim()) { showToast('Please enter a competition name.', 'warning'); return; }
@@ -1074,13 +1120,17 @@ export default function PuntingClub() {
     const code = genCode(6);
     const status = adminUser?.role === 'owner' ? 'active' : 'pending';
     const buyInNum = parseInt(String(comp.buyIn || comp.buy_in || '1000').replace(/[^0-9]/g, '')) || 1000;
+    const weeksCalc = comp.startDate && comp.endDate
+      ? Math.round((new Date(comp.endDate) - new Date(comp.startDate)) / (7 * 86400000))
+      : null;
+    if (!weeksCalc || weeksCalc < 1) { showToast('Please set valid start and end dates.', 'warning'); return; }
     const localComp = {
       id:         code,
       code,
       name:       comp.name.trim(),
       pub:        comp.pub.trim(),
       status,
-      weeks:      parseInt(comp.weeks) || 8,
+      weeks:      weeksCalc,
       buy_in:     buyInNum,
       buyIn:      `$${buyInNum.toLocaleString()}`,
       max_teams:  parseInt(comp.maxTeams) || 20,
@@ -1113,6 +1163,21 @@ export default function PuntingClub() {
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
     } catch(err) { console.error(err); }
+  };
+
+  const advanceWeek = async (id, direction = 'forward') => {
+    const label = direction === 'forward' ? 'Week Advanced' : 'Week Rolled Back';
+    try {
+      const updated = await apiAdvanceWeek(id, adminUser?.role, direction);
+      setAdminComps(prev => prev.map(c => c.id === id ? { ...c, start_date: updated.start_date } : c));
+      const active = await apiGetActiveCompetitions();
+      setActiveCompetitions(active);
+      await refreshLeaderboard();
+      addAuditEntry(adminUser?.role, label, id, `New start_date: ${updated.start_date}`);
+      showToast(`${label} — leaderboard updated`, 'success');
+    } catch(err) {
+      showToast(`Failed: ${err.message}`, 'error');
+    }
   };
 
   const markNotifRead = (id) => setAdminNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -1211,10 +1276,7 @@ export default function PuntingClub() {
   const currentWeekNum = (() => {
     const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
     if (!comp?.start_date) return 0;
-    const start = new Date(comp.start_date);
-    const now = new Date();
-    const weeks = Math.floor((now - start) / (7 * 24 * 60 * 60 * 1000));
-    return Math.max(0, weeks);
+    return calcCurrentWeek(comp.start_date) - 1; // 0-indexed for betting order rotation
   })();
   const currentWeekBettorIdx = currentWeekNum;
   const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)];
@@ -1445,7 +1507,14 @@ export default function PuntingClub() {
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
               <div>
                 <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-                <p className="text-gray-500 text-sm">Week 3 of 8 · Auto-checks results every 3 hours from first event start</p>
+                <p className="text-gray-500 text-sm">
+                  {(() => {
+                    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+                    const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
+                    const total = comp?.weeks || '—';
+                    return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
+                  })()}
+                </p>
                 {lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
                 {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
               </div>
@@ -2354,6 +2423,61 @@ export default function PuntingClub() {
                               <button onClick={() => setAdminBets(prev => prev.map(x => x.id === b.id ? {...x, status:'pending'} : x))} className="text-amber-500 text-xs hover:text-amber-400">Reopen dispute</button>
                             </div>
                           )}
+                          {/* Per-leg override */}
+                          {canAdmin('bets') && b.legs?.length > 0 && (
+                            <div className="border-t border-white/5">
+                              <button
+                                onClick={() => setExpandedBetId(expandedBetId === b.id ? null : b.id)}
+                                className="w-full px-4 py-2 text-left text-xs text-gray-500 hover:text-amber-400 flex items-center gap-1.5 transition-colors"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})`}
+                              </button>
+                              {expandedBetId === b.id && (
+                                <div className="px-4 pb-4 space-y-2 bg-black/30">
+                                  <p className="text-amber-400 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
+                                  {b.legs.map(leg => {
+                                    const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-amber-400';
+                                    return (
+                                      <div key={leg.id} className="bg-gray-900 border border-white/8 rounded-lg p-3">
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                          <div>
+                                            <span className="text-gray-500 text-xs">Leg {leg.leg_number} · </span>
+                                            <span className="text-white text-xs font-semibold">{leg.selection}</span>
+                                            <span className="text-gray-500 text-xs"> · {leg.market}</span>
+                                          </div>
+                                          <span className={`text-xs font-bold ${legColor}`}>{leg.status?.toUpperCase()}</span>
+                                        </div>
+                                        <div className="text-gray-600 text-xs mb-2 truncate">{leg.event}</div>
+                                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                                          {['won','lost','pending','void'].map(s => (
+                                            <button
+                                              key={s}
+                                              onClick={() => overrideLegResult(b.id, leg.id, s, legNotes[leg.id] || leg.resultNote || '')}
+                                              className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all ${
+                                                leg.status === s
+                                                  ? s === 'won' ? 'bg-green-500/30 border-green-400 text-green-300' : s === 'lost' ? 'bg-red-500/30 border-red-400 text-red-300' : 'bg-gray-500/30 border-gray-400 text-gray-300'
+                                                  : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/30 hover:text-white'
+                                              }`}
+                                            >
+                                              {s === 'won' ? '✓ Won' : s === 'lost' ? '✗ Lost' : s === 'void' ? '— Void' : '⏳ Pending'}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        <input
+                                          type="text"
+                                          placeholder="Result note (optional)"
+                                          defaultValue={leg.resultNote || ''}
+                                          onChange={e => setLegNotes(prev => ({ ...prev, [leg.id]: e.target.value }))}
+                                          className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -2399,11 +2523,16 @@ export default function PuntingClub() {
                             ))}
                             <div>
                               <label className="block text-xs font-semibold text-amber-400 mb-1">Season Length</label>
-                              <select value={newComp.weeks} onChange={e => setNewComp(prev => ({...prev, weeks: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
-                                <option value="8">8 weeks (Quarter Season)</option>
-                                <option value="16">16 weeks (Half Season)</option>
-                                <option value="32">32 weeks (Full Season)</option>
-                              </select>
+                              {(() => {
+                                const weeks = newComp.startDate && newComp.endDate
+                                  ? Math.round((new Date(newComp.endDate) - new Date(newComp.startDate)) / (7 * 86400000))
+                                  : null;
+                                return (
+                                  <div className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-400">
+                                    {weeks !== null && weeks > 0 ? <span className="text-white">{weeks} week{weeks !== 1 ? 's' : ''}</span> : <span className="text-gray-600 italic">Set start & end dates above</span>}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-gray-400">
@@ -2411,7 +2540,7 @@ export default function PuntingClub() {
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', weeks:'8', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
+                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
                         </div>
                       )}
@@ -2471,6 +2600,18 @@ export default function PuntingClub() {
                                   <div className="flex flex-col gap-1.5 flex-shrink-0">
                                     {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Approve</button>}
                                     {c.status === 'active'  && <button onClick={() => updateCompStatus(c.id || c.code, 'closed')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs">Close</button>}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={() => { if (window.confirm(`Force week rollover for "${c.name}"? This moves current bets to history and starts a new week.`)) advanceWeek(c.id, 'forward'); }}
+                                        className="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                      >⏭ Advance Week</button>
+                                    )}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={() => { if (window.confirm(`Roll back one week for "${c.name}"?`)) advanceWeek(c.id, 'back'); }}
+                                        className="bg-gray-500/10 border border-gray-500/20 text-gray-500 px-2.5 py-1 rounded-lg text-xs"
+                                      >↩ Rollback</button>
+                                    )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
                                   </div>
                                 )}
