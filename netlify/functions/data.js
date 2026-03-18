@@ -433,7 +433,7 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'get_leaderboard': {
-        const { competitionId } = payload;
+        const { competitionId, startDate } = payload;
         const { data, error: e } = await supabase
           .from('teams')
           .select(`id, team_name, team_code, status, finalised, team_members(count), bets(id, overall_status, stake, estimated_return, week_number, bet_type, combined_odds, flagged, submitted_at, bet_legs(*))`)
@@ -442,6 +442,22 @@ exports.handler = async (event) => {
         if (e) return error(e.message);
 
         const currentWeek = payload.currentWeek || 1;
+
+        // Derive which competition week a bet belongs to from its upload timestamp.
+        // Wednesday 12:00 AEST marks the boundary between weeks — same logic as the frontend.
+        const calcWeekFromTimestamp = (submittedAt, compStartDate) => {
+          if (!submittedAt || !compStartDate) return null;
+          const AEST = 10 * 60 * 60 * 1000;
+          const submittedAEST = new Date(submittedAt).getTime() + AEST;
+          const startAEST    = new Date(compStartDate).getTime() + AEST;
+          let boundary = new Date(startAEST);
+          boundary.setUTCHours(12, 0, 0, 0);
+          const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
+          boundary = new Date(boundary.getTime() + daysToWed * 86400000);
+          if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
+          if (submittedAEST < boundary.getTime()) return 1;
+          return Math.floor((submittedAEST - boundary.getTime()) / (7 * 86400000)) + 2;
+        };
 
         // Compute overall_status from actual leg statuses — keeps display in sync
         // even if the DB overall_status column hasn't been written yet
@@ -462,6 +478,10 @@ exports.handler = async (event) => {
             const sortedBets = (team.bets || [])
               .map(b => ({
                 ...b,
+                // Derive week from submitted_at timestamp — more reliable than the stored week_number
+                week_number: (startDate && b.submitted_at)
+                  ? calcWeekFromTimestamp(b.submitted_at, startDate)
+                  : (b.week_number || 1),
                 // Re-derive status from legs so it's always accurate
                 overall_status: b.bet_legs?.length ? deriveLegStatus(b.bet_legs) : (b.overall_status || 'pending'),
                 // Sort legs by leg_number
