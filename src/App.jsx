@@ -1706,170 +1706,243 @@ export default function PuntingClub() {
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
       {activeNav === 'weekly' && (() => {
-        const comp        = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
-        const totalWeeks  = comp?.weeks || 8;
-        const thisWeek    = currentWeekNum + 1;
+        const comp       = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+        const totalWeeks = comp?.weeks || 8;
+        const thisWeek   = currentWeekNum + 1;
+        const prevWeek   = thisWeek - 1;
 
-        // All bets across every team for this week
+        // ── Previous week data (the review) ─────────────────────────────
+        const prevWeekData = leaderboardTeams.map(t => {
+          const bet = (t.bets || []).find(b => b.weekNumber === prevWeek) || null;
+          return { team: t, bet, isMyTeam: t.team === myTeamName };
+        });
+        const prevBetsSubmitted  = prevWeekData.filter(d => d.bet);
+        const prevWinners        = prevBetsSubmitted.filter(d => d.bet.overallStatus === 'won');
+        const prevLosers         = prevBetsSubmitted.filter(d => d.bet.overallStatus === 'lost');
+        const prevPending        = prevBetsSubmitted.filter(d => !['won','lost','partial'].includes(d.bet.overallStatus));
+        const prevSettledCount   = prevWinners.length + prevLosers.length;
+        const prevWinRate        = prevSettledCount > 0 ? Math.round((prevWinners.length / prevSettledCount) * 100) : null;
+
+        // Biggest win last week
+        const bestPrevWin = prevWinners
+          .sort((a, b) => parseFloat((b.bet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) - parseFloat((a.bet.estimatedReturn || '0').replace(/[^0-9.]/g,'')))[0];
+
+        // My team last week
+        const myPrevData = prevWeekData.find(d => d.isMyTeam);
+
+        // ── This week data (the look-ahead) ─────────────────────────────
         const allThisWeekBets = leaderboardTeams.flatMap(t =>
           (t.bets || []).filter(b => b.weekNumber === thisWeek)
         );
-        // All bets ever (whole season)
-        const allBetsEver = leaderboardTeams.flatMap(t => t.bets || []);
-
-        // Win rate: settled bets this week
-        const settledThisWeek = allThisWeekBets.filter(b => ['won','lost','partial'].includes(b.overallStatus));
-        const wonThisWeek     = settledThisWeek.filter(b => b.overallStatus === 'won');
-        const winRate         = settledThisWeek.length > 0 ? Math.round((wonThisWeek.length / settledThisWeek.length) * 100) : null;
-
-        // Total prize money won across the entire season
-        const totalWinnings = leaderboardTeams.reduce((sum, t) => {
-          const raw = parseFloat((t.total || '$0').replace(/[^0-9.]/g, ''));
-          return sum + (isNaN(raw) ? 0 : raw);
-        }, 0);
-
-        // Biggest single win this week
-        const bestWinThisWeek = allThisWeekBets
-          .filter(b => b.overallStatus === 'won')
-          .sort((a, b) => parseFloat((b.estimatedReturn || '0').replace(/[^0-9.]/g, '')) - parseFloat((a.estimatedReturn || '0').replace(/[^0-9.]/g, '')))[0];
-        const bestWinTeam = bestWinThisWeek
-          ? leaderboardTeams.find(t => (t.bets || []).some(b => b.id === bestWinThisWeek.id))?.team
-          : null;
-
-        // Season leader
-        const leader = leaderboardTeams[0];
-
-        // Cutoff display
-        const cutoffStr = nextWedCutoff.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
-
-        // Previous week stats for commentary
-        const prevWeekBets     = leaderboardTeams.flatMap(t => (t.bets || []).filter(b => b.weekNumber === thisWeek - 1));
-        const prevSettled      = prevWeekBets.filter(b => ['won','lost'].includes(b.overallStatus));
-        const prevWinRate      = prevSettled.length > 0 ? Math.round(prevSettled.filter(b => b.overallStatus === 'won').length / prevSettled.length * 100) : null;
-
-        // Leg count distribution for insight
-        const legCounts = allBetsEver.filter(b => b.overallStatus === 'won').map(b => (b.legs || []).length);
-        const avgWinLegs = legCounts.length > 0 ? (legCounts.reduce((a, b) => a + b, 0) / legCounts.length).toFixed(1) : null;
-
-        // Teams yet to bet this week
         const teamsNoBet = leaderboardTeams.filter(t => !(t.bets || []).some(b => b.weekNumber === thisWeek));
+        const cutoffStr  = nextWedCutoff.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+
+        // Season totals
+        const totalWinnings = leaderboardTeams.reduce((sum, t) => sum + parseFloat((t.total || '$0').replace(/[^0-9.]/g,'')) || 0, 0);
+        const leader = leaderboardTeams[0];
 
         return (
           <section className="pt-28 pb-16 px-4 sm:px-6">
             <div className="max-w-5xl mx-auto">
+
+              {/* Page header */}
               <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
               <p className="text-gray-500 mb-8 text-sm">
-                Week {thisWeek} of {totalWeeks}
-                {comp?.name && <> · {comp.name}</>}
-                {' · '}Cutoff {cutoffStr}
+                Week {thisWeek} of {totalWeeks}{comp?.name ? ` · ${comp.name}` : ''}
               </p>
 
-              {/* Alert cards */}
-              <div className="grid md:grid-cols-2 gap-4 mb-8">
-                {bestWinThisWeek && bestWinTeam ? (
-                  <div className="bg-green-950/30 border border-green-500/30 rounded-xl p-5">
-                    <h3 className="font-bold text-green-400 mb-2">🎉 Big Win This Week!</h3>
-                    <p className="text-gray-300 text-sm">
-                      <strong className="text-white">{bestWinTeam}</strong> landed a {(bestWinThisWeek.legs || []).length}-leg multi for <strong className="text-green-400">{bestWinThisWeek.estimatedReturn}</strong>
-                    </p>
-                    <p className="text-gray-600 text-xs mt-2">{bestWinThisWeek.submittedAt}</p>
+              {/* ── PREVIOUS WEEK REVIEW ── */}
+              {prevWeek >= 1 ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h2 className="text-xl font-black text-white">Week {prevWeek} Review</h2>
+                    {prevWinRate !== null && (
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${prevWinRate >= 50 ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'bg-red-500/15 border-red-500/40 text-red-400'}`}>
+                        {prevWinRate}% win rate
+                      </span>
+                    )}
+                    {prevPending.length > 0 && (
+                      <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">{prevPending.length} pending</span>
+                    )}
                   </div>
-                ) : (
-                  <div className="bg-white/3 border border-white/8 rounded-xl p-5">
-                    <h3 className="font-bold text-gray-400 mb-2">🎯 No Wins Yet This Week</h3>
-                    <p className="text-gray-500 text-sm">{allThisWeekBets.length} bet{allThisWeekBets.length !== 1 ? 's' : ''} submitted — results pending.</p>
-                    {leader && <p className="text-gray-600 text-xs mt-2">Current leader: <span className="text-amber-400">{leader.team}</span> · {leader.total}</p>}
-                  </div>
-                )}
-                <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-5">
-                  <h3 className="font-bold text-amber-400 mb-2">⏰ Betting Reminder</h3>
-                  <p className="text-gray-300 text-sm">
-                    Week {thisWeek} deadline: <strong className="text-white">{cutoffStr}</strong>
-                  </p>
-                  {currentBettor && (
-                    <p className="text-amber-400 text-xs mt-2">
-                      It's <strong>{currentBettor}</strong>'s turn to place the bet!
-                    </p>
-                  )}
-                  {teamsNoBet.length > 0 && (
-                    <p className="text-gray-600 text-xs mt-1">
-                      {teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit
-                    </p>
-                  )}
-                </div>
-              </div>
 
-              {/* Key stats */}
-              <div className="grid grid-cols-3 gap-4 mb-8">
-                {[
-                  ['Bets This Week', allThisWeekBets.length || '—', 'text-amber-400'],
-                  ['Win Rate', winRate !== null ? `${winRate}%` : '—', 'text-green-400'],
-                  ['Season Winnings', totalWinnings > 0 ? `$${totalWinnings.toLocaleString()}` : '$0', 'text-blue-400'],
-                ].map(([l, v, c]) => (
-                  <div key={l} className="bg-white/3 border border-white/8 rounded-xl p-4 text-center">
-                    <p className="text-gray-500 text-xs mb-1">{l}</p>
-                    <p className={`text-2xl font-black ${c}`}>{v}</p>
-                  </div>
-                ))}
-              </div>
+                  {/* My team callout */}
+                  {myPrevData && (
+                    <div className={`rounded-xl p-5 mb-4 border-2 ${
+                      myPrevData.bet?.overallStatus === 'won' ? 'bg-green-950/30 border-green-500/40' :
+                      myPrevData.bet?.overallStatus === 'lost' ? 'bg-red-950/30 border-red-500/30' :
+                      myPrevData.bet ? 'bg-amber-950/20 border-amber-500/20' : 'bg-white/3 border-white/8'
+                    }`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Your Team — {myPrevData.team.team}</p>
+                          {myPrevData.bet ? (
+                            <>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-2xl font-black ${myPrevData.bet.overallStatus === 'won' ? 'text-green-400' : myPrevData.bet.overallStatus === 'lost' ? 'text-red-400' : 'text-amber-400'}`}>
+                                  {myPrevData.bet.overallStatus === 'won' ? '🏆 WON!' : myPrevData.bet.overallStatus === 'lost' ? '❌ Lost' : myPrevData.bet.overallStatus === 'partial' ? '⚡ Partial' : '⏳ Pending'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-300">
+                                {myPrevData.bet.type} · Stake: <span className="text-white font-semibold">{myPrevData.bet.stake}</span>
+                                {myPrevData.bet.overallStatus === 'won' && <> · Return: <span className="text-green-400 font-bold">{myPrevData.bet.estimatedReturn}</span></>}
+                                {myPrevData.bet.submittedBy && <> · Placed by <span className="text-amber-400">{myPrevData.bet.submittedBy}</span></>}
+                              </p>
+                              {(myPrevData.bet.legs || []).length > 0 && (
+                                <div className="flex gap-1 mt-2 flex-wrap">
+                                  {myPrevData.bet.legs.map((leg, li) => {
+                                    const lc = leg.status === 'won' ? 'bg-green-500/30 border-green-500/50 text-green-300' : leg.status === 'lost' ? 'bg-red-500/30 border-red-500/50 text-red-300' : 'bg-white/5 border-white/10 text-gray-500';
+                                    return <span key={li} className={`text-xs px-2 py-0.5 rounded border ${lc}`}>{leg.selection}</span>;
+                                  })}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-gray-500 text-sm italic">No bet submitted for Week {prevWeek}</p>
+                          )}
+                        </div>
+                        {myPrevData.team.rank && (
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-xs text-gray-500">Season rank</p>
+                            <p className="text-2xl font-black text-amber-400">#{myPrevData.team.rank}</p>
+                            <p className="text-xs text-gray-500">{myPrevData.team.total}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Leaderboard snapshot */}
-              {leaderboardTeams.length > 0 && (
-                <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-6">
-                  <h3 className="font-bold text-amber-400 mb-4">🏆 Season Standings</h3>
-                  <div className="space-y-2">
-                    {leaderboardTeams.slice(0, 5).map((t, i) => {
-                      const thisWeekBet  = (t.bets || []).find(b => b.weekNumber === thisWeek);
-                      const statusColor  = thisWeekBet?.overallStatus === 'won' ? 'text-green-400' : thisWeekBet?.overallStatus === 'lost' ? 'text-red-400' : 'text-gray-500';
-                      const statusLabel  = thisWeekBet?.overallStatus === 'won' ? 'Won' : thisWeekBet?.overallStatus === 'lost' ? 'Lost' : thisWeekBet ? 'Pending' : 'No bet';
-                      return (
-                        <div key={t.id} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${i === 0 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-black/20'}`}>
-                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${i === 0 ? 'bg-amber-500 text-black' : 'bg-white/5 text-gray-400'}`}>{i + 1}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate">{t.team}</p>
-                            <div className="flex gap-1 mt-0.5">
-                              {(t.weekHistory || []).slice(-6).map((r, wi) => (
-                                <span key={wi} className={`w-4 h-4 rounded text-xs flex items-center justify-center font-bold ${r === 'W' ? 'bg-green-500/30 text-green-400' : r === 'L' ? 'bg-red-500/30 text-red-400' : 'bg-white/5 text-gray-600'}`}>{r || '–'}</span>
+                  {/* All teams results */}
+                  <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-6">
+                    <h3 className="font-bold text-amber-400 mb-4">How Everyone Did — Week {prevWeek}</h3>
+                    {prevBetsSubmitted.length === 0 ? (
+                      <p className="text-gray-600 text-sm italic">No bets were submitted last week.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Winners first */}
+                        {prevWinners.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">🏆 Winners</p>
+                            <div className="space-y-2">
+                              {prevWinners.map(({ team: t, bet }) => (
+                                <div key={t.id} className="bg-green-950/20 border border-green-500/15 rounded-lg px-3 py-2.5 flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-sm text-white">{t.team}</span>
+                                      {t.team === myTeamName && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">You</span>}
+                                      <span className="text-xs text-gray-500">{bet.type} · {(bet.legs||[]).length} leg{(bet.legs||[]).length !== 1 ? 's' : ''}</span>
+                                      {bet.submittedBy && <span className="text-xs text-gray-600">by {bet.submittedBy}</span>}
+                                    </div>
+                                    {(bet.legs||[]).length > 0 && (
+                                      <div className="flex gap-1 mt-1.5 flex-wrap">
+                                        {bet.legs.map((leg, li) => (
+                                          <span key={li} className="text-xs bg-green-500/10 border border-green-500/20 text-green-300 px-1.5 py-0.5 rounded">{leg.selection}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="text-green-400 font-bold text-sm">{bet.estimatedReturn}</p>
+                                    <p className="text-gray-600 text-xs">from {bet.stake}</p>
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-amber-400 font-bold text-sm">{t.total}</p>
-                            <p className={`text-xs ${statusColor}`}>{statusLabel}</p>
+                        )}
+
+                        {/* Losers */}
+                        {prevLosers.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">❌ Bust</p>
+                            <div className="space-y-2">
+                              {prevLosers.map(({ team: t, bet }) => (
+                                <div key={t.id} className="bg-red-950/10 border border-red-500/10 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-sm text-gray-300">{t.team}</span>
+                                    {t.team === myTeamName && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">You</span>}
+                                    <span className="text-xs text-gray-600">{bet.type} · {(bet.legs||[]).length} legs</span>
+                                    {bet.submittedBy && <span className="text-xs text-gray-600">by {bet.submittedBy}</span>}
+                                  </div>
+                                  <p className="text-red-400 text-sm font-semibold flex-shrink-0">{bet.stake} lost</p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        )}
+
+                        {/* Pending */}
+                        {prevPending.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">⏳ Still Pending</p>
+                            <div className="space-y-1">
+                              {prevPending.map(({ team: t, bet }) => (
+                                <div key={t.id} className="bg-amber-950/10 border border-amber-500/10 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+                                  <span className="text-sm text-gray-400">{t.team}</span>
+                                  <span className="text-xs text-amber-400">{bet.type}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No bet */}
+                        {prevWeekData.filter(d => !d.bet).length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">— No Bet Submitted</p>
+                            <div className="flex flex-wrap gap-2">
+                              {prevWeekData.filter(d => !d.bet).map(({ team: t }) => (
+                                <span key={t.id} className="text-xs text-gray-600 bg-white/3 border border-white/5 rounded px-2 py-1">{t.team}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Key stat strip for previous week */}
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    {[
+                      ['Week ' + prevWeek + ' Bets', prevBetsSubmitted.length || '—', 'text-amber-400'],
+                      ['Win Rate', prevWinRate !== null ? `${prevWinRate}%` : '—', prevWinRate !== null && prevWinRate >= 50 ? 'text-green-400' : 'text-red-400'],
+                      ['Season Pot', totalWinnings > 0 ? `$${totalWinnings.toLocaleString()}` : '$0', 'text-blue-400'],
+                    ].map(([l, v, c]) => (
+                      <div key={l} className="bg-white/3 border border-white/8 rounded-xl p-4 text-center">
+                        <p className="text-gray-500 text-xs mb-1">{l}</p>
+                        <p className={`text-2xl font-black ${c}`}>{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-8 text-center">
+                  <p className="text-gray-500 text-sm">This is Week 1 — no previous week to review yet.</p>
                 </div>
               )}
 
-              {/* Commentary */}
-              <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-6">
-                <h3 className="font-bold text-amber-400 mb-3">📊 Week {thisWeek} Snapshot</h3>
-                <div className="text-sm text-gray-300 space-y-2 leading-relaxed">
-                  {allThisWeekBets.length === 0 ? (
-                    <p>No bets have been submitted yet for Week {thisWeek}. Deadline is {cutoffStr}.</p>
-                  ) : (
-                    <>
-                      <p>
-                        Week {thisWeek} of {totalWeeks}: <strong className="text-white">{allThisWeekBets.length}</strong> bet{allThisWeekBets.length !== 1 ? 's' : ''} submitted across {leaderboardTeams.filter(t => (t.bets || []).some(b => b.weekNumber === thisWeek)).length} team{leaderboardTeams.filter(t => (t.bets || []).some(b => b.weekNumber === thisWeek)).length !== 1 ? 's' : ''}.
-                        {winRate !== null && <> Current win rate: <strong className={winRate >= 50 ? 'text-green-400' : 'text-red-400'}>{winRate}%</strong>.</>}
-                      </p>
-                      {prevWinRate !== null && (
-                        <p>
-                          <strong className="text-white">vs last week:</strong> Week {thisWeek - 1} finished with a {prevWinRate}% win rate across {prevSettled.length} settled bet{prevSettled.length !== 1 ? 's' : ''}.
-                          {prevWinRate > (winRate ?? 0) ? ' This week is tracking below that pace.' : prevWinRate < (winRate ?? 0) ? ' This week is tracking ahead of that pace.' : ' Tracking at the same pace.'}
-                        </p>
-                      )}
-                      {avgWinLegs && (
-                        <p><strong className="text-white">Key insight:</strong> Winning bets this season average <strong className="text-amber-400">{avgWinLegs} legs</strong>.</p>
-                      )}
-                      {leader && (
-                        <p><strong className="text-white">Leading:</strong> {leader.team} at {leader.total} — {teamsNoBet.length > 0 ? `${teamsNoBet.length} team${teamsNoBet.length !== 1 ? 's' : ''} yet to bet this week.` : 'all teams have submitted this week.'}</p>
-                      )}
-                    </>
-                  )}
+              {/* ── THIS WEEK OUTLOOK ── */}
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-xl font-black text-white">Week {thisWeek} — Up Next</h2>
+                <span className="text-xs text-gray-500 bg-white/5 border border-white/8 px-2 py-0.5 rounded-full">Deadline {cutoffStr}</span>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-5">
+                  <h3 className="font-bold text-amber-400 mb-2">⏰ Betting Window Open</h3>
+                  {currentBettor && <p className="text-gray-300 text-sm">It's <strong className="text-white">{currentBettor}</strong>'s turn to place the bet.</p>}
+                  <p className="text-gray-500 text-xs mt-2">Deadline: <span className="text-white">{cutoffStr}</span></p>
+                  {teamsNoBet.length > 0 && <p className="text-gray-600 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
+                </div>
+                <div className="bg-white/3 border border-white/8 rounded-xl p-5">
+                  <h3 className="font-bold text-amber-400 mb-2">🏆 Season Standings</h3>
+                  {leaderboardTeams.slice(0, 3).map((t, i) => (
+                    <div key={t.id} className="flex items-center gap-2 py-1">
+                      <span className={`text-xs font-black w-5 ${i === 0 ? 'text-amber-400' : 'text-gray-500'}`}>#{i + 1}</span>
+                      <span className={`text-sm flex-1 truncate ${t.team === myTeamName ? 'text-amber-300 font-bold' : 'text-gray-300'}`}>{t.team}{t.team === myTeamName ? ' (You)' : ''}</span>
+                      <span className="text-amber-400 text-xs font-bold">{t.total}</span>
+                    </div>
+                  ))}
+                  {leaderboardTeams.length > 3 && <p className="text-gray-600 text-xs mt-1">+{leaderboardTeams.length - 3} more teams</p>}
                 </div>
               </div>
             </div>
