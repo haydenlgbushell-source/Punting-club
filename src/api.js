@@ -25,8 +25,9 @@ export const apiVerifySession  = (userId)        => call('auth', { action: 'veri
 export const apiGetActiveCompetitions = ()      => call('data', { action: 'get_active_competitions' });
 export const apiGetAllCompetitions    = ()      => call('data', { action: 'get_all_competitions' });
 export const apiCreateCompetition = (comp, adminRole) => call('data', { action: 'create_competition', ...comp, adminRole });
-export const apiUpdateCompStatus = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
-export const apiAdvanceWeek      = (id, adminRole, direction = 'forward') => call('data', { action: 'advance_week', id, adminRole, direction });
+export const apiUpdateCompStatus      = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
+export const apiUpdateCompetition     = (id, fields, adminRole) => call('data', { action: 'update_competition', id, ...fields, adminRole });
+export const apiAdvanceWeek           = (id, adminRole, direction = 'forward') => call('data', { action: 'advance_week', id, adminRole, direction });
 
 // ── TEAMS ────────────────────────────────────────────────────
 export const apiGetTeam                = (teamId)                    => call('data', { action: 'get_team', teamId });

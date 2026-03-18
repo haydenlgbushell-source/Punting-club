@@ -76,6 +76,25 @@ exports.handler = async (event) => {
         return json(data);
       }
 
+      case 'update_competition': {
+        const { id, name, pub, buyIn, maxTeams, startDate, endDate, adminRole } = payload;
+        const weeksCalc = startDate && endDate
+          ? Math.round((new Date(endDate) - new Date(startDate)) / (7 * 86400000))
+          : null;
+        const updates = {};
+        if (name)      updates.name       = name.trim();
+        if (pub)       updates.pub        = pub.trim();
+        if (buyIn)     updates.buy_in     = parseInt(String(buyIn).replace(/[^0-9]/g, '')) || undefined;
+        if (maxTeams)  updates.max_teams  = parseInt(maxTeams) || undefined;
+        if (startDate) updates.start_date = startDate;
+        if (endDate)   updates.end_date   = endDate;
+        if (weeksCalc && weeksCalc > 0) updates.weeks = weeksCalc;
+        const { data, error: e } = await supabase.from('competitions').update(updates).eq('id', id).select().single();
+        if (e) return error(e.message);
+        await addAudit(adminRole, 'Competition Updated', data.name, Object.keys(updates).join(', '));
+        return json(data);
+      }
+
       case 'advance_week': {
         // Shift start_date back by 7 days so calcCurrentWeek returns week+1.
         // direction: 'forward' (default) or 'back' to undo.

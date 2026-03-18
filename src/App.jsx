@@ -5,7 +5,7 @@ import {
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
-  apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog,
+  apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
@@ -350,6 +350,8 @@ export default function PuntingClub() {
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
+  const [editingCompId, setEditingCompId] = useState(null);   // comp being edited inline
+  const [editCompForm, setEditCompForm] = useState({});        // edit form values
   const [adminLoadError, setAdminLoadError] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
@@ -1156,6 +1158,19 @@ export default function PuntingClub() {
       console.warn('Supabase save failed (competition saved locally only):', err.message);
     }
   };
+  const updateCompetition = async (id, fields) => {
+    try {
+      const updated = await apiUpdateCompetition(id, fields, adminUser?.role);
+      setAdminComps(prev => prev.map(c => (c.id === id || c.code === id) ? { ...c, ...updated } : c));
+      addAuditEntry(adminUser?.role, 'Competition Updated', id, Object.keys(fields).join(', '));
+      const active = await apiGetActiveCompetitions();
+      setActiveCompetitions(active);
+      setEditingCompId(null);
+      showToast('Competition updated', 'success');
+    } catch (err) {
+      showToast(`Update failed: ${err.message}`, 'error');
+    }
+  };
   const updateCompStatus = async (id, status) => {
     setAdminComps(prev => prev.map(c => c.id === id ? { ...c, status } : c));
     addAuditEntry(adminUser?.role, `Competition ${status}`, id, '');
@@ -1631,13 +1646,11 @@ export default function PuntingClub() {
                           ) : <span className="text-gray-700 text-xs italic">No bet submitted</span>
                         ) : (
                           // Season view — week history dots
-                          <div className="flex items-center gap-1.5">
-                            {['W1','W2','W3'].map((wk, wi) => {
-                              const result = team.weekHistory?.[wi];
-                              const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : 'bg-white/5 border-white/10 text-gray-600';
-                              return <div key={wk} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
-                            })}
-                            <span className="text-gray-600 text-xs ml-1">+ {Math.max(0, 8 - 3)} more</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {team.weekHistory?.length > 0 ? team.weekHistory.map((result, wi) => {
+                              const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-white/5 border-white/10 text-gray-600';
+                              return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
+                            }) : <span className="text-gray-700 text-xs italic">No history yet</span>}
                             <span className="text-amber-400 font-bold text-sm ml-auto">{team.total}</span>
                           </div>
                         )}
@@ -2618,10 +2631,33 @@ export default function PuntingClub() {
                                       >↩ Rollback</button>
                                     )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '' }); }} className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                   </div>
                                 )}
                               </div>
                             </div>
+                            {/* Inline edit form */}
+                            {editingCompId === c.id && (
+                              <div className="border-t border-amber-500/20 bg-black/30 px-4 py-4">
+                                <p className="text-xs font-bold text-amber-400 mb-3">Edit Competition</p>
+                                <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                                  {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date']].map(([l,k,t]) => (
+                                    <div key={k}>
+                                      <label className="block text-xs text-gray-500 mb-1">{l}</label>
+                                      <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                                    </div>
+                                  ))}
+                                </div>
+                                {editCompForm.startDate && editCompForm.endDate && (() => {
+                                  const w = Math.round((new Date(editCompForm.endDate) - new Date(editCompForm.startDate)) / (7 * 86400000));
+                                  return w > 0 ? <p className="text-xs text-gray-500 mb-3">Season length: <span className="text-white">{w} weeks</span></p> : null;
+                                })()}
+                                <div className="flex gap-2">
+                                  <button onClick={() => setEditingCompId(null)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
+                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate })} className="flex-1 bg-amber-500 text-black font-bold py-2 rounded-lg text-sm">Save Changes</button>
+                                </div>
+                              </div>
+                            )}
                             {/* Registered teams list */}
                             {showTeams && teamCount > 0 && (
                               <div className="border-t border-white/5 bg-black/20 px-4 py-3">
