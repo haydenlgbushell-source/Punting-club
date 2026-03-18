@@ -910,10 +910,10 @@ export default function PuntingClub() {
     refreshLeaderboard(currentUser.competitionCode, activeCompetitions);
   }, [currentUser?.competitionCode, activeCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch leaderboard from DB when user navigates to leaderboard tab
+  // Re-fetch leaderboard from DB when user navigates to leaderboard or weekly summary tab
   // (picks up results written by the scheduled check-results function)
   useEffect(() => {
-    if (activeNav === 'leaderboard' && currentUser?.competitionCode) {
+    if ((activeNav === 'leaderboard' || activeNav === 'weekly') && currentUser?.competitionCode) {
       refreshLeaderboard();
     }
   }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
