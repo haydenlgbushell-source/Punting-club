@@ -1520,16 +1520,6 @@ export default function PuntingClub() {
           : ['Results update automatically · Click "Check Results" to refresh · Expand a team row to see the full bet slip'];
         return (
         <section className="pt-28 pb-16 px-0 sm:px-0">
-          {/* Scrolling results ticker */}
-          <div style={{ background: '#111827', borderBottom: '1px solid #1f2937', overflow: 'hidden', whiteSpace: 'nowrap', height: 34, display: 'flex', alignItems: 'center' }}>
-            <div className="bc-ticker">
-              {[...ticker, ...ticker].map((msg, i) => (
-                <span key={i} style={{ fontFamily: BC, fontWeight: 600, fontSize: 12, letterSpacing: '0.05em', color: '#f59e0b', padding: '0 28px' }}>
-                  {msg} &nbsp;•
-                </span>
-              ))}
-            </div>
-          </div>
           <div className="max-w-5xl mx-auto px-2 sm:px-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
