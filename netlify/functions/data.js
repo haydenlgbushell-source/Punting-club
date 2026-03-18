@@ -386,9 +386,10 @@ exports.handler = async (event) => {
       }
 
       case 'update_bet_leg': {
-        const { legId, status, resultNote } = payload;
-        const { data, error: e } = await supabase.from('bet_legs').update({ status, result_note: resultNote, updated_at: new Date().toISOString() }).eq('id', legId).select().single();
+        const { legId, status, resultNote, adminRole } = payload;
+        const { data, error: e } = await supabase.from('bet_legs').update({ status, result_note: resultNote, updated_at: new Date().toISOString() }).eq('id', legId).select('*, bets(id, teams(team_name))').single();
         if (e) return error(e.message);
+        if (adminRole) await addAudit(adminRole, 'Leg Override', `${data.bets?.teams?.team_name} — ${data.selection}`, `Status → ${status}${resultNote ? ': ' + resultNote : ''}`);
         return json(data);
       }
 

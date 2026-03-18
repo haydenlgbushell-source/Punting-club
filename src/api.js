@@ -47,7 +47,7 @@ export const apiSubmitBet      = (payload)              => call('data', { action
 export const apiGetTeamBets    = (teamId, weekNumber)   => call('data', { action: 'get_team_bets', teamId, weekNumber });
 export const apiGetAllBets     = (weekNumber)           => call('data', { action: 'get_all_bets', weekNumber });
 export const apiUpdateBetResult = (betId, status, adminRole) => call('data', { action: 'update_bet_result', betId, overallStatus: status, adminRole });
-export const apiUpdateBetLeg   = (legId, status, resultNote) => call('data', { action: 'update_bet_leg', legId, status, resultNote });
+export const apiUpdateBetLeg   = (legId, status, resultNote, adminRole) => call('data', { action: 'update_bet_leg', legId, status, resultNote, adminRole });
 export const apiRejectBet      = (betId, reason, adminRole) => call('data', { action: 'reject_bet', betId, reason, adminRole });
 export const apiCorrectBet     = (betId, field, value, adminRole) => call('data', { action: 'correct_bet', betId, field, value, adminRole });
 
