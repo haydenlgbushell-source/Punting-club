@@ -427,7 +427,7 @@ export default function PuntingClub() {
       const myTeam = teams.find(t => t.myRole !== 'pending') || teams[0];
       // competitions may be nested as object or array depending on join
       const compCode = myTeam?.competitions?.code || (Array.isArray(myTeam?.competitions) ? myTeam.competitions[0]?.code : null);
-      const sessionUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode };
+      const sessionUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode, allTeamIds: teams.filter(t => t.myRole !== 'pending').map(t => t.id) };
       setCurrentUser(sessionUser);
       setCurrentTeamId(myTeam?.id || null);
       setIsLoggedIn(true);
@@ -435,7 +435,7 @@ export default function PuntingClub() {
       setLoginPhone(''); setLoginPassword('');
       if (myTeam?.id) setActiveNav('team');
       // Persist session so refresh doesn't log out
-      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok' })); } catch(e) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok', allTeamIds: teams.filter(t => t.myRole !== 'pending').map(t => t.id) })); } catch(e) {}
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
@@ -792,7 +792,7 @@ export default function PuntingClub() {
         const teamId = sess?.teamId;
         if (userId && !String(userId).startsWith('local_') && (!teamId || !String(teamId).startsWith('local_'))) {
           // Optimistically restore from cache for instant UI
-          const restoredUser = { ...sess.user, teamId: sess.teamId, teamCode: sess.teamCode, teamName: sess.teamName, role: sess.role, competitionCode: sess.competitionCode, firstName: sess.user.first_name, lastName: sess.user.last_name };
+          const restoredUser = { ...sess.user, teamId: sess.teamId, teamCode: sess.teamCode, teamName: sess.teamName, role: sess.role, competitionCode: sess.competitionCode, firstName: sess.user.first_name, lastName: sess.user.last_name, allTeamIds: sess.allTeamIds || [sess.teamId].filter(Boolean) };
           setCurrentUser(restoredUser);
           setCurrentTeamId(sess.teamId || null);
           setIsLoggedIn(true);
@@ -808,10 +808,11 @@ export default function PuntingClub() {
             const { user, teams } = result;
             const myTeam = (teams || []).find(t => t.myRole !== 'pending') || (teams || [])[0];
             const compCode = myTeam?.competitions?.code || (Array.isArray(myTeam?.competitions) ? myTeam.competitions[0]?.code : null);
-            const freshUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode };
+            const allTeamIds = (teams || []).filter(t => t.myRole !== 'pending').map(t => t.id);
+            const freshUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode, allTeamIds };
             setCurrentUser(freshUser);
             setCurrentTeamId(myTeam?.id || null);
-            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok' })); } catch(_) {}
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', allTeamIds })); } catch(_) {}
           }).catch(() => {
             // Server unreachable — keep cached session, data will load via normal effects
           });
@@ -1255,6 +1256,18 @@ export default function PuntingClub() {
 
   const submitBet = async () => {
     if (!selectedTeamForBet) { showToast('Please select a team before submitting.', 'warning'); return; }
+    // Enforce $50/week total stake cap across all bets for this team this week
+    const targetTeam = leaderboardTeams.find(t => t.team === selectedTeamForBet);
+    const weeklyUsed = (targetTeam?.bets || [])
+      .filter(b => b.weekNumber === currentWeekNum + 1)
+      .reduce((sum, b) => sum + parseFloat((b.stake || '0').replace(/[^0-9.]/g, '')), 0);
+    const newStake = parseFloat((analyzedBet?.stake || '0').replace(/[^0-9.]/g, ''));
+    const weeklyTotal = weeklyUsed + newStake;
+    if (weeklyTotal > WEEK_BUDGET) {
+      const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed).toFixed(2);
+      showToast(`Weekly limit exceeded — $${weeklyUsed.toFixed(2)} already staked this week. Only $${remaining} remaining.`, 'warning');
+      return;
+    }
     const newBet = { type: analyzedBet.betType, stake: analyzedBet.stake, combinedOdds: analyzedBet.combinedOdds, estimatedReturn: analyzedBet.estimatedReturn, submissionValid: analyzedBet.submissionValid, legs: analyzedBet.legs, overallStatus: 'pending', submittedAt: analyzedBet.timestamp };
     // Optimistic UI update
     setLeaderboardTeams(prev => prev.map(t => t.team === selectedTeamForBet ? { ...t, bets: [...t.bets, newBet] } : t));
@@ -3236,13 +3249,29 @@ export default function PuntingClub() {
                   </div>
                 </div>
                 <BetSlipCard bet={{ ...analyzedBet, type: analyzedBet.betType, overallStatus: 'pending' }} />
-                <div>
-                  <label className="block text-xs font-semibold text-amber-400 mb-1.5">Submit for team *</label>
-                  <select value={selectedTeamForBet} onChange={e => setSelectedTeamForBet(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50">
-                    <option value="">Choose a team…</option>
-                    {leaderboardTeams.map(t => <option key={t.team} value={t.team}>{t.team}</option>)}
-                  </select>
-                </div>
+                {(() => {
+                  const myTeams = leaderboardTeams.filter(t => currentUser?.allTeamIds?.includes(t.id) || t.team === myTeamName);
+                  const selectedTeam = myTeams.find(t => t.team === selectedTeamForBet);
+                  const weeklyUsed = selectedTeam
+                    ? (selectedTeam.bets || []).filter(b => b.weekNumber === currentWeekNum + 1).reduce((sum, b) => sum + parseFloat((b.stake || '0').replace(/[^0-9.]/g, '')), 0)
+                    : 0;
+                  const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed);
+                  return (
+                    <div>
+                      <label className="block text-xs font-semibold text-amber-400 mb-1.5">Submit for team *</label>
+                      <select value={selectedTeamForBet} onChange={e => setSelectedTeamForBet(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50">
+                        <option value="">Choose a team…</option>
+                        {myTeams.map(t => <option key={t.team} value={t.team}>{t.team}</option>)}
+                      </select>
+                      {selectedTeamForBet && (
+                        <div className={`mt-2 flex items-center justify-between text-xs px-1 ${remaining <= 0 ? 'text-red-400' : remaining < 25 ? 'text-amber-400' : 'text-gray-500'}`}>
+                          <span>Weekly budget used: <strong>${weeklyUsed.toFixed(2)}</strong> of ${WEEK_BUDGET}</span>
+                          <span className="font-semibold">${remaining.toFixed(2)} remaining</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-3">
                   <button onClick={resetBetAnalyzer} className="flex-1 border border-amber-500/40 hover:bg-amber-500/10 text-amber-400 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
                   <button onClick={submitBet} className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2.5 rounded-xl text-sm">Submit Bet ✓</button>
