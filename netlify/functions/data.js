@@ -51,20 +51,79 @@ exports.handler = async (event) => {
       }
 
       case 'create_competition': {
-        const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, adminRole } = payload;
+        const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
         const status = adminRole === 'owner' ? 'active' : 'pending';
         const code   = genCode(6);
         const { data, error: e } = await supabase.from('competitions').insert({
           code, name, pub, status,
-          weeks:     parseInt(weeks) || 8,
-          buy_in:    parseInt(String(buyIn).replace(/[^0-9]/g, '')) || 1000,
-          max_teams: parseInt(maxTeams) || 20,
+          weeks:      parseInt(weeks) || 8,
+          buy_in:     parseInt(String(buyIn).replace(/[^0-9]/g, '')) || 1000,
+          max_teams:  parseInt(maxTeams) || 20,
           start_date: startDate || null,
           end_date:   endDate   || null,
-          jackpot:   0,
+          jackpot:    0,
+          is_private: isPrivate ? true : false,
         }).select().single();
         if (e) return error(e.message);
-        await addAudit(adminRole, 'Competition Created', name, `Code: ${code}`);
+        await addAudit(adminRole, 'Competition Created', name, `Code: ${code}, Private: ${isPrivate ? 'yes' : 'no'}`);
+        return json(data);
+      }
+
+      case 'request_competition': {
+        const { contactName, contactPhone, contactEmail, pubName, compName, estimatedTeams, preferredStartDate, preferredEndDate, buyIn, isPrivate, notes } = payload;
+        const requestCode = genCode(8);
+        const { data, error: e } = await supabase.from('competition_requests').insert({
+          request_code:          requestCode,
+          contact_name:          contactName || '',
+          contact_phone:         contactPhone || '',
+          contact_email:         contactEmail || '',
+          pub_name:              pubName || '',
+          comp_name:             compName || '',
+          estimated_teams:       parseInt(estimatedTeams) || null,
+          preferred_start_date:  preferredStartDate || null,
+          preferred_end_date:    preferredEndDate || null,
+          buy_in:                parseInt(String(buyIn || '0').replace(/[^0-9]/g, '')) || null,
+          is_private:            isPrivate ? true : false,
+          notes:                 notes || '',
+          status:                'requested',
+        }).select().single();
+        if (e) return error(e.message);
+        return json(data);
+      }
+
+      case 'get_competition_requests': {
+        const { adminRole } = payload;
+        if (!adminRole) return error('Admin access required', 403);
+        const { data, error: e } = await supabase
+          .from('competition_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (e) return error(e.message);
+        return json(data || []);
+      }
+
+      case 'update_competition_request': {
+        const { id, status: reqStatus, adminRole } = payload;
+        if (!adminRole) return error('Admin access required', 403);
+        const { data, error: e } = await supabase
+          .from('competition_requests')
+          .update({ status: reqStatus })
+          .eq('id', id)
+          .select().single();
+        if (e) return error(e.message);
+        await addAudit(adminRole, `Competition Request ${reqStatus}`, data.comp_name, `Contact: ${data.contact_name}`);
+        return json(data);
+      }
+
+      case 'get_competition_by_code': {
+        const { code } = payload;
+        const { data, error: e } = await supabase
+          .from('competitions')
+          .select('id, name, pub, code, status, buy_in, max_teams, start_date, end_date, is_private, weeks')
+          .eq('code', code.toUpperCase())
+          .single();
+        if (e) return error('Competition not found');
+        if (data.status !== 'active') return error('This competition is not currently active');
         return json(data);
       }
 
@@ -77,18 +136,19 @@ exports.handler = async (event) => {
       }
 
       case 'update_competition': {
-        const { id, name, pub, buyIn, maxTeams, startDate, endDate, adminRole } = payload;
+        const { id, name, pub, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
         const weeksCalc = startDate && endDate
           ? Math.round((new Date(endDate) - new Date(startDate)) / (7 * 86400000))
           : null;
         const updates = {};
-        if (name)      updates.name       = name.trim();
-        if (pub)       updates.pub        = pub.trim();
-        if (buyIn)     updates.buy_in     = parseInt(String(buyIn).replace(/[^0-9]/g, '')) || undefined;
-        if (maxTeams)  updates.max_teams  = parseInt(maxTeams) || undefined;
-        if (startDate) updates.start_date = startDate;
-        if (endDate)   updates.end_date   = endDate;
+        if (name)                updates.name       = name.trim();
+        if (pub)                 updates.pub        = pub.trim();
+        if (buyIn)               updates.buy_in     = parseInt(String(buyIn).replace(/[^0-9]/g, '')) || undefined;
+        if (maxTeams)            updates.max_teams  = parseInt(maxTeams) || undefined;
+        if (startDate)           updates.start_date = startDate;
+        if (endDate)             updates.end_date   = endDate;
         if (weeksCalc && weeksCalc > 0) updates.weeks = weeksCalc;
+        if (isPrivate !== undefined) updates.is_private = isPrivate;
         const { data, error: e } = await supabase.from('competitions').update(updates).eq('id', id).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, 'Competition Updated', data.name, Object.keys(updates).join(', '));
