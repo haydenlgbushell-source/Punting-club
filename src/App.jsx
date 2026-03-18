@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   apiSignUp, apiLogin, apiVerifySession,
-  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus,
+  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
@@ -1159,6 +1159,21 @@ export default function PuntingClub() {
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
     } catch(err) { console.error(err); }
+  };
+
+  const advanceWeek = async (id, direction = 'forward') => {
+    const label = direction === 'forward' ? 'Week Advanced' : 'Week Rolled Back';
+    try {
+      const updated = await apiAdvanceWeek(id, adminUser?.role, direction);
+      setAdminComps(prev => prev.map(c => c.id === id ? { ...c, start_date: updated.start_date } : c));
+      const active = await apiGetActiveCompetitions();
+      setActiveCompetitions(active);
+      await refreshLeaderboard();
+      addAuditEntry(adminUser?.role, label, id, `New start_date: ${updated.start_date}`);
+      showToast(`${label} — leaderboard updated`, 'success');
+    } catch(err) {
+      showToast(`Failed: ${err.message}`, 'error');
+    }
   };
 
   const markNotifRead = (id) => setAdminNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -2576,6 +2591,18 @@ export default function PuntingClub() {
                                   <div className="flex flex-col gap-1.5 flex-shrink-0">
                                     {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Approve</button>}
                                     {c.status === 'active'  && <button onClick={() => updateCompStatus(c.id || c.code, 'closed')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs">Close</button>}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={() => { if (window.confirm(`Force week rollover for "${c.name}"? This moves current bets to history and starts a new week.`)) advanceWeek(c.id, 'forward'); }}
+                                        className="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                      >⏭ Advance Week</button>
+                                    )}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={() => { if (window.confirm(`Roll back one week for "${c.name}"?`)) advanceWeek(c.id, 'back'); }}
+                                        className="bg-gray-500/10 border border-gray-500/20 text-gray-500 px-2.5 py-1 rounded-lg text-xs"
+                                      >↩ Rollback</button>
+                                    )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
                                   </div>
                                 )}

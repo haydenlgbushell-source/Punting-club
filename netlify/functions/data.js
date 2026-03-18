@@ -76,6 +76,22 @@ exports.handler = async (event) => {
         return json(data);
       }
 
+      case 'advance_week': {
+        // Shift start_date back by 7 days so calcCurrentWeek returns week+1.
+        // direction: 'forward' (default) or 'back' to undo.
+        const { id, adminRole, direction = 'forward' } = payload;
+        const { data: comp, error: fetchErr } = await supabase.from('competitions').select('start_date, name').eq('id', id).single();
+        if (fetchErr) return error(fetchErr.message);
+        const shift = direction === 'back' ? 7 : -7; // days
+        const newDate = new Date(comp.start_date);
+        newDate.setUTCDate(newDate.getUTCDate() + shift);
+        const newDateStr = newDate.toISOString().slice(0, 10);
+        const { data, error: e } = await supabase.from('competitions').update({ start_date: newDateStr }).eq('id', id).select().single();
+        if (e) return error(e.message);
+        await addAudit(adminRole, direction === 'back' ? 'Week Rolled Back' : 'Week Advanced', comp.name, `start_date: ${comp.start_date} → ${newDateStr}`);
+        return json(data);
+      }
+
       // ══════════════════════════════════════════════════════
       //  TEAMS
       // ══════════════════════════════════════════════════════
