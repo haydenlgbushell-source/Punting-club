@@ -184,9 +184,16 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
       {/* ── Header ── */}
       <div style={{ padding: compact ? '16px 18px 12px' : '22px 22px 14px', borderBottom: '1px solid #ffffff0d' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
-            {(bet.type || 'MULTI').toUpperCase()} BET
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
+              {(bet.type || 'MULTI').toUpperCase()} BET
+            </span>
+            {bet.submittedBy && (
+              <span style={{ fontSize: 11, color: '#9ca3af', background: '#ffffff0d', border: '1px solid #ffffff12', borderRadius: 6, padding: '2px 8px' }}>
+                👤 {bet.submittedBy}
+              </span>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280' }}>⌛ {bet.submittedAt}</span>}
             {onCheckBet && (status === 'pending' || status === 'in_progress') && (
@@ -707,6 +714,7 @@ export default function PuntingClub() {
       estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
       weekNumber: b.week_number,
       submittedAt: new Date(b.submitted_at).toLocaleString(),
+      submittedBy: b.submitted_by_name || null,
       legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
     })),
   })), []);
@@ -1303,15 +1311,19 @@ export default function PuntingClub() {
     if (!isLoggedIn || !currentUser?.teamId) return;
     apiGetTeamMembers(currentUser.teamId)
       .then(members => {
-        setTeamMembers(members.map(m => ({
+        const mapped = members.map(m => ({
           ...m,
           phone:       m.users?.phone || m.user_id,
           name:        `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
           role:        m.role,
           canBet:      m.can_bet,
           depositPaid: m.deposit_paid,
-        })));
-        setPendingMembers(members.filter(m => m.role === 'pending'));
+        }));
+        setTeamMembers(mapped);
+        setPendingMembers(mapped.filter(m => m.role === 'pending'));
+        // Populate betting order from approved members (preserves DB ordering)
+        const approved = mapped.filter(m => m.role !== 'pending' && m.name);
+        if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
       })
       .catch(err => console.warn('Could not load team members (using demo data):', err));
   }, [isLoggedIn, currentUser?.teamId]);
@@ -1508,16 +1520,6 @@ export default function PuntingClub() {
           : ['Results update automatically · Click "Check Results" to refresh · Expand a team row to see the full bet slip'];
         return (
         <section className="pt-28 pb-16 px-0 sm:px-0">
-          {/* Scrolling results ticker */}
-          <div style={{ background: '#111827', borderBottom: '1px solid #1f2937', overflow: 'hidden', whiteSpace: 'nowrap', height: 34, display: 'flex', alignItems: 'center' }}>
-            <div className="bc-ticker">
-              {[...ticker, ...ticker].map((msg, i) => (
-                <span key={i} style={{ fontFamily: BC, fontWeight: 600, fontSize: 12, letterSpacing: '0.05em', color: '#f59e0b', padding: '0 28px' }}>
-                  {msg} &nbsp;•
-                </span>
-              ))}
-            </div>
-          </div>
           <div className="max-w-5xl mx-auto px-2 sm:px-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
@@ -1789,91 +1791,18 @@ export default function PuntingClub() {
               ))}
             </div>
 
-            {/* ── DEPOSIT CALCULATOR ─────────────────────────────────────── */}
-            {teamFinalised && depositPerMember ? (
-              <div className="bg-green-950/30 border-2 border-green-500/40 rounded-xl p-5 mb-5">
-                <div className="flex items-start justify-between gap-3 mb-4">
+            {/* ── DEPOSIT BANNER (pre-finalise only) ─────────────────────── */}
+            {currentUser?.role === 'captain' && !teamFinalised && (
+              <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">💰</span>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle className="w-5 h-5 text-green-400" />
-                      <h3 className="font-black text-green-400 text-base">Team Finalised</h3>
-                    </div>
-                    <p className="text-gray-400 text-xs">Deposit split calculated based on {teamMembers.filter(m => m.depositPaid).length} confirmed members</p>
+                    <p className="font-bold text-amber-400 text-sm mb-1">Buy-In Not Yet Calculated</p>
+                    <p className="text-gray-400 text-xs leading-relaxed">Once you've confirmed all members have joined, click <strong className="text-amber-300">Finalise Team</strong> to lock in the roster and automatically calculate each member's deposit amount.</p>
                   </div>
-                  {currentUser?.role === 'captain' && (
-                    <button onClick={unfinaliseTeam} className="text-gray-600 hover:text-gray-400 text-xs border border-gray-700 px-2 py-1 rounded-lg">Re-open</button>
-                  )}
                 </div>
-
-                {/* Big deposit amount */}
-                <div className="bg-black/40 rounded-xl p-4 mb-4 text-center border border-green-500/20">
-                  <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Deposit Per Member</p>
-                  <p className="text-4xl font-black text-green-400">${depositPerMember.toLocaleString()}</p>
-                  <p className="text-gray-500 text-xs mt-1">
-                    ${(() => {
-                      const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
-                      return comp ? parseInt((comp.buyIn || '$1,000').replace(/[^0-9]/g,'')) || 1000 : 1000;
-                    })()} total ÷ {teamMembers.filter(m => m.depositPaid).length} members
-                  </p>
-                </div>
-
-                {/* Per-member breakdown */}
-                <div className="space-y-2">
-                  <p className="text-gray-500 text-xs uppercase tracking-wider">Member Payment Status</p>
-                  {teamMembers.length === 0 && (
-                    <div className="text-center py-8 text-gray-600">
-                      <p className="text-2xl mb-2">👥</p>
-                      <p className="text-sm">No members yet — share your team code to invite people.</p>
-                    </div>
-                  )}
-                  {teamMembers.map(m => (
-                    <div key={m.phone} className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${m.depositPaid ? 'bg-green-950/30 border border-green-500/20' : 'bg-red-950/30 border border-red-500/20'}`}>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${m.depositPaid ? 'bg-green-500 text-black' : 'bg-red-500/20 border border-red-500/40 text-red-400'}`}>
-                          {m.depositPaid ? '✓' : '!'}
-                        </div>
-                        <span className="text-sm font-semibold">{m.name}</span>
-                        <PermissionBadge role={m.role} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-black text-sm ${m.depositPaid ? 'text-green-400' : 'text-red-400'}`}>
-                          {m.depositPaid ? `$${depositPerMember.toLocaleString()} ✓` : 'Unpaid'}
-                        </span>
-                        {currentUser?.role === 'captain' && m.role !== 'captain' && (
-                          <button onClick={() => toggleDepositPaid(m.phone)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
-                            {m.depositPaid ? 'Mark Unpaid' : 'Mark Paid'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Summary */}
-                <div className="mt-4 pt-3 border-t border-green-500/20 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">{teamMembers.filter(m=>m.depositPaid).length} of {teamMembers.length} paid</p>
-                    <p className="text-xs text-gray-600 mt-0.5">Total collected: <span className="text-green-400 font-bold">${(teamMembers.filter(m=>m.depositPaid).length * depositPerMember).toLocaleString()}</span> of <span className="text-white font-bold">${(() => { const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode); return comp ? parseInt((comp.buy_in||'1000').toString().replace(/[^0-9]/g,''))||1000 : 1000; })().toLocaleString()}</span></p>
-                  </div>
-                  {teamMembers.every(m => m.depositPaid) && (
-                    <span className="bg-green-500 text-black text-xs font-black px-3 py-1 rounded-full">🎉 All Paid!</span>
-                  )}
-                </div>
+                <button onClick={() => setShowFinaliseModal(true)} className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap">Finalise Team</button>
               </div>
-            ) : (
-              /* Not yet finalised — show pending banner for captain */
-              currentUser?.role === 'captain' && !teamFinalised && (
-                <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl flex-shrink-0">💰</span>
-                    <div>
-                      <p className="font-bold text-amber-400 text-sm mb-1">Buy-In Not Yet Calculated</p>
-                      <p className="text-gray-400 text-xs leading-relaxed">Once you've confirmed all members have joined, click <strong className="text-amber-300">Finalise Team</strong> to lock in the roster and automatically calculate each member's deposit amount.</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setShowFinaliseModal(true)} className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap">Finalise Team</button>
-                </div>
-              )
             )}
 
             {/* Betting order tracker */}
@@ -1930,6 +1859,63 @@ export default function PuntingClub() {
               })()}
             </div>
 
+            {/* Previous Weeks Bet History */}
+            {(() => {
+              const pastBets = (myTeamData?.bets || [])
+                .filter(b => b.weekNumber < currentWeekNum + 1 && b.weekNumber > 0)
+                .sort((a, b) => b.weekNumber - a.weekNumber);
+              if (!pastBets.length) return null;
+              return (
+                <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-5">
+                  <h3 className="font-bold text-purple-400 mb-4">📜 Previous Weeks</h3>
+                  <div className="space-y-3">
+                    {pastBets.map((bet, i) => {
+                      const legs = bet.legs || [];
+                      const status = (() => {
+                        if (!legs.length) return bet.overallStatus || 'pending';
+                        if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
+                        if (legs.some(l => l.status === 'pending'))     return 'pending';
+                        if (!legs.every(l => ['won','lost','void'].includes(l.status))) return 'pending';
+                        if (legs.every(l => l.status === 'won')) return 'won';
+                        if (legs.some(l => l.status === 'lost')) return 'lost';
+                        return 'partial';
+                      })();
+                      const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'partial' ? 'text-amber-400 bg-amber-500/15 border-amber-500/40' : 'text-gray-400 bg-white/5 border-white/10';
+                      const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
+                      return (
+                        <div key={bet.id || i} className="bg-black/30 border border-white/8 rounded-xl overflow-hidden">
+                          {/* Row summary */}
+                          <div className="flex items-center gap-3 px-4 py-3">
+                            <div className="w-9 h-9 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
+                              <span className="text-purple-400 font-black text-xs">W{bet.weekNumber}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-white text-sm font-semibold">{bet.type || 'Multi'}</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${resultCls}`}>{resultLabel}</span>
+                                {bet.submittedBy && (
+                                  <span className="text-xs text-gray-500 bg-white/5 border border-white/8 rounded px-2 py-0.5">👤 {bet.submittedBy}</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <span className="text-gray-500 text-xs">Stake: <span className="text-gray-300">{bet.stake}</span></span>
+                                {status === 'won' && <span className="text-green-400 text-xs font-semibold">Return: {bet.estimatedReturn}</span>}
+                                <span className="text-gray-600 text-xs">{bet.submittedAt}</span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Full bet card */}
+                          <div className="border-t border-white/5">
+                            <BetSlipCard bet={bet} compact onCheckBet={null} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Pending approvals */}
             {pendingMembers.length > 0 && (
               <div className="bg-orange-950/20 border border-orange-500/30 rounded-xl p-5 mb-5">
@@ -1952,13 +1938,24 @@ export default function PuntingClub() {
             )}
 
             {/* Team members */}
-            <div className="bg-white/3 border border-white/8 rounded-xl p-5">
-              <h3 className="font-bold text-amber-400 mb-4">👥 Team Members</h3>
+            <div className={`border rounded-xl p-5 ${teamFinalised ? 'bg-green-950/10 border-green-500/20' : 'bg-white/3 border-white/8'}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  {teamFinalised && <CheckCircle className="w-4 h-4 text-green-400" />}
+                  <h3 className={`font-bold ${teamFinalised ? 'text-green-400' : 'text-amber-400'}`}>👥 Team Members</h3>
+                  {teamFinalised && depositPerMember && (
+                    <span className="text-xs bg-green-500/15 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full font-semibold">${depositPerMember.toLocaleString()} / member</span>
+                  )}
+                </div>
+                {teamFinalised && currentUser?.role === 'captain' && (
+                  <button onClick={unfinaliseTeam} className="text-gray-600 hover:text-gray-400 text-xs border border-gray-700 px-2 py-1 rounded-lg">Re-open</button>
+                )}
+              </div>
               <div className="space-y-2">
                 {teamMembers.map(m => (
-                  <div key={m.user_id || m.phone} className="bg-black/30 rounded-xl px-3 py-3 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-sm flex-shrink-0">
-                      {(m.name || '?').charAt(0).toUpperCase()}
+                  <div key={m.user_id || m.phone} className={`rounded-xl px-3 py-3 flex items-start gap-3 ${teamFinalised ? (m.depositPaid ? 'bg-green-950/30 border border-green-500/20' : 'bg-red-950/20 border border-red-500/15') : 'bg-black/30'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${teamFinalised ? (m.depositPaid ? 'bg-green-500 text-black' : 'bg-red-500/20 border border-red-500/40 text-red-400') : 'bg-amber-500/20 border border-amber-500/30 text-amber-400'}`}>
+                      {teamFinalised ? (m.depositPaid ? '✓' : '!') : (m.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -1967,9 +1964,15 @@ export default function PuntingClub() {
                       </div>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <PermissionBadge role={m.role} />
-                        {m.depositPaid
-                          ? <span className="text-green-400 text-xs flex items-center gap-0.5"><CheckCircle className="w-3 h-3"/>Deposit paid</span>
-                          : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3"/>Deposit pending</span>}
+                        {teamFinalised && depositPerMember ? (
+                          m.depositPaid
+                            ? <span className="text-green-400 text-xs font-bold flex items-center gap-0.5"><CheckCircle className="w-3 h-3"/>${depositPerMember.toLocaleString()} paid</span>
+                            : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3"/>Unpaid — ${depositPerMember.toLocaleString()} owing</span>
+                        ) : (
+                          m.depositPaid
+                            ? <span className="text-green-400 text-xs flex items-center gap-0.5"><CheckCircle className="w-3 h-3"/>Deposit paid</span>
+                            : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3"/>Deposit pending</span>
+                        )}
                         {m.canBet && m.role !== 'view-only' && <span className="text-blue-400 text-xs">Can bet</span>}
                       </div>
                     </div>
@@ -1979,14 +1982,27 @@ export default function PuntingClub() {
                           <option value="member">Member</option>
                           <option value="view-only">View Only</option>
                         </select>
-                        <button onClick={() => toggleDepositPaid(m.phone)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-green-500/40 text-green-400 bg-green-500/10' : 'border-red-500/40 text-red-400 bg-red-500/10'}`}>
-                          {m.depositPaid ? '💰' : '⚠'}
+                        <button onClick={() => toggleDepositPaid(m.phone)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
+                          {m.depositPaid ? 'Mark Unpaid' : 'Mark Paid'}
                         </button>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
+              {/* Payment summary — only shown when finalised */}
+              {teamFinalised && depositPerMember && teamMembers.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-green-500/15 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">{teamMembers.filter(m => m.depositPaid).length} of {teamMembers.length} paid</p>
+                    <p className="text-xs text-gray-600 mt-0.5">Collected: <span className="text-green-400 font-bold">${(teamMembers.filter(m => m.depositPaid).length * depositPerMember).toLocaleString()}</span></p>
+                  </div>
+                  {teamMembers.every(m => m.depositPaid)
+                    ? <span className="bg-green-500 text-black text-xs font-black px-3 py-1 rounded-full">🎉 All Paid!</span>
+                    : <span className="text-xs text-red-400">{teamMembers.filter(m => !m.depositPaid).length} still owing</span>
+                  }
+                </div>
+              )}
             </div>
           </div>
         </section>
