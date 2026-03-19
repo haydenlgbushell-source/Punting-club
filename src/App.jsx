@@ -1410,7 +1410,7 @@ export default function PuntingClub() {
                     <p className="text-amber-400 text-xs font-bold leading-tight">{currentUser?.teamName}{currentUser?.role === 'captain' && <span className="ml-1">👑</span>}</p>
                     <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName} · <PermissionBadge role={currentUser?.role} /></p>
                   </div>
-                  <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setShowCreateTeamModal(true); }} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">+ New Team</button>
+                  <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">+ New Team</button>
                   <button onClick={handleLogout} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">Logout</button>
                 </div>
               ) : (
@@ -1433,7 +1433,7 @@ export default function PuntingClub() {
                 {isLoggedIn ? (
                   <>
                     <p className="text-amber-400 text-sm font-bold px-3">{currentUser?.teamName} ({currentUser?.firstName})</p>
-                    <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-400 px-4 py-2 rounded-lg text-sm font-semibold">+ Create Another Team</button>
+                    <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-400 px-4 py-2 rounded-lg text-sm font-semibold">+ Create Another Team</button>
                     <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-2 rounded-lg text-sm font-semibold">Logout</button>
                   </>
                 ) : (
@@ -3850,7 +3850,7 @@ export default function PuntingClub() {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <h2 className="text-lg font-bold text-white">New Team</h2>
-              <button onClick={() => setShowCreateTeamModal(false)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowCreateTeamModal(false); setPrivateCompLookup(null); setPrivateCompLookupError(null); }} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
             {/* Tabs */}
@@ -3884,22 +3884,22 @@ export default function PuntingClub() {
 
                 <div>
                   <label className="block text-xs font-semibold text-amber-400 mb-1">Competition <span className="text-gray-600 font-normal">(optional)</span></label>
-                  {activeCompetitions.length > 0 ? (
+                  {activeCompetitions.filter(c => !c.is_private).length > 0 ? (
                     <>
                       <select
                         value={createTeamForm.competitionCode}
-                        onChange={e => setCreateTeamForm(p => ({ ...p, competitionCode: e.target.value }))}
+                        onChange={e => { setCreateTeamForm(p => ({ ...p, competitionCode: e.target.value, privateCompCode: '' })); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
                         style={{ backgroundColor: '#111827' }}
                       >
                         <option value="">— No competition (register team only) —</option>
-                        {activeCompetitions.map(c => (
+                        {activeCompetitions.filter(c => !c.is_private).map(c => (
                           <option key={c.code} value={c.code}>
                             {c.name} · {c.pub} · {c.weeks}wks · ${c.buy_in?.toLocaleString()} buy-in
                           </option>
                         ))}
                       </select>
-                      {createTeamForm.competitionCode && (() => {
+                      {createTeamForm.competitionCode && !privateCompLookup && (() => {
                         const sel = activeCompetitions.find(c => c.code === createTeamForm.competitionCode);
                         return sel ? (
                           <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
@@ -3910,8 +3910,48 @@ export default function PuntingClub() {
                       })()}
                     </>
                   ) : (
-                    <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No active competitions available</div>
+                    <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No public competitions available</div>
                   )}
+                  <div className="mt-3">
+                    <label className="block text-xs text-gray-500 mb-1">Have a private competition code?</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={createTeamForm.privateCompCode || ''}
+                        onChange={e => { setCreateTeamForm(p => ({ ...p, privateCompCode: e.target.value.toUpperCase(), competitionCode: '' })); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 placeholder-gray-600 uppercase"
+                        placeholder="Enter code"
+                        maxLength={10}
+                      />
+                      <button
+                        type="button"
+                        disabled={!createTeamForm.privateCompCode || privateCompLookupLoading}
+                        onClick={async () => {
+                          setPrivateCompLookupLoading(true);
+                          setPrivateCompLookupError(null);
+                          setPrivateCompLookup(null);
+                          try {
+                            const comp = await apiGetCompetitionByCode(createTeamForm.privateCompCode);
+                            if (!comp.is_private) { setPrivateCompLookupError('This is a public competition — select it from the dropdown above.'); return; }
+                            setPrivateCompLookup(comp);
+                            setCreateTeamForm(p => ({ ...p, competitionCode: comp.code }));
+                          } catch (err) {
+                            setPrivateCompLookupError(err.message || 'Code not found');
+                          } finally {
+                            setPrivateCompLookupLoading(false);
+                          }
+                        }}
+                        className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-400 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 transition-all"
+                      >{privateCompLookupLoading ? '...' : 'Find'}</button>
+                    </div>
+                    {privateCompLookupError && <p className="text-red-400 text-xs mt-1">✗ {privateCompLookupError}</p>}
+                    {privateCompLookup && (
+                      <div className="mt-2 bg-purple-500/10 border border-purple-500/30 rounded-lg px-3 py-2">
+                        <p className="text-purple-400 text-xs font-semibold">🔒 Private: {privateCompLookup.name}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">{privateCompLookup.pub} · {privateCompLookup.weeks} weeks · Buy-in: ${privateCompLookup.buy_in?.toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
