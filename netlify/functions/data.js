@@ -43,7 +43,7 @@ exports.handler = async (event) => {
       case 'get_all_competitions': {
         const { data, error: e } = await supabase
           .from('competitions')
-          .select('*, teams(id, team_name, team_code, status, captain_id, users!teams_captain_id_fkey(first_name, last_name))')
+          .select('*, teams(id, team_name, team_code, status)')
           .order('created_at', { ascending: false });
         if (e) return error(e.message);
         const enriched = (data || []).map(c => ({ ...c, team_count: c.teams?.length || 0 }));
@@ -54,7 +54,7 @@ exports.handler = async (event) => {
         const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
         const status = adminRole === 'owner' ? 'active' : 'pending';
         const code   = genCode(6);
-        const { data, error: e } = await supabase.from('competitions').insert({
+        const insertRow = {
           code, name, pub, status,
           weeks:      parseInt(weeks) || 8,
           buy_in:     parseInt(String(buyIn).replace(/[^0-9]/g, '')) || 1000,
@@ -63,8 +63,17 @@ exports.handler = async (event) => {
           end_date:   endDate   || null,
           jackpot:    0,
           is_private: isPrivate ? true : false,
-        }).select().single();
-        if (e) return error(e.message);
+        };
+        let { data, error: e } = await supabase.from('competitions').insert(insertRow).select().single();
+        if (e && e.message && e.message.includes('is_private')) {
+          // Column not yet migrated — insert without it then patch
+          const { is_private: _drop, ...rowWithout } = insertRow;
+          const res2 = await supabase.from('competitions').insert(rowWithout).select().single();
+          if (res2.error) return error(res2.error.message);
+          data = res2.data;
+        } else if (e) {
+          return error(e.message);
+        }
         await addAudit(adminRole, 'Competition Created', name, `Code: ${code}, Private: ${isPrivate ? 'yes' : 'no'}`);
         return json(data);
       }
