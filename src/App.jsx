@@ -1439,12 +1439,51 @@ export default function PuntingClub() {
                 Create a team, place bets, compete with friends. 8, 16, or 32 week seasons. AI-powered tracking.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
-                <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2">
-                  Create Team <ArrowRight className="w-5 h-5" />
-                </button>
-                <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all">
-                  Join a Team
-                </button>
+                {isLoggedIn ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' });
+                        setCreateTeamError(null);
+                        setJoinTeamCode('');
+                        setJoinTeamError(null);
+                        setJoinTeamSuccess(null);
+                        setTeamModalTab('create');
+                        setPrivateCompLookup(null);
+                        setPrivateCompLookupError(null);
+                        setShowCreateTeamModal(true);
+                      }}
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                    >
+                      Join a Competition <ArrowRight className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' });
+                        setCreateTeamError(null);
+                        setJoinTeamCode('');
+                        setJoinTeamError(null);
+                        setJoinTeamSuccess(null);
+                        setTeamModalTab('create');
+                        setPrivateCompLookup(null);
+                        setPrivateCompLookupError(null);
+                        setShowCreateTeamModal(true);
+                      }}
+                      className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all"
+                    >
+                      + New Team
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2">
+                      Create Team <ArrowRight className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all">
+                      Join a Team
+                    </button>
+                  </>
+                )}
               </div>
               <div className="flex justify-center mb-12">
                 <button
@@ -3857,6 +3896,11 @@ export default function PuntingClub() {
                     maxLength={50}
                     required
                   />
+                  {currentUser?.teamName && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Using your current name <button type="button" className="text-amber-400 hover:underline" onClick={() => setCreateTeamForm(p => ({ ...p, teamName: currentUser.teamName }))}>{currentUser.teamName}</button> or enter a new one.
+                    </p>
+                  )}
                 </div>
 
                 <div>
