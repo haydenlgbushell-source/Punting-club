@@ -1154,47 +1154,20 @@ export default function PuntingClub() {
     if (!comp.name?.trim()) { showToast('Please enter a competition name.', 'warning'); return; }
     if (!comp.pub?.trim())  { showToast('Please enter a pub/club name.', 'warning'); return; }
 
-    // Generate code and build competition object locally first
-    const code = genCode(6);
-    const status = adminUser?.role === 'owner' ? 'active' : 'pending';
-    const buyInNum = parseInt(String(comp.buyIn || comp.buy_in || '1000').replace(/[^0-9]/g, '')) || 1000;
     const weeksCalc = comp.startDate && comp.endDate
       ? Math.round((new Date(comp.endDate) - new Date(comp.startDate)) / (7 * 86400000))
       : null;
     if (!weeksCalc || weeksCalc < 1) { showToast('Please set valid start and end dates.', 'warning'); return; }
-    const localComp = {
-      id:         code,
-      code,
-      name:       comp.name.trim(),
-      pub:        comp.pub.trim(),
-      status,
-      weeks:      weeksCalc,
-      buy_in:     buyInNum,
-      buyIn:      `$${buyInNum.toLocaleString()}`,
-      max_teams:  parseInt(comp.maxTeams) || 20,
-      start_date: comp.startDate || null,
-      end_date:   comp.endDate   || null,
-      jackpot:    0,
-      is_private: comp.isPrivate ? true : false,
-      teams:      0,
-    };
 
-    // Update local state immediately — works even without Supabase
-    setAdminComps(prev => [...prev, localComp]);
-    setActiveCompetitions(prev => status === 'active' ? [...prev, localComp] : prev);
-    addAuditEntry(adminUser?.role, 'Competition Created', localComp.name, `Code: ${code}`);
-    showToast(`Competition "${localComp.name}" created! Code: ${code}`, 'success');
-
-    // Also try to save to Supabase in background (won't block if it fails)
     try {
-      const saved = await apiCreateCompetition(comp, adminUser?.role);
-      // Replace local placeholder with full DB record (code, id, is_private, etc.)
-      setAdminComps(prev => prev.map(c => c.code === code ? { ...c, ...saved, teams: c.teams } : c));
-      if (status === 'active') {
-        setActiveCompetitions(prev => prev.map(c => c.code === code ? { ...c, ...saved } : c));
-      }
-    } catch(err) {
-      console.warn('Supabase save failed (competition saved locally only):', err.message);
+      const saved = await apiCreateCompetition({ ...comp, weeks: weeksCalc }, adminUser?.role);
+      const enriched = { ...saved, teams: saved.teams || 0, team_count: 0 };
+      setAdminComps(prev => [...prev, enriched]);
+      if (saved.status === 'active') setActiveCompetitions(prev => [...prev, enriched]);
+      addAuditEntry(adminUser?.role, 'Competition Created', saved.name, `Code: ${saved.code}`);
+      showToast(`Competition "${saved.name}" created! Code: ${saved.code}`, 'success');
+    } catch (err) {
+      showToast(`Failed to create competition: ${err.message}`, 'error');
     }
   };
   const updateCompetition = async (id, fields) => {
