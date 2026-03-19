@@ -1175,6 +1175,7 @@ export default function PuntingClub() {
       start_date: comp.startDate || null,
       end_date:   comp.endDate   || null,
       jackpot:    0,
+      is_private: comp.isPrivate ? true : false,
       teams:      0,
     };
 
@@ -1187,8 +1188,11 @@ export default function PuntingClub() {
     // Also try to save to Supabase in background (won't block if it fails)
     try {
       const saved = await apiCreateCompetition(comp, adminUser?.role);
-      // Update local entry with real DB id
-      setAdminComps(prev => prev.map(c => c.code === code ? { ...c, id: saved.id } : c));
+      // Replace local placeholder with full DB record (code, id, is_private, etc.)
+      setAdminComps(prev => prev.map(c => c.code === code ? { ...c, ...saved, teams: c.teams } : c));
+      if (status === 'active') {
+        setActiveCompetitions(prev => prev.map(c => c.code === code ? { ...c, ...saved } : c));
+      }
     } catch(err) {
       console.warn('Supabase save failed (competition saved locally only):', err.message);
     }
