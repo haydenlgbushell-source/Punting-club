@@ -362,6 +362,9 @@ export default function PuntingClub() {
   const [privateCompLookupLoading, setPrivateCompLookupLoading] = useState(false);
   const [privateCompLookupError, setPrivateCompLookupError] = useState(null);
 
+  // Which competition is being viewed on leaderboard / weekly / team pages
+  const [viewedCompetitionCode, setViewedCompetitionCode] = useState(null);
+
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminUser, setAdminUser] = useState(null);
@@ -930,17 +933,26 @@ export default function PuntingClub() {
     refreshAdminData(adminUser?.role);
   }, [isAdminLoggedIn, refreshAdminData, adminUser?.role]);
 
-  // Load leaderboard when competition is known
+  // Initialise viewedCompetitionCode from the user's primary competition
   useEffect(() => {
-    if (!currentUser?.competitionCode || !activeCompetitions.length) return;
-    refreshLeaderboard(currentUser.competitionCode, activeCompetitions);
-  }, [currentUser?.competitionCode, activeCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (currentUser?.competitionCode && !viewedCompetitionCode) {
+      setViewedCompetitionCode(currentUser.competitionCode);
+    }
+  }, [currentUser?.competitionCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load leaderboard when the viewed competition (or available competitions) changes
+  useEffect(() => {
+    const code = viewedCompetitionCode || currentUser?.competitionCode;
+    if (!code || !activeCompetitions.length) return;
+    refreshLeaderboard(code, activeCompetitions);
+  }, [viewedCompetitionCode, currentUser?.competitionCode, activeCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fetch leaderboard from DB when user navigates to leaderboard or weekly summary tab
   // (picks up results written by the scheduled check-results function)
   useEffect(() => {
-    if ((activeNav === 'leaderboard' || activeNav === 'weekly') && currentUser?.competitionCode) {
-      refreshLeaderboard();
+    const code = viewedCompetitionCode || currentUser?.competitionCode;
+    if ((activeNav === 'leaderboard' || activeNav === 'weekly') && code) {
+      refreshLeaderboard(code, activeCompetitions);
     }
   }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1301,8 +1313,35 @@ export default function PuntingClub() {
 
   const resetBetAnalyzer = () => { setUploadedImages([]); setAnalyzedBet(null); setSelectedTeamForBet(''); };
 
+  // Switch which competition is displayed on leaderboard / weekly / team pages
+  const switchViewedCompetition = useCallback(async (code) => {
+    setViewedCompetitionCode(code);
+    await refreshLeaderboard(code, activeCompetitions);
+    // Load team members for the user's team in the new competition
+    const comp = activeCompetitions.find(c => c.code === code);
+    const myTeamInComp = (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id));
+    if (myTeamInComp?.id && myTeamInComp.id !== currentTeamId) {
+      try {
+        const members = await apiGetTeamMembers(myTeamInComp.id);
+        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        setCurrentTeamId(myTeamInComp.id);
+      } catch (_) {}
+    }
+  }, [activeCompetitions, currentUser?.allTeamIds, currentTeamId, refreshLeaderboard]);
+
   // ── DERIVED ───────────────────────────────────────────────────────────────
-  const myTeamName = currentUser?.teamName || '';
+  // Effective competition being viewed (leaderboard / weekly / team)
+  const effectiveViewedCode = viewedCompetitionCode || currentUser?.competitionCode;
+  // Competitions this user has a team in (drives the switcher)
+  const userCompetitions = activeCompetitions.filter(c =>
+    (c.teams || []).some(t => (currentUser?.allTeamIds || []).includes(t.id))
+  );
+  // User's team entry inside the currently viewed competition
+  const viewedMyTeam = (() => {
+    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
+    return (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id)) || null;
+  })();
+  const myTeamName = (isLoggedIn && viewedMyTeam?.team_name) || currentUser?.teamName || '';
   const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
 
   // Enrich leaderboard with member names for current user's team
@@ -1590,7 +1629,7 @@ export default function PuntingClub() {
                 <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
                 <p className="text-gray-500 text-sm">
                   {(() => {
-                    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+                    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
                     const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
                     const total = comp?.weeks || '—';
                     return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
@@ -1608,6 +1647,19 @@ export default function PuntingClub() {
                 </button>
               </div>
             </div>
+
+            {/* Competition switcher — shown when user is in multiple competitions */}
+            {isLoggedIn && userCompetitions.length > 1 && (
+              <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
+                <span className="text-xs text-gray-500 font-semibold">Competition:</span>
+                {userCompetitions.map(c => (
+                  <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* View toggle */}
             <div className="flex gap-1 mb-4 px-2">
@@ -1756,7 +1808,7 @@ export default function PuntingClub() {
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
       {activeNav === 'weekly' && (() => {
-        const comp       = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+        const comp       = activeCompetitions.find(c => c.code === effectiveViewedCode);
         const totalWeeks = comp?.weeks || 8;
         const thisWeek   = currentWeekNum + 1;
         const prevWeek   = thisWeek - 1;
@@ -1797,9 +1849,22 @@ export default function PuntingClub() {
 
               {/* Page header */}
               <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
-              <p className="text-gray-500 mb-8 text-sm">
+              <p className="text-gray-500 mb-4 text-sm">
                 Week {thisWeek} of {totalWeeks}{comp?.name ? ` · ${comp.name}` : ''}
               </p>
+
+              {/* Competition switcher */}
+              {isLoggedIn && userCompetitions.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap mb-8">
+                  <span className="text-xs text-gray-500 font-semibold">Competition:</span>
+                  {userCompetitions.map(c => (
+                    <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* ── PREVIOUS WEEK REVIEW ── */}
               {prevWeek >= 1 ? (
@@ -2010,6 +2075,19 @@ export default function PuntingClub() {
               </div>
             )}
 
+            {/* Competition switcher for My Team page */}
+            {isLoggedIn && userCompetitions.length > 1 && (
+              <div className="flex items-center gap-2 flex-wrap mb-5">
+                <span className="text-xs text-gray-500 font-semibold">Competition:</span>
+                {userCompetitions.map(c => (
+                  <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Team header */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
               <div>
@@ -2018,8 +2096,8 @@ export default function PuntingClub() {
                   <PermissionBadge role={currentUser?.role || 'member'} />
                   <span className="text-gray-500 text-sm">·</span>
                   <span className="text-gray-400 text-sm">#{myTeamData?.rank || 1} on leaderboard</span>
-                  {currentUser?.competitionCode && (
-                    <span className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">{currentUser.competitionCode}</span>
+                  {effectiveViewedCode && (
+                    <span className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">{activeCompetitions.find(c => c.code === effectiveViewedCode)?.name || effectiveViewedCode}</span>
                   )}
                   {!allDepositsConfirmed && <span className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-2 py-0.5 rounded-full">⚠ Deposits pending</span>}
                   {allDepositsConfirmed && <span className="bg-green-500/20 border border-green-500/40 text-green-400 text-xs px-2 py-0.5 rounded-full">✓ All deposits confirmed</span>}
