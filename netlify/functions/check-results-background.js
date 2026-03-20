@@ -9,34 +9,68 @@ const UNSETTLED = ['pending', 'in_progress'];
 const VERSION   = 'v9-two-step-haiku-tool';
 
 // Step 1: Sonnet + web search → prose summary (no JSON required, avoids max_tokens issue)
+// Multi-turn loop handles both server-side (web_search_20250305) and any
+// stop_reason='tool_use' continuation that requires a follow-up message.
 async function searchForResults(apiKey, searchPrompt) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta':    'web-search-2025-03-05',
-    },
-    body: JSON.stringify({
-      model:       'claude-sonnet-4-6',
-      max_tokens:  1024,
-      tools:       [{ type: 'web_search_20250305', name: 'web_search' }],
-      tool_choice: { type: 'any' },
-      messages:    [{ role: 'user', content: searchPrompt }],
-    }),
-  });
+  const SEARCH_HEADERS = {
+    'Content-Type':      'application/json',
+    'x-api-key':         apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta':    'web-search-2025-03-05',
+  };
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || `Anthropic API ${res.status}`);
+  let messages = [{ role: 'user', content: searchPrompt }];
 
-  const types = (data.content || []).map(b => b.type).join(', ');
-  console.log(`[check-results-bg] Search: stop_reason=${data.stop_reason}, content=[${types}]`);
+  for (let turn = 0; turn < 5; turn++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: SEARCH_HEADERS,
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-6',
+        max_tokens: 1024,
+        tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages,
+      }),
+    });
 
-  // Concatenate all text blocks — the search results and summary
-  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-  console.log('[check-results-bg] Search summary:', text?.slice(0, 600));
-  return text || null;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `Anthropic API ${res.status}`);
+
+    const types = (data.content || []).map(b => b.type).join(', ');
+    console.log(`[check-results-bg] Search turn ${turn + 1}: stop_reason=${data.stop_reason}, content=[${types}]`);
+
+    const textBlocks = (data.content || []).filter(b => b.type === 'text');
+    if (data.stop_reason === 'end_turn') {
+      const text = textBlocks.map(b => b.text).join('\n');
+      console.log('[check-results-bg] Search summary:', text?.slice(0, 600));
+      return text || null;
+    }
+
+    if (data.stop_reason === 'tool_use') {
+      // Add assistant's turn to messages, then provide tool_results so the
+      // conversation can continue to the final text response.
+      const toolUseBlocks = (data.content || []).filter(b => b.type === 'tool_use');
+      messages = [
+        ...messages,
+        { role: 'assistant', content: data.content },
+        {
+          role: 'user',
+          content: toolUseBlocks.map(b => ({
+            type: 'tool_result',
+            tool_use_id: b.id,
+            content: `Tool ${b.name} called with: ${JSON.stringify(b.input || {}).slice(0, 200)}`,
+          })),
+        },
+      ];
+      continue;
+    }
+
+    // Any other stop reason — return whatever text we have
+    const text = textBlocks.map(b => b.text).join('\n');
+    return text || null;
+  }
+
+  return null;
 }
 
 // Step 2: Haiku (separate rate limit bucket) + forced tool_use → guaranteed structured output

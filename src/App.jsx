@@ -253,6 +253,12 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 16, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leg.selection}</div>
                       <div style={{ fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leg.event}{leg.market ? ` · ${leg.market}` : ''}</div>
+                      {(leg.eventDate || leg.startTime) && (
+                        <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
+                          {leg.eventDate ? new Date(leg.eventDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}
+                          {leg.startTime ? ` · ${leg.startTime} AEST` : ''}
+                        </div>
+                      )}
                     </div>
                   </div>
                   {/* Right — odds + badge + toggle */}
