@@ -1351,9 +1351,10 @@ export default function PuntingClub() {
     }
     return t;
   });
-  // Week number derived from competition start date, fallback to 0
+  // Week number derived from the currently viewed competition's start date, fallback to 0.
+  // Uses effectiveViewedCode so that bet submission always targets the competition on screen.
   const currentWeekNum = (() => {
-    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
+    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
     if (!comp?.start_date) return 0;
     return calcCurrentWeek(comp.start_date) - 1; // 0-indexed for betting order rotation
   })();
