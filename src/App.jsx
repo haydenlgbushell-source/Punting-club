@@ -255,8 +255,11 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                       <div style={{ fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leg.event}{leg.market ? ` · ${leg.market}` : ''}</div>
                       {(leg.eventDate || leg.startTime) && (
                         <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
-                          {leg.eventDate ? new Date(leg.eventDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}
-                          {leg.startTime ? ` · ${leg.startTime} AEST` : ''}
+                          {leg.eventDate ? (() => {
+                            const [yr, mo, dy] = leg.eventDate.split('-').map(Number);
+                            return new Date(yr, mo - 1, dy).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+                          })() : ''}
+                          {leg.startTime ? ` · ${String(leg.startTime).substring(0, 5)} AEST` : ''}
                         </div>
                       )}
                     </div>
