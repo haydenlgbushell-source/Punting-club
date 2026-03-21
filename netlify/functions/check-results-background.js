@@ -200,19 +200,20 @@ exports.handler = async (event) => {
       }
       betIndex++;
 
-      if (!betId) {
-        const hasStarted = unsettledLegs.some(l => {
-          if (!l.event_date) return true;
-          const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-          const start = new Date(`${l.event_date}T${t}:00+10:00`);
-          return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
-        });
-        if (!hasStarted) { console.log(`[check-results-bg] Bet ${bet.id} not started`); continue; }
-      }
+      // Only search for legs whose event has actually started — prevents Claude from
+      // hallucinating results for future matches regardless of manual vs. auto mode.
+      const legHasStarted = (l) => {
+        if (!l.event_date) return true;
+        const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
+        const start = new Date(`${l.event_date}T${t}:00+10:00`);
+        return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
+      };
+      const startedLegs = unsettledLegs.filter(legHasStarted);
+      if (!startedLegs.length) { console.log(`[check-results-bg] Bet ${bet.id} — no legs started yet`); continue; }
 
       const legs = bet.bet_legs || [];
-      // Only search for unsettled legs — already won/lost legs don't need re-searching
-      const legsToSearch = unsettledLegs.map(l => {
+      // Only search for legs that have started
+      const legsToSearch = startedLegs.map(l => {
         const d = l.event_date ? ` on ${l.event_date}` : '';
         return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
       }).join('\n');
@@ -248,7 +249,7 @@ Report the result for EVERY match listed above — do not skip any.`;
       console.log(`[check-results-bg] Step 2 — settling bet ${bet.id}...`);
       let updates;
       try {
-        updates = await settleLegs(apiKey, summary, unsettledLegs);
+        updates = await settleLegs(apiKey, summary, startedLegs);
       } catch (e) {
         console.error(`[check-results-bg] Settle error bet ${bet.id}:`, e.message);
         continue;

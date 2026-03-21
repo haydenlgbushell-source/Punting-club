@@ -8,6 +8,7 @@ import {
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
+  apiUpdateLegTiming,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
 
@@ -390,6 +391,8 @@ export default function PuntingClub() {
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
+  const [legTimingEdits, setLegTimingEdits] = useState({}); // {legId: {date, time}}
+  const [detectingTimingBetId, setDetectingTimingBetId] = useState(null); // betId being auto-detected
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
   const [editingCompId, setEditingCompId] = useState(null);   // comp being edited inline
   const [editCompForm, setEditCompForm] = useState({});        // edit form values
@@ -1047,6 +1050,8 @@ export default function PuntingClub() {
       if (data.legsUpdated > 0) {
         showToast('Result found — leaderboard updated!', 'success');
         setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet — ${data.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
+      } else if (data.message?.includes('No legs started')) {
+        showToast("Matches haven't started yet — check back after kick-off", 'info');
       } else {
         showToast('No new results — match may still be in progress', 'info');
       }
@@ -1159,6 +1164,70 @@ export default function PuntingClub() {
     try { await apiRejectBet(id, reason, adminUser?.role); } catch(err) { console.error(err); }
   };
 
+  // Save manually-edited event date/time for a leg
+  const saveLegTiming = async (betId, legId) => {
+    const edits = legTimingEdits[legId] || {};
+    const eventDate = edits.date || null;
+    const startTime = edits.time || null;
+    try {
+      await apiUpdateLegTiming(legId, eventDate, startTime, adminUser?.role);
+      setAdminBets(prev => prev.map(bet => bet.id !== betId ? bet : {
+        ...bet,
+        legs: (bet.legs || []).map(l => l.id !== legId ? l : { ...l, eventDate, startTime }),
+      }));
+      setLegTimingEdits(prev => { const n = { ...prev }; delete n[legId]; return n; });
+      showToast('Timing saved', 'success');
+    } catch (err) { showToast(`Save failed: ${err.message}`, 'error'); }
+  };
+
+  // Auto-detect correct event date/time for all legs in a bet via Claude web search
+  const autoDetectLegTiming = async (betId) => {
+    const bet = adminBets.find(b => b.id === betId);
+    if (!bet?.legs?.length) return;
+    setDetectingTimingBetId(betId);
+    showToast('Searching for event dates…', 'info');
+    try {
+      const legList = bet.legs.map((l, i) =>
+        `Leg ${l.leg_number || i + 1}: "${l.selection}" | ${l.event} | ${l.market}`
+      ).join('\n');
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages: [{ role: 'user', content:
+            `Today is ${today}. For each of the following Australian sports bet legs, find the correct scheduled date and start time (AEST, 24h HH:MM) of the event. Search each one.\n\nLegs:\n${legList}\n\nReturn ONLY a JSON array like:\n[{"legNumber":1,"eventDate":"YYYY-MM-DD","startTime":"HH:MM"},{"legNumber":2,"eventDate":"YYYY-MM-DD","startTime":"HH:MM"}]\nIf you cannot find a date/time for a leg, use null for that field. Return ONLY the JSON array.`
+          }],
+        }),
+      });
+      const data = await res.json();
+      const textBlock = (data.content || []).find(b => b.type === 'text');
+      if (!textBlock?.text) throw new Error('No response from Claude');
+      let parsed;
+      try { parsed = JSON.parse(textBlock.text.replace(/```json|```/g, '').trim()); }
+      catch { throw new Error('Could not parse Claude response'); }
+      if (!Array.isArray(parsed)) throw new Error('Unexpected response format');
+      // Apply detected timings to each leg
+      for (const item of parsed) {
+        const leg = bet.legs.find(l => (l.leg_number || l.legNumber) === item.legNumber);
+        if (!leg?.id || (!item.eventDate && !item.startTime)) continue;
+        await apiUpdateLegTiming(leg.id, item.eventDate || null, item.startTime || null, adminUser?.role);
+        setAdminBets(prev => prev.map(b => b.id !== betId ? b : {
+          ...b,
+          legs: (b.legs || []).map(l => l.id !== leg.id ? l : { ...l, eventDate: item.eventDate || l.eventDate, startTime: item.startTime || l.startTime }),
+        }));
+      }
+      showToast('Event dates updated!', 'success');
+    } catch (err) {
+      showToast(`Auto-detect failed: ${err.message}`, 'error');
+      console.error('[autoDetectLegTiming]', err);
+    }
+    setDetectingTimingBetId(null);
+  };
+
   const overrideLegResult = async (betId, legId, status, resultNote) => {
     const b = adminBets.find(x => x.id === betId);
     const leg = b?.legs?.find(l => l.id === legId);
@@ -1251,7 +1320,7 @@ export default function PuntingClub() {
     setAnalyzing(true);
     try {
       const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1600, messages:[{ role:'user', content:[
-        { type:'text', text:`You are a sports betting expert. Analyze this bet slip image carefully and return ONLY valid JSON in this exact format:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"2026-03-15","startTime":"19:30","status":"pending"}]\n}\nRules:\n- eventDate: REQUIRED — this is the date the MATCH/GAME is played, NOT the date the bet slip was printed or submitted. Look for the date shown specifically next to each individual leg/event (not a general slip date). Format: YYYY-MM-DD. If the year is not shown, assume the current year.\n- startTime: REQUIRED — the kick-off / start time for each individual event. Format: HH:MM in 24h. If not visible, use null.\n- dollar signs on money values, decimal odds\n- status for each leg must be one of: pending, won, lost, void\n- submissionValid = true if the bet was placed before the first leg started\n- Return ONLY valid JSON, no other text.` },
+        { type:'text', text:`You are a sports betting expert. Analyze this bet slip image carefully and return ONLY valid JSON in this exact format:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"2026-03-21","startTime":"19:30","status":"pending"}]\n}\n\nCRITICAL RULES FOR DATE AND TIME:\n- Bet slips always show a PRINT/PLACED date and time at the top of the slip (e.g. "Fri 20 Mar 13:36"). THIS IS NOT THE EVENT DATE — ignore it completely for eventDate and startTime.\n- Each individual leg/selection has its OWN date and time shown next to it (e.g. "Sat 21 Mar 15:00"). You MUST use the date and time shown beside THAT specific leg, not the slip header.\n- eventDate: the date the match/race IS SCHEDULED TO BE PLAYED, taken from beside that specific leg. Format: YYYY-MM-DD. Today is ${new Date().toISOString().slice(0,10)} — use this year if the year is not shown on the slip.\n- startTime: the scheduled start/kick-off time for that specific leg, in HH:MM 24h format. If not visible for that leg, use null.\n- If different legs have different dates, each leg must have its own correct date.\n\nOTHER RULES:\n- dollar signs on money values, decimal odds\n- status for each leg must be: pending (default for all legs on a newly placed slip)\n- submissionValid = true if the bet was placed before the first leg started\n- Return ONLY valid JSON, no other text.` },
         ...uploadedImages.map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
@@ -2829,9 +2898,23 @@ export default function PuntingClub() {
                               </button>
                               {expandedBetId === b.id && (
                                 <div className="px-4 pb-4 space-y-2 bg-black/30">
-                                  <p className="text-amber-400 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-amber-400 text-xs font-semibold">⚠ Manual Override — use when AI couldn't find a result</p>
+                                    <button
+                                      onClick={() => autoDetectLegTiming(b.id)}
+                                      disabled={detectingTimingBetId === b.id}
+                                      className="flex items-center gap-1 bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 rounded text-xs font-semibold transition-all"
+                                    >
+                                      <RefreshCw className={`w-3 h-3 ${detectingTimingBetId === b.id ? 'animate-spin' : ''}`} />
+                                      {detectingTimingBetId === b.id ? 'Detecting…' : 'Auto-detect timing'}
+                                    </button>
+                                  </div>
                                   {b.legs.map(leg => {
                                     const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-amber-400';
+                                    const timingEdit = legTimingEdits[leg.id];
+                                    const currentDate = timingEdit?.date !== undefined ? timingEdit.date : (leg.eventDate || '');
+                                    const currentTime = timingEdit?.time !== undefined ? timingEdit.time : (leg.startTime ? String(leg.startTime).substring(0, 5) : '');
+                                    const hasUnsavedTiming = timingEdit !== undefined;
                                     return (
                                       <div key={leg.id} className="bg-gray-900 border border-white/8 rounded-lg p-3">
                                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -2843,6 +2926,27 @@ export default function PuntingClub() {
                                           <span className={`text-xs font-bold ${legColor}`}>{leg.status?.toUpperCase()}</span>
                                         </div>
                                         <div className="text-gray-600 text-xs mb-2 truncate">{leg.event}</div>
+                                        {/* Date / time editor */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <input
+                                            type="date"
+                                            value={currentDate}
+                                            onChange={e => setLegTimingEdits(prev => ({ ...prev, [leg.id]: { ...(prev[leg.id] || {}), date: e.target.value } }))}
+                                            className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500/60"
+                                          />
+                                          <input
+                                            type="time"
+                                            value={currentTime}
+                                            onChange={e => setLegTimingEdits(prev => ({ ...prev, [leg.id]: { ...(prev[leg.id] || {}), time: e.target.value } }))}
+                                            className="w-24 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500/60"
+                                          />
+                                          {hasUnsavedTiming && (
+                                            <button
+                                              onClick={() => saveLegTiming(b.id, leg.id)}
+                                              className="px-2.5 py-1 bg-blue-600/30 border border-blue-500/50 text-blue-400 hover:bg-blue-600/50 rounded text-xs font-semibold transition-all"
+                                            >Save</button>
+                                          )}
+                                        </div>
                                         <div className="flex items-center gap-1.5 flex-wrap mb-2">
                                           {['won','lost','pending','void'].map(s => (
                                             <button

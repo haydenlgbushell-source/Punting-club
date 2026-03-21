@@ -497,6 +497,18 @@ exports.handler = async (event) => {
         return json(data);
       }
 
+      case 'update_leg_timing': {
+        const { legId, eventDate, startTime, adminRole } = payload;
+        const updates = { updated_at: new Date().toISOString() };
+        // Allow explicit null to clear the value
+        updates.event_date = eventDate || null;
+        updates.start_time = startTime ? String(startTime).substring(0, 5) : null;
+        const { data, error: e } = await supabase.from('bet_legs').update(updates).eq('id', legId).select('*, bets(id, teams(team_name))').single();
+        if (e) return error(e.message);
+        if (adminRole) await addAudit(adminRole, 'Leg Timing Updated', `${data.bets?.teams?.team_name} — ${data.selection}`, `Date: ${eventDate || '—'}, Time: ${startTime || '—'}`);
+        return json(data);
+      }
+
       case 'reject_bet': {
         const { betId, reason, adminRole } = payload;
         const { data, error: e } = await supabase.from('bets').update({ overall_status: 'rejected', rejection_reason: reason }).eq('id', betId).select('*, teams(team_name)').single();
