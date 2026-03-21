@@ -8,6 +8,7 @@ import {
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
+  apiUpdateLegTiming,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
 
@@ -390,6 +391,8 @@ export default function PuntingClub() {
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
+  const [legTimingEdits, setLegTimingEdits] = useState({}); // {legId: {date, time}}
+  const [detectingTimingBetId, setDetectingTimingBetId] = useState(null); // betId being auto-detected
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
   const [editingCompId, setEditingCompId] = useState(null);   // comp being edited inline
   const [editCompForm, setEditCompForm] = useState({});        // edit form values
@@ -1159,6 +1162,70 @@ export default function PuntingClub() {
     setAdminBets(prev => prev.map(bet => bet.id === id ? { ...bet, status: 'rejected', overall_status: 'rejected', flagged: false } : bet));
     addAuditEntry(adminUser?.role, 'Bet Rejected', `${b?.team || b?.teams?.team_name} ${id}`, reason);
     try { await apiRejectBet(id, reason, adminUser?.role); } catch(err) { console.error(err); }
+  };
+
+  // Save manually-edited event date/time for a leg
+  const saveLegTiming = async (betId, legId) => {
+    const edits = legTimingEdits[legId] || {};
+    const eventDate = edits.date || null;
+    const startTime = edits.time || null;
+    try {
+      await apiUpdateLegTiming(legId, eventDate, startTime, adminUser?.role);
+      setAdminBets(prev => prev.map(bet => bet.id !== betId ? bet : {
+        ...bet,
+        legs: (bet.legs || []).map(l => l.id !== legId ? l : { ...l, eventDate, startTime }),
+      }));
+      setLegTimingEdits(prev => { const n = { ...prev }; delete n[legId]; return n; });
+      showToast('Timing saved', 'success');
+    } catch (err) { showToast(`Save failed: ${err.message}`, 'error'); }
+  };
+
+  // Auto-detect correct event date/time for all legs in a bet via Claude web search
+  const autoDetectLegTiming = async (betId) => {
+    const bet = adminBets.find(b => b.id === betId);
+    if (!bet?.legs?.length) return;
+    setDetectingTimingBetId(betId);
+    showToast('Searching for event dates…', 'info');
+    try {
+      const legList = bet.legs.map((l, i) =>
+        `Leg ${l.leg_number || i + 1}: "${l.selection}" | ${l.event} | ${l.market}`
+      ).join('\n');
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages: [{ role: 'user', content:
+            `Today is ${today}. For each of the following Australian sports bet legs, find the correct scheduled date and start time (AEST, 24h HH:MM) of the event. Search each one.\n\nLegs:\n${legList}\n\nReturn ONLY a JSON array like:\n[{"legNumber":1,"eventDate":"YYYY-MM-DD","startTime":"HH:MM"},{"legNumber":2,"eventDate":"YYYY-MM-DD","startTime":"HH:MM"}]\nIf you cannot find a date/time for a leg, use null for that field. Return ONLY the JSON array.`
+          }],
+        }),
+      });
+      const data = await res.json();
+      const textBlock = (data.content || []).find(b => b.type === 'text');
+      if (!textBlock?.text) throw new Error('No response from Claude');
+      let parsed;
+      try { parsed = JSON.parse(textBlock.text.replace(/```json|```/g, '').trim()); }
+      catch { throw new Error('Could not parse Claude response'); }
+      if (!Array.isArray(parsed)) throw new Error('Unexpected response format');
+      // Apply detected timings to each leg
+      for (const item of parsed) {
+        const leg = bet.legs.find(l => (l.leg_number || l.legNumber) === item.legNumber);
+        if (!leg?.id || (!item.eventDate && !item.startTime)) continue;
+        await apiUpdateLegTiming(leg.id, item.eventDate || null, item.startTime || null, adminUser?.role);
+        setAdminBets(prev => prev.map(b => b.id !== betId ? b : {
+          ...b,
+          legs: (b.legs || []).map(l => l.id !== leg.id ? l : { ...l, eventDate: item.eventDate || l.eventDate, startTime: item.startTime || l.startTime }),
+        }));
+      }
+      showToast('Event dates updated!', 'success');
+    } catch (err) {
+      showToast(`Auto-detect failed: ${err.message}`, 'error');
+      console.error('[autoDetectLegTiming]', err);
+    }
+    setDetectingTimingBetId(null);
   };
 
   const overrideLegResult = async (betId, legId, status, resultNote) => {
@@ -2831,9 +2898,23 @@ export default function PuntingClub() {
                               </button>
                               {expandedBetId === b.id && (
                                 <div className="px-4 pb-4 space-y-2 bg-black/30">
-                                  <p className="text-amber-400 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-amber-400 text-xs font-semibold">⚠ Manual Override — use when AI couldn't find a result</p>
+                                    <button
+                                      onClick={() => autoDetectLegTiming(b.id)}
+                                      disabled={detectingTimingBetId === b.id}
+                                      className="flex items-center gap-1 bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 rounded text-xs font-semibold transition-all"
+                                    >
+                                      <RefreshCw className={`w-3 h-3 ${detectingTimingBetId === b.id ? 'animate-spin' : ''}`} />
+                                      {detectingTimingBetId === b.id ? 'Detecting…' : 'Auto-detect timing'}
+                                    </button>
+                                  </div>
                                   {b.legs.map(leg => {
                                     const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-amber-400';
+                                    const timingEdit = legTimingEdits[leg.id];
+                                    const currentDate = timingEdit?.date !== undefined ? timingEdit.date : (leg.eventDate || '');
+                                    const currentTime = timingEdit?.time !== undefined ? timingEdit.time : (leg.startTime ? String(leg.startTime).substring(0, 5) : '');
+                                    const hasUnsavedTiming = timingEdit !== undefined;
                                     return (
                                       <div key={leg.id} className="bg-gray-900 border border-white/8 rounded-lg p-3">
                                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -2845,6 +2926,27 @@ export default function PuntingClub() {
                                           <span className={`text-xs font-bold ${legColor}`}>{leg.status?.toUpperCase()}</span>
                                         </div>
                                         <div className="text-gray-600 text-xs mb-2 truncate">{leg.event}</div>
+                                        {/* Date / time editor */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <input
+                                            type="date"
+                                            value={currentDate}
+                                            onChange={e => setLegTimingEdits(prev => ({ ...prev, [leg.id]: { ...(prev[leg.id] || {}), date: e.target.value } }))}
+                                            className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500/60"
+                                          />
+                                          <input
+                                            type="time"
+                                            value={currentTime}
+                                            onChange={e => setLegTimingEdits(prev => ({ ...prev, [leg.id]: { ...(prev[leg.id] || {}), time: e.target.value } }))}
+                                            className="w-24 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500/60"
+                                          />
+                                          {hasUnsavedTiming && (
+                                            <button
+                                              onClick={() => saveLegTiming(b.id, leg.id)}
+                                              className="px-2.5 py-1 bg-blue-600/30 border border-blue-500/50 text-blue-400 hover:bg-blue-600/50 rounded text-xs font-semibold transition-all"
+                                            >Save</button>
+                                          )}
+                                        </div>
                                         <div className="flex items-center gap-1.5 flex-wrap mb-2">
                                           {['won','lost','pending','void'].map(s => (
                                             <button
