@@ -199,23 +199,30 @@ exports.handler = async (event) => {
     let totalBetsUpdated = 0;
     const debugLog = [];
 
+    // Helper: has a specific leg's scheduled start time passed?
+    const legHasStarted = (l) => {
+      if (!l.event_date) return true; // no date stored — assume started
+      const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
+      const start = new Date(`${l.event_date}T${t}:00+10:00`);
+      return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
+    };
+
     for (const bet of bets) {
       const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
       if (!unsettledLegs.length) { console.log(`[check-results] Bet ${bet.id} all settled`); continue; }
 
-      if (!betId) {
-        const hasStarted = unsettledLegs.some(l => {
-          if (!l.event_date) return true;
-          const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-          const start = new Date(`${l.event_date}T${t}:00+10:00`);
-          return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
-        });
-        if (!hasStarted) { console.log(`[check-results] Bet ${bet.id} not started yet`); continue; }
+      // Only search for legs whose event has actually started — prevents Claude from
+      // hallucinating results for future matches regardless of manual vs. auto mode.
+      const startedLegs = unsettledLegs.filter(legHasStarted);
+      if (!startedLegs.length) {
+        console.log(`[check-results] Bet ${bet.id} — no legs started yet`);
+        debugLog.push({ betId: bet.id, message: 'No legs started yet' });
+        continue;
       }
 
       const legs = bet.bet_legs || [];
-      // Only search for unsettled legs — already won/lost legs don't need re-searching
-      const legsToSearch = unsettledLegs.map(l => {
+      // Only search for legs that have started — skip future legs entirely
+      const legsToSearch = startedLegs.map(l => {
         const d = l.event_date ? ` on ${l.event_date}` : '';
         return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
       }).join('\n');
@@ -256,7 +263,7 @@ Report the result for EVERY match listed above — do not skip any.`;
       console.log(`[check-results] Step 2 — settling bet ${bet.id}...`);
       let updates;
       try {
-        updates = await settleLegs(apiKey, summary, unsettledLegs);
+        updates = await settleLegs(apiKey, summary, startedLegs);
       } catch (e) {
         console.error(`[check-results] Settle error bet ${bet.id}:`, e.message);
         debugLog.push({ betId: bet.id, error: e.message });
