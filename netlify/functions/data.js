@@ -3,6 +3,7 @@
 // Uses service_role key to bypass RLS on admin operations
 
 const { createClient } = require('@supabase/supabase-js');
+const wa = require('./lib/whatsapp');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -287,15 +288,24 @@ exports.handler = async (event) => {
           .update({ role: 'member', can_bet: true })
           .eq('team_id', teamId).eq('user_id', userId).select().single();
         if (e) return error(e.message);
+        // WhatsApp notification — look up user phone + team name
+        notifyMemberApproved(userId, teamId).catch(() => {});
         return json(data);
       }
 
       case 'reject_member': {
         const { teamId, userId } = payload;
+        // Fetch user/team details before deleting the record
+        const memberInfo = await getMemberInfo(userId, teamId);
         const { error: e } = await supabase
           .from('team_members').delete()
           .eq('team_id', teamId).eq('user_id', userId);
         if (e) return error(e.message);
+        // WhatsApp notification
+        if (memberInfo) {
+          wa.sendMemberRejected(memberInfo.phone, memberInfo.firstName, memberInfo.teamName)
+            .catch(() => {});
+        }
         return json({ success: true });
       }
 
@@ -495,9 +505,11 @@ exports.handler = async (event) => {
 
       case 'update_bet_result': {
         const { betId, overallStatus, adminRole } = payload;
-        const { data, error: e } = await supabase.from('bets').update({ overall_status: overallStatus }).eq('id', betId).select('*, teams(team_name)').single();
+        const { data, error: e } = await supabase.from('bets').update({ overall_status: overallStatus }).eq('id', betId).select('*, teams(team_name, captain_id)').single();
         if (e) return error(e.message);
         await addAudit(adminRole, `Bet ${overallStatus}`, `${data.teams?.team_name} — ${betId}`, `Result set to ${overallStatus}`);
+        // WhatsApp notification to team captain
+        notifyBetResult(data).catch(() => {});
         return json(data);
       }
 
@@ -647,6 +659,10 @@ exports.handler = async (event) => {
         const { data, error: e } = await supabase.from('users').update({ kyc_status: kycStatus, active: kycStatus !== 'rejected' }).eq('id', userId).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, `KYC ${kycStatus}`, `${data.first_name} ${data.last_name}`, `KYC status set to ${kycStatus}`);
+        // WhatsApp notification — fire-and-forget
+        if (data.whatsapp_opt_in !== false && data.phone) {
+          wa.sendKycUpdate(data.phone, data.first_name, kycStatus).catch(() => {});
+        }
         return json(data);
       }
 
@@ -716,6 +732,23 @@ exports.handler = async (event) => {
         return json({ success: true });
       }
 
+      // ══════════════════════════════════════════════════════
+      //  WHATSAPP PREFERENCES
+      // ══════════════════════════════════════════════════════
+
+      case 'update_whatsapp_preference': {
+        const { userId, optIn } = payload;
+        if (!userId) return error('Not logged in');
+        const { data, error: e } = await supabase
+          .from('users')
+          .update({ whatsapp_opt_in: !!optIn })
+          .eq('id', userId)
+          .select('id, whatsapp_opt_in')
+          .single();
+        if (e) return error(e.message);
+        return json(data);
+      }
+
       default:
         return error(`Unknown action: ${action}`);
     }
@@ -737,4 +770,36 @@ const createAdminNotif = async (type, title, message, data = {}) => {
 
 // Helper: generate random code
 const genCode = (len) => Array.from({ length: len }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+
+// ── WhatsApp notification helpers ─────────────────────────────────────────────
+
+// Fetch user + team details needed for member notifications
+const getMemberInfo = async (userId, teamId) => {
+  const [{ data: user }, { data: team }] = await Promise.all([
+    supabase.from('users').select('first_name, phone, whatsapp_opt_in').eq('id', userId).maybeSingle(),
+    supabase.from('teams').select('team_name').eq('id', teamId).maybeSingle(),
+  ]);
+  if (!user?.phone || user.whatsapp_opt_in === false) return null;
+  return { phone: user.phone, firstName: user.first_name, teamName: team?.team_name || 'your team' };
+};
+
+// Notify approved member via WhatsApp
+const notifyMemberApproved = async (userId, teamId) => {
+  const info = await getMemberInfo(userId, teamId);
+  if (!info) return;
+  await wa.sendMemberApproved(info.phone, info.firstName, info.teamName);
+};
+
+// Notify team captain of bet result via WhatsApp
+const notifyBetResult = async (bet) => {
+  const captainId = bet.teams?.captain_id;
+  if (!captainId) return;
+  const { data: captain } = await supabase
+    .from('users')
+    .select('first_name, phone, whatsapp_opt_in')
+    .eq('id', captainId)
+    .maybeSingle();
+  if (!captain?.phone || captain.whatsapp_opt_in === false) return;
+  await wa.sendBetResult(captain.phone, bet.teams?.team_name || 'your team', bet.overall_status, bet.estimated_return || 0);
+};
 

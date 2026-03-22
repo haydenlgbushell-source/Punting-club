@@ -1,5 +1,6 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
+const wa = require('./lib/whatsapp');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -239,6 +240,9 @@ exports.handler = async (event) => {
         const { data: sd, error: signInErr } = await supabase.auth.signInWithPassword({ email: authEmail, password });
         if (!signInErr) sessionData = sd;
       } catch(e) {}
+
+      // Send WhatsApp welcome message (fire-and-forget — never block signup on this)
+      wa.sendWelcome(cleanPhone, firstName).catch(() => {});
 
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, team, session: sessionData?.session || null }) };
     }

@@ -16,6 +16,9 @@
   schedule = "0 */3 * * *"
   timeout = 900
 
+[functions."whatsapp"]
+  timeout = 10
+
 [[redirects]]
   from = "/api/auth"
   to = "/.netlify/functions/auth"
@@ -34,6 +37,11 @@
 [[redirects]]
   from = "/api/check-results"
   to = "/.netlify/functions/check-results"
+  status = 200
+
+[[redirects]]
+  from = "/api/whatsapp"
+  to = "/.netlify/functions/whatsapp"
   status = 200
 
 [[redirects]]
