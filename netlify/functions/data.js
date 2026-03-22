@@ -97,6 +97,12 @@ exports.handler = async (event) => {
           status:                'requested',
         }).select().single();
         if (e) return error(e.message);
+        await createAdminNotif(
+          'competition_request',
+          `New competition request: ${compName || pubName}`,
+          `${contactName} from ${pubName} has requested a competition (${compName}). ~${estimatedTeams || '?'} teams, buy-in $${parseInt(String(buyIn || '0').replace(/[^0-9]/g, '')) || 'TBD'}.`,
+          { requestId: data.id, requestCode, pubName, compName, contactName, contactPhone, contactEmail, estimatedTeams }
+        );
         return json(data);
       }
 
@@ -381,6 +387,12 @@ exports.handler = async (event) => {
           }
         }
 
+        await createAdminNotif(
+          'new_team',
+          `New team registered: ${teamName.trim()}`,
+          `A new team "${teamName.trim()}" has signed up${competitionCode ? ` for competition ${competitionCode}` : ''}. Captain user ID: ${userId}.`,
+          { teamId: newTeam.id, teamCode: teamCodeGen, teamName: teamName.trim(), competitionCode: competitionCode || null, userId }
+        );
         return json({ ...newTeam, teamCode: teamCodeGen });
       }
 
@@ -663,6 +675,47 @@ exports.handler = async (event) => {
         return json({ success: true });
       }
 
+      // ══════════════════════════════════════════════════════
+      //  ADMIN NOTIFICATIONS
+      // ══════════════════════════════════════════════════════
+
+      case 'get_admin_notifications': {
+        const { adminRole: role, unreadOnly = false } = payload;
+        if (!role) return error('Admin access required', 403);
+        let query = supabase
+          .from('admin_notifications')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (unreadOnly) query = query.eq('read', false);
+        const { data, error: e } = await query;
+        if (e) return error(e.message);
+        return json(data || []);
+      }
+
+      case 'mark_notification_read': {
+        const { id, adminRole: role } = payload;
+        if (!role) return error('Admin access required', 403);
+        const { data, error: e } = await supabase
+          .from('admin_notifications')
+          .update({ read: true })
+          .eq('id', id)
+          .select().single();
+        if (e) return error(e.message);
+        return json(data);
+      }
+
+      case 'mark_all_notifications_read': {
+        const { adminRole: role } = payload;
+        if (!role) return error('Admin access required', 403);
+        const { error: e } = await supabase
+          .from('admin_notifications')
+          .update({ read: true })
+          .eq('read', false);
+        if (e) return error(e.message);
+        return json({ success: true });
+      }
+
       default:
         return error(`Unknown action: ${action}`);
     }
@@ -675,6 +728,11 @@ exports.handler = async (event) => {
 // Helper: add audit log entry
 const addAudit = async (adminRole, action, target, detail) => {
   await supabase.from('audit_log').insert({ admin_role: adminRole, action, target, detail });
+};
+
+// Helper: create admin notification
+const createAdminNotif = async (type, title, message, data = {}) => {
+  await supabase.from('admin_notifications').insert({ type, title, message, data });
 };
 
 // Helper: generate random code
