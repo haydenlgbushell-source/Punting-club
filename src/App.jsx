@@ -8,6 +8,7 @@ import {
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
+  apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
 
@@ -396,6 +397,7 @@ export default function PuntingClub() {
   const [adminLoadError, setAdminLoadError] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
 
   // Bet Analyzer
   const [showBetAnalyzer, setShowBetAnalyzer] = useState(false);
@@ -896,13 +898,14 @@ export default function PuntingClub() {
     setAdminLoading(true);
     setAdminLoadError(null);
     try {
-      const [teams, users, bets, comps, audit, requests] = await Promise.allSettled([
+      const [teams, users, bets, comps, audit, requests, dbNotifs] = await Promise.allSettled([
         apiGetAllTeams(),
         apiGetAllUsers(),
         apiGetAllBets(),
         apiGetAllCompetitions(),
         apiGetAuditLog(100),
         apiGetCompetitionRequests(adminRole || 'owner'),
+        apiGetAdminNotifications(adminRole || 'owner'),
       ]);
       if (teams.status === 'fulfilled' && teams.value) {
         setAdminTeams(teams.value.map(mapTeam));
@@ -931,6 +934,19 @@ export default function PuntingClub() {
       if (requests.status === 'fulfilled' && requests.value) {
         setAdminCompRequests(requests.value);
       }
+      if (dbNotifs.status === 'fulfilled' && dbNotifs.value) {
+        setAdminNotifs(dbNotifs.value.map(n => ({
+          id:      n.id,
+          dbId:    n.id,
+          type:    n.type === 'new_team' ? 'info' : n.type === 'competition_request' ? 'warning' : 'info',
+          notifType: n.type,
+          msg:     n.title,
+          detail:  n.message,
+          data:    n.data || {},
+          time:    new Date(n.created_at).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }),
+          read:    n.read,
+        })));
+      }
     } finally {
       setAdminLoading(false);
     }
@@ -941,6 +957,16 @@ export default function PuntingClub() {
     if (!isAdminLoggedIn) return;
     refreshAdminData(adminUser?.role);
   }, [isAdminLoggedIn, refreshAdminData, adminUser?.role]);
+
+  // Close notification panel on outside click
+  useEffect(() => {
+    if (!showNotifPanel) return;
+    const handler = (e) => {
+      if (!e.target.closest('[data-notif-panel]')) setShowNotifPanel(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNotifPanel]);
 
   // Initialise viewedCompetitionCode from the user's primary competition
   useEffect(() => {
@@ -1229,7 +1255,14 @@ export default function PuntingClub() {
     }
   };
 
-  const markNotifRead = (id) => setAdminNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markNotifRead = async (id) => {
+    setAdminNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    try { await apiMarkNotificationRead(id, adminUser?.role || 'owner'); } catch(e) { /* non-critical */ }
+  };
+  const markAllNotifsRead = async () => {
+    setAdminNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    try { await apiMarkAllNotificationsRead(adminUser?.role || 'owner'); } catch(e) { /* non-critical */ }
+  };
   const unreadNotifs = adminNotifs.filter(n => !n.read).length;
 
   // canAdmin: owner can do everything; campaign can edit bets/kyc; pub_admin can only see their comp
@@ -2453,11 +2486,56 @@ export default function PuntingClub() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <button className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                <div className="relative" data-notif-panel>
+                  <button onClick={() => setShowNotifPanel(p => !p)} className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
                     <Bell className="w-4 h-4" />
-                    {unreadNotifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"/>}
+                    {unreadNotifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"/>}
                   </button>
+                  {showNotifPanel && (
+                    <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,width:'340px',backgroundColor:'#0f172a',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'12px',boxShadow:'0 20px 60px rgba(0,0,0,0.6)',zIndex:100,maxHeight:'480px',display:'flex',flexDirection:'column'}}>
+                      <div style={{padding:'12px 16px',borderBottom:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+                        <span style={{fontWeight:700,fontSize:'13px',color:'#f1f5f9'}}>Notifications {unreadNotifs > 0 && <span style={{backgroundColor:'#ef4444',color:'white',borderRadius:'999px',padding:'1px 7px',fontSize:'11px',marginLeft:'6px'}}>{unreadNotifs}</span>}</span>
+                        {unreadNotifs > 0 && (
+                          <button onClick={() => { markAllNotifsRead(); }} style={{fontSize:'11px',color:'#60a5fa',background:'none',border:'none',cursor:'pointer',padding:0}}>Mark all read</button>
+                        )}
+                      </div>
+                      <div style={{overflowY:'auto',flex:1}}>
+                        {adminNotifs.length === 0 && (
+                          <div style={{padding:'32px 16px',textAlign:'center',color:'#4b5563',fontSize:'13px'}}>No notifications yet</div>
+                        )}
+                        {adminNotifs.map(n => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              markNotifRead(n.id);
+                              setShowNotifPanel(false);
+                              if (n.notifType === 'new_team') setAdminTab('teams');
+                              else if (n.notifType === 'competition_request') setAdminTab('competitions');
+                            }}
+                            style={{
+                              padding:'12px 16px',
+                              borderBottom:'1px solid rgba(255,255,255,0.05)',
+                              cursor:'pointer',
+                              backgroundColor: n.read ? 'transparent' : 'rgba(255,255,255,0.03)',
+                              transition:'background 0.15s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor='rgba(255,255,255,0.06)'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor= n.read ? 'transparent' : 'rgba(255,255,255,0.03)'}
+                          >
+                            <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
+                              <span style={{fontSize:'16px',flexShrink:0,marginTop:'1px'}}>{n.notifType === 'new_team' ? '🏆' : n.notifType === 'competition_request' ? '📬' : '🔔'}</span>
+                              <div style={{flex:1,minWidth:0}}>
+                                <p style={{fontSize:'12px',fontWeight:n.read ? 500 : 700,color: n.read ? '#9ca3af' : '#f1f5f9',marginBottom:'2px',lineHeight:'1.4'}}>{n.msg}</p>
+                                {n.detail && <p style={{fontSize:'11px',color:'#6b7280',lineHeight:'1.4',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{n.detail}</p>}
+                                <p style={{fontSize:'10px',color:'#4b5563',marginTop:'4px'}}>{n.time}</p>
+                              </div>
+                              {!n.read && <span style={{width:'7px',height:'7px',borderRadius:'50%',backgroundColor:'#3b82f6',flexShrink:0,marginTop:'5px'}}/>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="hidden sm:block text-gray-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
                 {adminLoading && <span className="text-xs text-amber-400 animate-pulse">Loading...</span>}
@@ -2539,6 +2617,33 @@ export default function PuntingClub() {
                       <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
                       <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-purple-400"/>
                     </div>
+
+                    {/* Pending notifications panel on dashboard */}
+                    {adminNotifs.filter(n => !n.read).length > 0 && (
+                      <div className="bg-blue-950/20 border border-blue-500/30 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-bold text-blue-400 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
+                          <button onClick={markAllNotifsRead} className="text-xs text-blue-400 hover:text-blue-300">Mark all read</button>
+                        </div>
+                        <div className="space-y-2">
+                          {adminNotifs.filter(n => !n.read).slice(0, 5).map(n => (
+                            <div
+                              key={n.id}
+                              onClick={() => { markNotifRead(n.id); if (n.notifType === 'new_team') setAdminTab('teams'); else if (n.notifType === 'competition_request') setAdminTab('competitions'); }}
+                              className="flex items-start gap-3 bg-black/30 rounded-lg px-3 py-2.5 cursor-pointer hover:bg-black/50 transition-colors"
+                            >
+                              <span className="text-base flex-shrink-0">{n.notifType === 'new_team' ? '🏆' : n.notifType === 'competition_request' ? '📬' : '🔔'}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-white">{n.msg}</p>
+                                {n.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.detail}</p>}
+                                <p className="text-xs text-gray-600 mt-1">{n.time}</p>
+                              </div>
+                              <span className="text-xs text-blue-400 flex-shrink-0 mt-0.5">{n.notifType === 'new_team' ? 'View →' : 'Review →'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Flagged + KYC side by side on desktop */}
                     <div className="grid lg:grid-cols-2 gap-4">

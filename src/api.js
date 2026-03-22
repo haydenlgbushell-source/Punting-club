@@ -66,6 +66,9 @@ export const apiUpdateKyc    = (userId, kycStatus, adminRole) => call('data', { 
 export const apiUpdateUser   = (userId, updates, adminRole)   => call('data', { action: 'update_user', userId, updates, adminRole });
 export const apiGetAuditLog  = (limit)                   => call('data', { action: 'get_audit_log', limit });
 export const apiAddAudit     = (adminRole, action, target, detail) => call('data', { action: 'add_audit', adminRole, action, target, detail });
+export const apiGetAdminNotifications    = (adminRole, unreadOnly = false) => call('data', { action: 'get_admin_notifications', adminRole, unreadOnly });
+export const apiMarkNotificationRead    = (id, adminRole) => call('data', { action: 'mark_notification_read', id, adminRole });
+export const apiMarkAllNotificationsRead = (adminRole)    => call('data', { action: 'mark_all_notifications_read', adminRole });
 
 // ── CLAUDE AI ────────────────────────────────────────────────
 export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {

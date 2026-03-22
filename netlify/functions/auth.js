@@ -210,6 +210,14 @@ exports.handler = async (event) => {
           }
         }
 
+        // Notify admin of new team signup
+        await supabase.from('admin_notifications').insert({
+          type:    'new_team',
+          title:   `New team registered: ${teamName.trim()}`,
+          message: `${firstName} ${lastName} created team "${teamName.trim()}"${competitionCode ? ` for competition ${competitionCode}` : ''}. Phone: ${cleanPhone}.`,
+          data:    { teamId: newTeam.id, teamCode: teamCodeGen, teamName: teamName.trim(), competitionCode: competitionCode || null, captainName: `${firstName} ${lastName}`, captainPhone: cleanPhone },
+        });
+
         team = { ...newTeam, teamCode: teamCodeGen, team_code: teamCodeGen };
 
       } else if (teamCode) {
