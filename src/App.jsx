@@ -377,6 +377,7 @@ export default function PuntingClub() {
 
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminUser, setAdminUser] = useState(null);
   const [adminLoginId, setAdminLoginId] = useState('');
   const [adminLoginPw, setAdminLoginPw] = useState('');
@@ -1113,15 +1114,15 @@ export default function PuntingClub() {
     if (!a || a.password !== adminLoginPw) { showToast('Invalid admin credentials.', 'error'); return; }
     setIsAdminLoggedIn(true);
     setAdminUser(a);
+    setShowAdminPanel(true);
     setShowAdminLogin(false);
-    setActiveNav('admin');
     setAdminLoginId(''); setAdminLoginPw('');
     addAuditEntry(a.role, 'Admin Login', a.name, 'Logged in to admin panel');
   };
 
   const handleAdminLogout = () => {
     if (adminUser) addAuditEntry(adminUser.role, 'Admin Logout', adminUser.name, '');
-    setIsAdminLoggedIn(false); setAdminUser(null); setActiveNav('home');
+    setIsAdminLoggedIn(false); setAdminUser(null); setShowAdminPanel(false);
   };
 
   const addAuditEntry = (role, action, target, detail) => {
@@ -1454,7 +1455,7 @@ export default function PuntingClub() {
               ))}
               {/* Admin nav — always visible as a discreet entry point */}
               {isAdminLoggedIn ? (
-                <button onClick={() => setActiveNav('admin')} className={`relative px-3 py-1.5 rounded-lg text-sm transition-all flex items-center gap-1.5 ${activeNav === 'admin' ? 'text-red-400 bg-red-500/10 font-semibold' : 'text-red-500/70 hover:text-red-400 hover:bg-red-500/5'}`}>
+                <button onClick={() => setShowAdminPanel(p => !p)} className={`relative px-3 py-1.5 rounded-lg text-sm transition-all flex items-center gap-1.5 ${showAdminPanel ? 'text-red-400 bg-red-500/10 font-semibold' : 'text-red-500/70 hover:text-red-400 hover:bg-red-500/5'}`}>
                   <Shield className="w-3.5 h-3.5" />Admin
                   {unreadNotifs > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{unreadNotifs}</span>}
                 </button>
@@ -2438,7 +2439,7 @@ export default function PuntingClub() {
       {/* ══════════════════════════════════════════════════════════════════
           ADMIN PANEL
       ══════════════════════════════════════════════════════════════════ */}
-      {activeNav === 'admin' && isAdminLoggedIn && (() => {
+      {showAdminPanel && isAdminLoggedIn && (() => {
         // ── Admin sub-components (inline) ──────────────────────────────
         const AdminCard = ({ title, value, sub, icon, color = 'text-amber-400' }) => (
           <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.10)"}}>
@@ -2471,7 +2472,7 @@ export default function PuntingClub() {
         const filteredBets  = adminBets.filter(b => adminSearch === '' || b.team.toLowerCase().includes(adminSearch.toLowerCase()) || b.id.toLowerCase().includes(adminSearch.toLowerCase()));
 
         return (
-          <section style={{position:"fixed",inset:0,zIndex:50,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
+          <section style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
             {/* Admin top bar */}
             <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:0,zIndex:10}} className="px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -2484,6 +2485,13 @@ export default function PuntingClub() {
                   <span>·</span>
                   <span>{adminUser.name}</span>
                 </div>
+                <button
+                  onClick={() => setShowAdminPanel(false)}
+                  style={{backgroundColor:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"#94a3b8",padding:"4px 12px",borderRadius:"8px",fontSize:"12px",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}
+                  title="Return to user view (stay logged in as admin)"
+                >
+                  ← Back to Site
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative" data-notif-panel>
