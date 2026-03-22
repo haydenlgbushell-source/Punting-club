@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   apiSignUp, apiLogin, apiVerifySession,
-  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiAdvanceWeek,
+  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
@@ -1254,6 +1254,16 @@ export default function PuntingClub() {
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
     } catch(err) { console.error(err); }
+  };
+
+  const deleteCompetition = async (id, name) => {
+    try {
+      await apiDeleteCompetition(id, adminUser?.role);
+      setAdminComps(prev => prev.filter(c => c.id !== id));
+      setActiveCompetitions(prev => prev.filter(c => c.id !== id));
+      addAuditEntry(adminUser?.role, 'Competition Deleted', name, '');
+      showToast(`"${name}" deleted`, 'success');
+    } catch(err) { showToast(`Delete failed: ${err.message}`, 'error'); }
   };
 
   const advanceWeek = async (id, direction = 'forward') => {
@@ -3208,6 +3218,18 @@ export default function PuntingClub() {
                                     )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
                                     <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    {adminUser?.role === 'owner' && (
+                                      <button
+                                        onClick={() => {
+                                          const teamCount = (c.teams || []).length || c.team_count || 0;
+                                          const msg = teamCount > 0
+                                            ? `Delete "${c.name}"?\n\nThis will permanently delete the competition and its ${teamCount} team(s), all bets, and all bet legs. This cannot be undone.`
+                                            : `Delete "${c.name}"? This cannot be undone.`;
+                                          if (window.confirm(msg)) deleteCompetition(c.id, c.name);
+                                        }}
+                                        className="bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                      >🗑 Delete</button>
+                                    )}
                                   </div>
                                 )}
                               </div>

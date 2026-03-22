@@ -142,6 +142,32 @@ exports.handler = async (event) => {
         return json(data);
       }
 
+      case 'delete_competition': {
+        const { id, adminRole } = payload;
+        if (adminRole !== 'owner') return error('Only owner can delete competitions', 403);
+        // Fetch name for audit before deleting
+        const { data: comp, error: fetchErr } = await supabase.from('competitions').select('name, code').eq('id', id).single();
+        if (fetchErr) return error(fetchErr.message);
+        // Delete all dependent data in order
+        const teamRes = await supabase.from('teams').select('id').eq('competition_id', id);
+        const teamIds = (teamRes.data || []).map(t => t.id);
+        if (teamIds.length) {
+          const betRes = await supabase.from('bets').select('id').in('team_id', teamIds);
+          const betIds = (betRes.data || []).map(b => b.id);
+          if (betIds.length) {
+            await supabase.from('bet_legs').delete().in('bet_id', betIds);
+            await supabase.from('bets').delete().in('id', betIds);
+          }
+          await supabase.from('betting_order').delete().in('team_id', teamIds);
+          await supabase.from('team_members').delete().in('team_id', teamIds);
+          await supabase.from('teams').delete().in('id', teamIds);
+        }
+        const { error: delErr } = await supabase.from('competitions').delete().eq('id', id);
+        if (delErr) return error(delErr.message);
+        await addAudit(adminRole, 'Competition Deleted', comp.name, `Code: ${comp.code}, Teams removed: ${teamIds.length}`);
+        return json({ success: true, name: comp.name });
+      }
+
       case 'update_competition_status': {
         const { id, status, adminRole } = payload;
         const { data, error: e } = await supabase.from('competitions').update({ status }).eq('id', id).select().single();
