@@ -834,6 +834,8 @@ export default function PuntingClub() {
           setCurrentTeamId(sess.teamId || null);
           setIsLoggedIn(true);
           if (sess.teamId) setActiveNav('team');
+          // Restore finalised state from cache
+          if (sess.teamFinalised) { setTeamFinalised(true); setDepositPerMember(sess.depositPerMember || null); }
           // Verify with server and refresh all data (handles stale cache, role changes, new teams)
           apiVerifySession(userId).then(result => {
             if (!result?.user) {
@@ -849,7 +851,10 @@ export default function PuntingClub() {
             const freshUser = { ...user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, firstName: user.first_name, lastName: user.last_name, competitionCode: compCode, allTeamIds };
             setCurrentUser(freshUser);
             setCurrentTeamId(myTeam?.id || null);
-            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', allTeamIds })); } catch(_) {}
+            // Restore finalised state from live team data
+            if (myTeam?.finalised) { setTeamFinalised(true); setDepositPerMember(myTeam.deposit_per_member || null); }
+            else { setTeamFinalised(false); setDepositPerMember(null); }
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
           }).catch(() => {
             // Server unreachable — keep cached session, data will load via normal effects
           });
@@ -1097,6 +1102,11 @@ export default function PuntingClub() {
     setDepositPerMember(perMember);
     setTeamFinalised(true);
     setShowFinaliseModal(false);
+    // Persist to localStorage so refresh restores state before verify_session returns
+    try {
+      const saved = localStorage.getItem('pc_session');
+      if (saved) { const s = JSON.parse(saved); localStorage.setItem('pc_session', JSON.stringify({ ...s, teamFinalised: true, depositPerMember: perMember })); }
+    } catch(_) {}
     try {
       if (currentUser?.teamId) await apiFinaliseTeam(currentUser.teamId, perMember);
     } catch (err) { console.error('Finalise save failed (local state still updated):', err); }
@@ -1105,6 +1115,11 @@ export default function PuntingClub() {
   const unfinaliseTeam = () => {
     setTeamFinalised(false);
     setDepositPerMember(null);
+    // Clear from localStorage too
+    try {
+      const saved = localStorage.getItem('pc_session');
+      if (saved) { const s = JSON.parse(saved); localStorage.setItem('pc_session', JSON.stringify({ ...s, teamFinalised: false, depositPerMember: null })); }
+    } catch(_) {}
   };
 
   // ── ADMIN AUTH ────────────────────────────────────────────────────────────
