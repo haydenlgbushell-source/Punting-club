@@ -41,10 +41,13 @@ exports.handler = async (event) => {
       }
 
       case 'get_all_competitions': {
-        const { data, error: e } = await supabase
+        const { competitionId } = payload;
+        let query = supabase
           .from('competitions')
           .select('*, teams(id, team_name, team_code, status)')
           .order('created_at', { ascending: false });
+        if (competitionId) query = query.eq('id', competitionId);
+        const { data, error: e } = await query;
         if (e) return error(e.message);
         const enriched = (data || []).map(c => ({ ...c, team_count: c.teams?.length || 0 }));
         return json(enriched);
@@ -127,7 +130,43 @@ exports.handler = async (event) => {
           .select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, `Competition Request ${reqStatus}`, data.comp_name, `Contact: ${data.contact_name}`);
-        return json(data);
+
+        // When approved: auto-create the competition and generate pub admin credentials
+        let adminCredentials = null;
+        if (reqStatus === 'approved') {
+          const compCode = genCode(6);
+          // Username: lowercase slug of pub name, max 20 chars
+          const baseUsername = (data.pub_name || 'pub').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'pub';
+          // Ensure uniqueness by appending 4 random digits
+          const adminUsername = baseUsername + Math.floor(1000 + Math.random() * 9000);
+          const adminPassword = genCode(8).toLowerCase();
+
+          const insertRow = {
+            code:          compCode,
+            name:          data.comp_name || data.pub_name,
+            pub:           data.pub_name,
+            status:        'active',
+            weeks:         data.preferred_end_date && data.preferred_start_date
+                             ? Math.max(1, Math.round((new Date(data.preferred_end_date) - new Date(data.preferred_start_date)) / (7 * 86400000)))
+                             : 8,
+            buy_in:        data.buy_in || 1000,
+            max_teams:     data.estimated_teams || 20,
+            start_date:    data.preferred_start_date || null,
+            end_date:      data.preferred_end_date || null,
+            jackpot:       0,
+            is_private:    data.is_private || false,
+            admin_username: adminUsername,
+            admin_password: adminPassword,
+          };
+
+          const { data: newComp, error: compErr } = await supabase.from('competitions').insert(insertRow).select().single();
+          if (!compErr && newComp) {
+            adminCredentials = { adminUsername, adminPassword, competitionCode: compCode, competitionId: newComp.id };
+            await addAudit(adminRole, 'Competition Auto-Created', insertRow.name, `Code: ${compCode}, Admin: ${adminUsername}`);
+          }
+        }
+
+        return json({ ...data, adminCredentials });
       }
 
       case 'get_competition_by_code': {
@@ -227,11 +266,14 @@ exports.handler = async (event) => {
       }
 
       case 'get_all_teams': {
-        // Get teams with competition info
-        const { data: teams, error: e1 } = await supabase
+        // Get teams with competition info; pub_admin passes competitionId to scope results
+        const { competitionId } = payload;
+        let teamsQuery = supabase
           .from('teams')
           .select('*, competitions(id, name, code)')
           .order('created_at', { ascending: false });
+        if (competitionId) teamsQuery = teamsQuery.eq('competition_id', competitionId);
+        const { data: teams, error: e1 } = await teamsQuery;
         if (e1) return error(e1.message);
         if (!teams || teams.length === 0) return json([]);
 
@@ -740,6 +782,19 @@ exports.handler = async (event) => {
           .eq('read', false);
         if (e) return error(e.message);
         return json({ success: true });
+      }
+
+      case 'check_pub_admin_login': {
+        const { username, password } = payload;
+        if (!username || !password) return error('Missing credentials', 400);
+        const { data: comp, error: e } = await supabase
+          .from('competitions')
+          .select('id, name, pub, admin_username, admin_password')
+          .eq('admin_username', username.trim())
+          .single();
+        if (e || !comp) return error('Invalid credentials', 401);
+        if (comp.admin_password !== password) return error('Invalid credentials', 401);
+        return json({ competitionId: comp.id, competitionName: comp.name, pubName: comp.pub });
       }
 
       default:
