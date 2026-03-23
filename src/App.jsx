@@ -2173,7 +2173,9 @@ export default function PuntingClub() {
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button onClick={() => setShowInviteModal(true)} className="bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
+                {!teamFinalised && (
+                  <button onClick={() => setShowInviteModal(true)} className="bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
+                )}
                 {currentUser?.role === 'captain' && (
                   <button onClick={() => setShowOrderModal(true)} className="bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-xs font-semibold">Betting Order</button>
                 )}
@@ -2190,7 +2192,7 @@ export default function PuntingClub() {
             </div>
 
             {/* Captain tip — only shown if team has no members yet */}
-            {currentUser?.role === 'captain' && teamMembers.length <= 1 && (
+            {currentUser?.role === 'captain' && teamMembers.length <= 1 && !teamFinalised && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start gap-3">
                 <span className="text-xl flex-shrink-0">👑</span>
                 <div>
@@ -3850,7 +3852,7 @@ export default function PuntingClub() {
       )}
 
       {/* INVITE */}
-      {showInviteModal && (
+      {showInviteModal && !teamFinalised && (
         <Modal title="Invite Team Member" onClose={() => setShowInviteModal(false)}>
           <div className="p-5 space-y-4">
             <div className="bg-green-500/10 border-2 border-green-500/40 rounded-xl p-5 text-center">
