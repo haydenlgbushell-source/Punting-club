@@ -391,6 +391,7 @@ export default function PuntingClub() {
   const [adminSearch, setAdminSearch] = useState('');
   const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
+  const [expandedTeamIds, setExpandedTeamIds] = useState(new Set()); // teams with member list open
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
@@ -876,6 +877,7 @@ export default function PuntingClub() {
       captain, captainPhone: t.users?.phone || '',
       members: members.length,
       memberList: members.map(m => ({
+        userId: m.user_id,
         name: m.users ? `${m.users.first_name} ${m.users.last_name}`.trim() : '',
         role: m.role, phone: m.users?.phone, kyc: m.users?.kyc_status,
         depositPaid: m.deposit_paid, canBet: m.can_bet,
@@ -1188,6 +1190,50 @@ export default function PuntingClub() {
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
     try { await apiUpdateTeam(id, { flagged: newFlagged }, adminUser?.role); } catch(err) { console.error(err); }
+  };
+
+  // Change a team member's role (captain ↔ member). Owner only.
+  const handleChangeMemberRole = async (teamId, targetUserId, newRole) => {
+    const team = adminTeams.find(t => t.id === teamId);
+    if (!team) return;
+    const target = team.memberList.find(m => m.userId === targetUserId);
+    if (!target) return;
+
+    try {
+      if (newRole === 'captain') {
+        // Demote existing captain first
+        const oldCaptain = team.memberList.find(m => m.role === 'captain');
+        if (oldCaptain && oldCaptain.userId !== targetUserId) {
+          await apiUpdateMember(teamId, oldCaptain.userId, { role: 'member' });
+        }
+        // Promote new captain
+        await apiUpdateMember(teamId, targetUserId, { role: 'captain', can_bet: true });
+        // Update captain_id on the team row
+        await apiUpdateTeam(teamId, { captain_id: targetUserId }, adminUser.role);
+        // Update local state
+        setAdminTeams(prev => prev.map(t => {
+          if (t.id !== teamId) return t;
+          const updatedList = t.memberList.map(m => ({
+            ...m,
+            role: m.userId === targetUserId ? 'captain' : m.role === 'captain' ? 'member' : m.role,
+          }));
+          return { ...t, captain: target.name, memberList: updatedList };
+        }));
+        addAuditEntry(adminUser.role, 'Captain Changed', team.name, `New captain: ${target.name}`);
+        showToast(`${target.name} is now captain of ${team.name}`, 'success');
+      } else {
+        // Demote captain to member (only if there's another member to take over, or just demote)
+        await apiUpdateMember(teamId, targetUserId, { role: 'member' });
+        setAdminTeams(prev => prev.map(t => {
+          if (t.id !== teamId) return t;
+          return { ...t, memberList: t.memberList.map(m => m.userId === targetUserId ? { ...m, role: 'member' } : m) };
+        }));
+        addAuditEntry(adminUser.role, 'Member Demoted', team.name, `${target.name} changed to member`);
+        showToast(`${target.name} changed to member`, 'success');
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    }
   };
 
   // ── ADMIN USER / KYC ACTIONS ──────────────────────────────────────────────
@@ -2825,6 +2871,47 @@ export default function PuntingClub() {
                                 <span>Created: <span className="text-gray-300">{t.createdAt}</span></span>
                                 <span>Total Bet: <span className="text-green-400 font-semibold">{t.totalBet}</span></span>
                               </div>
+                              {/* Expandable member list (owner only) */}
+                              {adminUser?.role === 'owner' && t.memberList.length > 0 && (
+                                <button
+                                  onClick={() => setExpandedTeamIds(prev => {
+                                    const next = new Set(prev);
+                                    next.has(t.id) ? next.delete(t.id) : next.add(t.id);
+                                    return next;
+                                  })}
+                                  className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                >
+                                  {expandedTeamIds.has(t.id) ? '▲ Hide members' : '▼ Edit members'}
+                                </button>
+                              )}
+                              {expandedTeamIds.has(t.id) && (
+                                <div className="mt-3 space-y-1.5 border-t border-white/5 pt-3">
+                                  {t.memberList.map(m => (
+                                    <div key={m.userId} className="flex items-center justify-between gap-3 text-xs">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${m.role === 'captain' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : m.role === 'pending' ? 'bg-gray-500/20 text-gray-400 border border-gray-500/30' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                                          {m.role === 'captain' ? '★ Captain' : m.role === 'pending' ? 'Pending' : 'Member'}
+                                        </span>
+                                        <span className="text-gray-300 truncate">{m.name || 'Unknown'}</span>
+                                        {m.phone && <span className="text-gray-600 hidden sm:inline">{m.phone}</span>}
+                                        {m.depositPaid && <span className="text-green-500 text-xs">✓ Paid</span>}
+                                      </div>
+                                      {adminUser?.role === 'owner' && m.role !== 'captain' && m.role !== 'pending' && (
+                                        <button
+                                          onClick={() => handleChangeMemberRole(t.id, m.userId, 'captain')}
+                                          className="flex-shrink-0 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded text-xs hover:bg-amber-500/20"
+                                        >Make Captain</button>
+                                      )}
+                                      {adminUser?.role === 'owner' && m.role === 'captain' && t.memberList.filter(x => x.role !== 'pending').length > 1 && (
+                                        <button
+                                          onClick={() => handleChangeMemberRole(t.id, m.userId, 'member')}
+                                          className="flex-shrink-0 bg-gray-500/10 border border-gray-500/20 text-gray-400 px-2 py-0.5 rounded text-xs hover:bg-gray-500/20"
+                                        >Demote</button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             <div className="flex flex-col gap-1.5 flex-shrink-0">
                               {t.status === 'pending' && canAdmin('bets') && (
