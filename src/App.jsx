@@ -1475,7 +1475,7 @@ export default function PuntingClub() {
               <span className="text-xl font-black bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">PUNTING CLUB</span>
             </div>
             <div className="hidden md:flex items-center gap-1">
-              {[['home','Home'],['competition','Competition'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team'],['howto','How To']].map(([key, label]) => (
+              {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
                 <button key={key} onClick={() => setActiveNav(key)} className={`px-3 py-1.5 rounded-lg text-sm transition-all ${activeNav === key ? 'text-amber-400 bg-amber-500/10 font-semibold' : 'text-gray-400 hover:text-amber-300 hover:bg-white/5'}`}>{label}</button>
               ))}
               {/* Admin nav — always visible as a discreet entry point */}
@@ -1511,7 +1511,7 @@ export default function PuntingClub() {
           </div>
           {mobileMenuOpen && (
             <div className="md:hidden pb-4 space-y-1 border-t border-amber-500/20 pt-3 bg-gray-950">
-              {[['home','Home'],['competition','Competition'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team'],['howto','How To']].map(([key, label]) => (
+              {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
                 <button key={key} onClick={() => { setActiveNav(key); setMobileMenuOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">{label}</button>
               ))}
               <div className="border-t border-white/5 pt-3 space-y-2">
@@ -1641,12 +1641,38 @@ export default function PuntingClub() {
         </>
       )}
 
-      {/* ── COMPETITION ───────────────────────────────────────────────────── */}
-      {activeNav === 'competition' && (
+      {/* ── COMPETITION / HOW TO PLAY ─────────────────────────────────────── */}
+      {(activeNav === 'competition' || activeNav === 'howto') && (
         <section className="pt-28 pb-16 px-4 sm:px-6">
           <div className="max-w-5xl mx-auto">
-            <h1 className="text-4xl font-black mb-2">Competition Rules</h1>
-            <p className="text-gray-400 mb-10">Everything you need to know about how the competition works.</p>
+            <h1 className="text-4xl font-black mb-2">How to Play</h1>
+            <p className="text-gray-400 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
+
+            {/* Steps */}
+            <div className="space-y-4 mb-12">
+              {[
+                { n:'1', t:'Create or Join a Team', d:'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets:['Captain pays $1,000 buy-in or split among members','Invite up to 10+ members via your unique team code','Members must be approved by the captain before joining'] },
+                { n:'2', t:'Confirm Buy-In', d:'Before the season starts all team members must confirm their deposit contribution.', bullets:['Captain can track who has and hasn\'t paid','Competition doesn\'t officially start until all deposits confirmed','Special arrangements can be made via admin'] },
+                { n:'3', t:'Submit Your Weekly Bet', d:'Place your bet on any platform, then submit the screenshot via the website.', bullets:['$50 max per week (split how you like)','Must submit before first leg starts','Last week of competition: $200 bet','You keep all your winnings!'] },
+                { n:'4', t:'Track Results', d:'AI reads your bet slip and updates leg-by-leg results every 3 hours from the first event start.', bullets:['Green = won, Red = lost, Orange = in progress (live)','Team leaderboard updates in real-time','Click any team to see their full bet slip'] },
+                { n:'5', t:'Win the Jackpot', d:'Highest total winnings at season end takes the prize pool.', bullets:['Payout depends on number of teams','Final week has $200 bet for big finish','Top 2-3 teams paid depending on competition size'] },
+              ].map(s => (
+                <div key={s.n} className="bg-white/3 border border-white/8 rounded-xl p-5 flex gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-black text-lg flex-shrink-0">{s.n}</div>
+                  <div>
+                    <h3 className="font-bold text-base mb-1">{s.t}</h3>
+                    <p className="text-gray-400 text-sm mb-2">{s.d}</p>
+                    <ul className="space-y-1">
+                      {s.bullets.map((b, i) => <li key={i} className="text-gray-500 text-xs flex gap-1.5"><span className="text-amber-500">▸</span>{b}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Competition Rules */}
+            <h2 className="text-2xl font-black mb-2">Competition Rules</h2>
+            <p className="text-gray-400 mb-8">The detailed rules that govern how each season runs.</p>
             <div className="grid md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white/3 border border-white/8 rounded-xl p-6">
                 <h3 className="text-lg font-bold mb-4 text-amber-400">Betting Rules</h3>
@@ -1680,9 +1706,15 @@ export default function PuntingClub() {
                 ))}
               </div>
             </div>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 mb-8">
               <h3 className="text-lg font-bold mb-3 text-amber-400">The Punting Week</h3>
               <p className="text-gray-300 text-sm">Each competition week runs <strong className="text-white">Monday 12:00AM → Sunday 11:59PM</strong>. Bets must be submitted before the first leg of your multi starts. Teams can split the $50 across multiple bets (e.g. 2×$25 or 5×$10). Final week of the competition has a <strong className="text-white">$200 bet limit</strong>.</p>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
+              <h3 className="font-bold text-lg mb-2">Ready to play?</h3>
+              <p className="text-gray-400 text-sm mb-4">Get your mates together and start this week!</p>
+              <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 text-black px-8 py-3 rounded-xl font-bold transition-all hover:scale-105">Create Team Now</button>
             </div>
           </div>
         </section>
@@ -2440,39 +2472,6 @@ export default function PuntingClub() {
         </section>
       )}
 
-      {/* ── HOW TO PLAY ───────────────────────────────────────────────────── */}
-      {activeNav === 'howto' && (
-        <section className="pt-28 pb-16 px-4 sm:px-6">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl font-black mb-8">How to Play</h1>
-            <div className="space-y-4">
-              {[
-                { n:'1', t:'Create or Join a Team', d:'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets:['Captain pays $1,000 buy-in or split among members','Invite up to 10+ members via your unique team code','Members must be approved by the captain before joining'] },
-                { n:'2', t:'Confirm Buy-In', d:'Before the season starts all team members must confirm their deposit contribution.', bullets:['Captain can track who has and hasn\'t paid','Competition doesn\'t officially start until all deposits confirmed','Special arrangements can be made via admin'] },
-                { n:'3', t:'Submit Your Weekly Bet', d:'Place your bet on any platform, then submit the screenshot via the website.', bullets:['$50 max per week (split how you like)','Must submit before first leg starts','Last week of competition: $200 bet','You keep all your winnings!'] },
-                { n:'4', t:'Track Results', d:'AI reads your bet slip and updates leg-by-leg results every 3 hours from the first event start.', bullets:['Green = won, Red = lost, Orange = in progress (live)','Team leaderboard updates in real-time','Click any team to see their full bet slip'] },
-                { n:'5', t:'Win the Jackpot', d:'Highest total winnings at season end takes the prize pool.', bullets:['Payout depends on number of teams','Final week has $200 bet for big finish','Top 2-3 teams paid depending on competition size'] },
-              ].map(s => (
-                <div key={s.n} className="bg-white/3 border border-white/8 rounded-xl p-5 flex gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-black text-lg flex-shrink-0">{s.n}</div>
-                  <div>
-                    <h3 className="font-bold text-base mb-1">{s.t}</h3>
-                    <p className="text-gray-400 text-sm mb-2">{s.d}</p>
-                    <ul className="space-y-1">
-                      {s.bullets.map((b, i) => <li key={i} className="text-gray-500 text-xs flex gap-1.5"><span className="text-amber-500">▸</span>{b}</li>)}
-                    </ul>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-8 bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
-              <h3 className="font-bold text-lg mb-2">Ready to play?</h3>
-              <p className="text-gray-400 text-sm mb-4">Get your mates together and start this week!</p>
-              <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 text-black px-8 py-3 rounded-xl font-bold transition-all hover:scale-105">Create Team Now</button>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           ADMIN PANEL
@@ -3424,7 +3423,7 @@ export default function PuntingClub() {
           </div>
           {[
             ['Competition',[
-              { label:'How It Works', nav:'howto' },
+              { label:'How It Works', nav:'competition' },
               { label:'Leaderboards', nav:'leaderboard' },
               { label:'Competition Rules', nav:'competition' },
               { label:'Weekly Summary', nav:'weekly' },
@@ -3438,7 +3437,7 @@ export default function PuntingClub() {
             ['Contact',[
               { label:'support@puntingclub.com' },
               { label:'WhatsApp: +61 XXX XXX XXX' },
-              { label:'FAQ', nav:'howto' },
+              { label:'FAQ', nav:'competition' },
             ]],
           ].map(([h, items]) => (
             <div key={h}>
