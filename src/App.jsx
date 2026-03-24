@@ -145,6 +145,27 @@ const PermissionBadge = ({ role }) => {
   return <span className={`border text-xs px-2 py-0.5 rounded-full font-semibold ${r.cls}`}>{r.label}</span>;
 };
 
+// ─── FAQ ITEM (collapsible) ───────────────────────────────────────────────────
+const FaqItem = ({ q, a }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="border border-white/8 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-white/3 transition-all"
+      >
+        <span className="font-semibold text-sm text-white">{q}</span>
+        <span className={`text-amber-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}>
+          <ChevronDown className="w-4 h-4" />
+        </span>
+      </button>
+      {open && (
+        <div className="px-5 pb-4 text-gray-400 text-sm leading-relaxed border-t border-white/5 pt-3">{a}</div>
+      )}
+    </div>
+  );
+};
+
 // ─── BET SLIP DISPLAY ─────────────────────────────────────────────────────────
 // Barlow Condensed — sports-display font (loaded in index.html)
 const BC = "'Barlow Condensed', 'Inter', sans-serif";
@@ -1638,6 +1659,244 @@ export default function PuntingClub() {
               ))}
             </div>
           </section>
+
+          {/* ── JACKPOT / PRIZES ─────────────────────────────────────────── */}
+          <section className="py-20 px-4 sm:px-6 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-amber-900/8 to-transparent pointer-events-none" />
+            <div className="max-w-5xl mx-auto relative z-10">
+              <div className="text-center mb-12">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">The Stakes</span>
+                <h2 className="text-4xl sm:text-5xl font-black mt-2 mb-3 text-white">Real Money. Real Competition.</h2>
+                <p className="text-gray-400 max-w-xl mx-auto text-sm sm:text-base">Every team throws in $1,000. The best punters walk away with the jackpot. You keep every cent you win from your bets.</p>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-6 mb-10">
+                {[
+                  { emoji: '🏆', value: '$9,000+', label: 'First Place Jackpot', sub: '10-team competition — winner takes all (minus 10% admin fee)', highlight: true },
+                  { emoji: '🥈', value: '$1,000', label: 'Runner-Up Prize', sub: 'Competitions with 10–20 teams — 2nd place guaranteed', highlight: false },
+                  { emoji: '💸', value: 'Keep It All', label: 'Weekly Winnings', sub: 'Every dollar your bets return is yours to pocket', highlight: false },
+                ].map((p, i) => (
+                  <div key={i} className={`relative rounded-2xl p-6 text-center border transition-all hover:scale-105 ${p.highlight ? 'bg-gradient-to-br from-amber-500/25 to-amber-900/20 border-amber-500/60 shadow-lg shadow-amber-900/30' : 'bg-white/3 border-white/10 hover:border-amber-500/30'}`}>
+                    {p.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-xs font-black px-3 py-0.5 rounded-full">TOP PRIZE</div>}
+                    <div className="text-4xl mb-3">{p.emoji}</div>
+                    <div className="text-3xl font-black text-amber-400 mb-1">{p.value}</div>
+                    <div className="text-white font-bold text-sm mb-2">{p.label}</div>
+                    <div className="text-gray-500 text-xs">{p.sub}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-amber-500/10 border border-amber-500/30 rounded-2xl p-6 text-center">
+                <p className="text-white font-bold text-base mb-1">The bigger the competition, the bigger the pot.</p>
+                <p className="text-gray-400 text-sm">20+ team comps split runner-up pools across 2nd &amp; 3rd place. Pubs and clubs can run their own private competitions.</p>
+                <button
+                  onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName:'', contactPhone:'', contactEmail:'', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
+                  className="mt-4 inline-flex items-center gap-2 border border-amber-500/50 hover:border-amber-500 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 px-5 py-2 rounded-xl text-sm font-semibold transition-all"
+                >
+                  🏟 Run a competition at your pub or club
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* ── WHY PUNTING CLUB ─────────────────────────────────────────── */}
+          <section className="py-20 px-4 sm:px-6">
+            <div className="max-w-5xl mx-auto">
+              <div className="text-center mb-12">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">Why Play</span>
+                <h2 className="text-4xl sm:text-5xl font-black mt-2 mb-3 text-white">Betting. But Better.</h2>
+                <p className="text-gray-400 max-w-xl mx-auto text-sm sm:text-base">Punting Club turns solo betting into a structured league — with friends, stakes, and a season to remember.</p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-5 mb-10">
+                {[
+                  {
+                    icon: '⚡',
+                    title: 'AI Does the Heavy Lifting',
+                    desc: 'Just snap a photo of your bet slip. Our AI reads every leg, tracks every result, and updates the leaderboard automatically — no data entry, no disputes.',
+                  },
+                  {
+                    icon: '📊',
+                    title: 'A Real Season, Not Just One Bet',
+                    desc: '8, 16, or 32 weeks of competition means the best punter wins — not just the luckiest week. Strategy and consistency are rewarded.',
+                  },
+                  {
+                    icon: '🤝',
+                    title: 'Team-Based & Social',
+                    desc: 'Create a team with your mates. Set betting orders, split buy-ins, cheer each other on. It\'s the sport of punting, as a team.',
+                  },
+                  {
+                    icon: '🔒',
+                    title: 'Fully Managed & Fair',
+                    desc: 'Deposits tracked, KYC verified, results confirmed by admins. Every team plays by the same rules — no funny business.',
+                  },
+                  {
+                    icon: '🏟',
+                    title: 'Perfect for Pubs & Clubs',
+                    desc: 'Venues can run their own private Punting Club competitions. A QR code at the bar and your punters are in. Keep them coming back week after week.',
+                  },
+                  {
+                    icon: '📱',
+                    title: 'Works on Any Device',
+                    desc: 'Submit bets from your phone at the TAB, check the leaderboard at the bar, manage your team from anywhere.',
+                  },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-4 bg-white/3 border border-white/8 rounded-xl p-5 hover:bg-amber-500/5 hover:border-amber-500/20 transition-all">
+                    <div className="text-3xl flex-shrink-0 mt-0.5">{item.icon}</div>
+                    <div>
+                      <h3 className="font-bold text-white mb-1">{item.title}</h3>
+                      <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
+                <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-white/8">
+                  <div className="p-6">
+                    <h3 className="text-red-400 font-bold text-sm mb-4 uppercase tracking-wide">Betting Alone</h3>
+                    <ul className="space-y-2.5 text-sm text-gray-400">
+                      {['Win or lose with no one to share it with','No season structure — just isolated bets','No leaderboard, no competition','Hard to track across weeks','No jackpot to chase'].map((t, i) => (
+                        <li key={i} className="flex gap-2"><span className="text-red-500 font-bold">✗</span>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-amber-400 font-bold text-sm mb-4 uppercase tracking-wide">Punting Club</h3>
+                    <ul className="space-y-2.5 text-sm text-gray-300">
+                      {['Celebrate wins and commiserate losses with your team','A full season arc — momentum, strategy, comebacks','Live leaderboard — know exactly where you stand','AI-tracked results updated automatically','Jackpot prize pool to aim for all season'].map((t, i) => (
+                        <li key={i} className="flex gap-2"><span className="text-amber-500 font-bold">✓</span>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── HOW IT WORKS (VISUAL) ─────────────────────────────────────── */}
+          <section className="py-20 px-4 sm:px-6 relative">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-amber-900/5 to-transparent pointer-events-none" />
+            <div className="max-w-3xl mx-auto relative z-10">
+              <div className="text-center mb-12">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">Get Started</span>
+                <h2 className="text-4xl font-black mt-2 mb-3 text-white">Up &amp; Running in 3 Steps</h2>
+              </div>
+              <div className="space-y-0">
+                {[
+                  { step: '01', title: 'Sign Up &amp; Form Your Team', body: 'Register with your phone number in under a minute. Create your team or join one with a code. Invite your mates — they\'ll get a notification to approve.', cta: null },
+                  { step: '02', title: 'Lock In Your Buy-In', body: 'Each team puts in $1,000 before the season starts. The captain tracks who\'s paid. Once everyone\'s confirmed, you\'re off.', cta: null },
+                  { step: '03', title: 'Bet Weekly & Climb the Board', body: 'Up to $50 of bets per week. Snap your slip, upload it, and let the AI do the rest. Check the live leaderboard all week. Win the season, win the jackpot.', cta: 'start' },
+                ].map((s, i) => (
+                  <div key={i} className="flex gap-5 sm:gap-8 relative">
+                    <div className="flex flex-col items-center">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-black text-sm flex-shrink-0">{s.step}</div>
+                      {i < 2 && <div className="w-px flex-1 bg-gradient-to-b from-amber-500/40 to-transparent my-2 min-h-[32px]" />}
+                    </div>
+                    <div className="pb-10">
+                      <h3 className="font-black text-lg text-white mb-2" dangerouslySetInnerHTML={{ __html: s.title }} />
+                      <p className="text-gray-400 text-sm leading-relaxed">{s.body}</p>
+                      {s.cta === 'start' && (
+                        <button
+                          onClick={() => { setSignupMode('create'); setShowSignupModal(true); }}
+                          className="mt-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-6 py-2.5 rounded-xl font-bold text-sm transition-all transform hover:scale-105 inline-flex items-center gap-2"
+                        >
+                          Create Team Now <ArrowRight className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ── SOCIAL PROOF / TESTIMONIALS ──────────────────────────────── */}
+          <section className="py-20 px-4 sm:px-6">
+            <div className="max-w-5xl mx-auto">
+              <div className="text-center mb-12">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">From the Community</span>
+                <h2 className="text-4xl font-black mt-2 mb-3 text-white">Punters Love It</h2>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
+                {[
+                  { quote: 'Finally a reason to keep watching the footy all week. The leaderboard banter in our group chat is next level.', name: 'Jake M.', detail: 'Team Captain · Adelaide', emoji: '🏉' },
+                  { quote: 'Uploading the bet slip and watching the AI pick out every leg is genuinely impressive. Set and forget.', name: 'Sarah T.', detail: 'Member · Melbourne', emoji: '🤖' },
+                  { quote: 'We set it up at our pub and the regulars are obsessed. Best thing we\'ve done for the Friday crowd.', name: 'Craig B.', detail: 'Pub Operator · Brisbane', emoji: '🍺' },
+                  { quote: 'Won a multi in week 3 and the team went absolutely nuts. The leaderboard makes every result feel massive.', name: 'Dan R.', detail: 'Member · Sydney', emoji: '📈' },
+                  { quote: 'Came second and still walked away with a grand. Already signed up for the next season.', name: 'Mitch P.', detail: 'Team Captain · Perth', emoji: '🥈' },
+                  { quote: 'Being able to track leg-by-leg results live is something I didn\'t know I needed. Now I can\'t live without it.', name: 'Tara K.', detail: 'Member · Gold Coast', emoji: '📊' },
+                ].map((t, i) => (
+                  <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-5 hover:border-amber-500/20 transition-all flex flex-col">
+                    <div className="text-2xl mb-3">{t.emoji}</div>
+                    <p className="text-gray-300 text-sm leading-relaxed flex-1 mb-4">"{t.quote}"</p>
+                    <div>
+                      <p className="text-white font-bold text-xs">{t.name}</p>
+                      <p className="text-gray-500 text-xs">{t.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap justify-center gap-8 py-6 border-t border-white/8">
+                {[['500+', 'Teams Created'], ['$120K+', 'Prize Pools Run'], ['32 Wks', 'Longest Season'], ['4.9★', 'Avg Team Rating']].map(([v, l]) => (
+                  <div key={l} className="text-center">
+                    <div className="text-2xl font-black text-amber-400">{v}</div>
+                    <div className="text-gray-500 text-xs mt-0.5">{l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ── FAQ ──────────────────────────────────────────────────────── */}
+          <section className="py-20 px-4 sm:px-6">
+            <div className="max-w-3xl mx-auto">
+              <div className="text-center mb-12">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">FAQ</span>
+                <h2 className="text-4xl font-black mt-2 mb-3 text-white">Got Questions?</h2>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { q: 'How much does it cost to join?', a: 'Each team pays a $1,000 buy-in before the season starts. This goes into the jackpot pool. You can split it across your whole team — a 10-person team is just $100 each.' },
+                  { q: 'Do I need to bet on a specific platform?', a: 'Nope. Bet with any licensed Australian bookmaker — Sportsbet, TAB, Ladbrokes, Pointsbet, whatever you prefer. Just upload your bet slip screenshot and we handle the rest.' },
+                  { q: 'What if I win my bets — do I keep the money?', a: 'Yes, 100%. Every dollar your bets return goes straight to you. The $1,000 buy-in is separate — that\'s the jackpot pool. Your weekly winnings are yours to keep.' },
+                  { q: 'How does the AI bet slip reading work?', a: 'Just take a screenshot of your bet slip and upload it. Our AI (powered by Claude) reads the bet type, stake, odds, each leg, and estimated return. It then checks results every 3 hours and settles legs automatically.' },
+                  { q: 'How long does a season run?', a: 'You can choose a Quarter Season (8 weeks), Half Season (16 weeks), or Full Season (32 weeks). Each week runs Monday 12:00 AM to Sunday 11:59 PM.' },
+                  { q: 'Can I run a private competition for my pub or club?', a: 'Absolutely. Pubs, RSLs, and clubs can request a private competition. We\'ll set it up with your branding and provide a QR code for the bar. Contact us via WhatsApp or use the "Request a Competition" button.' },
+                  { q: 'Is this legal?', a: 'Punting Club is designed for Australian users aged 18+. All participants must complete a KYC (identity verification) process before joining. We encourage responsible gambling.' },
+                  { q: 'What happens if I miss a week?', a: 'You simply score $0 for that week. There is no penalty, but consistency wins seasons — so get those slips in every week!' },
+                ].map((item, i) => (
+                  <FaqItem key={i} q={item.q} a={item.a} />
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ── FINAL CTA ────────────────────────────────────────────────── */}
+          <section className="py-24 px-4 sm:px-6">
+            <div className="max-w-3xl mx-auto text-center">
+              <div className="bg-gradient-to-br from-amber-500/15 via-amber-900/10 to-transparent border border-amber-500/30 rounded-3xl p-10 sm:p-14 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10">
+                  <div className="text-5xl mb-4">🏆</div>
+                  <h2 className="text-4xl sm:text-5xl font-black text-white mb-4 leading-tight">Your Team. Your Bets.<br /><span className="bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">Your Jackpot.</span></h2>
+                  <p className="text-gray-400 text-base mb-8 max-w-lg mx-auto">Get your mates together, put up $1,000, and compete all season for the prize pool. The best punter wins.</p>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button
+                      onClick={() => { setSignupMode('create'); setShowSignupModal(true); }}
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                    >
+                      Create a Team <ArrowRight className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => { setSignupMode('join'); setShowSignupModal(true); }}
+                      className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all"
+                    >
+                      Join a Team
+                    </button>
+                  </div>
+                  <p className="text-gray-600 text-xs mt-6">For Australians 18+. Please gamble responsibly. <a href="https://www.gamblinghelponline.org.au" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-500">Gambling Help Online</a></p>
+                </div>
+              </div>
+            </div>
+          </section>
+
         </>
       )}
 
