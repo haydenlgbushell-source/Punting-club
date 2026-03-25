@@ -5,10 +5,11 @@ import {
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
-  apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
+  apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiUpdateUser, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
+  apiCheckPubAdminLogin,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
 
@@ -390,6 +391,7 @@ export default function PuntingClub() {
   const [adminSearch, setAdminSearch] = useState('');
   const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBet, setEditingBet] = useState(null); // bet being manually edited
+  const [expandedTeamIds, setExpandedTeamIds] = useState(new Set()); // teams with member list open
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
@@ -875,6 +877,7 @@ export default function PuntingClub() {
       captain, captainPhone: t.users?.phone || '',
       members: members.length,
       memberList: members.map(m => ({
+        userId: m.user_id,
         name: m.users ? `${m.users.first_name} ${m.users.last_name}`.trim() : '',
         role: m.role, phone: m.users?.phone, kyc: m.users?.kyc_status,
         depositPaid: m.deposit_paid, canBet: m.can_bet,
@@ -899,16 +902,16 @@ export default function PuntingClub() {
     };
   };
 
-  const refreshAdminData = useCallback(async (adminRole) => {
+  const refreshAdminData = useCallback(async (adminRole, competitionId) => {
     // mapTeam and mapUser are inlined here to avoid stale closure
     setAdminLoading(true);
     setAdminLoadError(null);
     try {
       const [teams, users, bets, comps, audit, requests, dbNotifs] = await Promise.allSettled([
-        apiGetAllTeams(),
+        apiGetAllTeams(competitionId),
         apiGetAllUsers(),
         apiGetAllBets(),
-        apiGetAllCompetitions(),
+        apiGetAllCompetitions(competitionId),
         apiGetAuditLog(100),
         apiGetCompetitionRequests(adminRole || 'owner'),
         apiGetAdminNotifications(adminRole || 'owner'),
@@ -962,8 +965,8 @@ export default function PuntingClub() {
   // Load admin data when admin logs in
   useEffect(() => {
     if (!isAdminLoggedIn) return;
-    refreshAdminData(adminUser?.role);
-  }, [isAdminLoggedIn, refreshAdminData, adminUser?.role]);
+    refreshAdminData(adminUser?.role, adminUser?.competitionId);
+  }, [isAdminLoggedIn, refreshAdminData, adminUser?.role, adminUser?.competitionId]);
 
   // Close notification panel on outside click
   useEffect(() => {
@@ -1124,16 +1127,39 @@ export default function PuntingClub() {
   };
 
   // ── ADMIN AUTH ────────────────────────────────────────────────────────────
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    const a = ADMIN_USERS[adminLoginId.trim()];
-    if (!a || a.password !== adminLoginPw) { showToast('Invalid admin credentials.', 'error'); return; }
-    setIsAdminLoggedIn(true);
-    setAdminUser(a);
-    setShowAdminPanel(true);
-    setShowAdminLogin(false);
-    setAdminLoginId(''); setAdminLoginPw('');
-    addAuditEntry(a.role, 'Admin Login', a.name, 'Logged in to admin panel');
+    const username = adminLoginId.trim();
+    // Check hardcoded admins first (owner / campaign manager)
+    const a = ADMIN_USERS[username];
+    if (a && a.password === adminLoginPw) {
+      setIsAdminLoggedIn(true);
+      setAdminUser(a);
+      setShowAdminPanel(true);
+      setShowAdminLogin(false);
+      setAdminLoginId(''); setAdminLoginPw('');
+      addAuditEntry(a.role, 'Admin Login', a.name, 'Logged in to admin panel');
+      return;
+    }
+    // Fall through: check Supabase for a competition pub admin
+    try {
+      const result = await apiCheckPubAdminLogin(username, adminLoginPw);
+      const pubAdminUser = {
+        role: 'pub_admin',
+        name: result.pubName || result.competitionName,
+        phone: username,
+        competitionId: result.competitionId,
+        competitionName: result.competitionName,
+      };
+      setIsAdminLoggedIn(true);
+      setAdminUser(pubAdminUser);
+      setShowAdminPanel(true);
+      setShowAdminLogin(false);
+      setAdminLoginId(''); setAdminLoginPw('');
+      addAuditEntry('pub_admin', 'Admin Login', pubAdminUser.name, `Logged in as pub admin for ${result.competitionName}`);
+    } catch (_) {
+      showToast('Invalid admin credentials.', 'error');
+    }
   };
 
   const handleAdminLogout = () => {
@@ -1165,6 +1191,50 @@ export default function PuntingClub() {
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
     try { await apiUpdateTeam(id, { flagged: newFlagged }, adminUser?.role); } catch(err) { console.error(err); }
+  };
+
+  // Change a team member's role (captain ↔ member). Owner only.
+  const handleChangeMemberRole = async (teamId, targetUserId, newRole) => {
+    const team = adminTeams.find(t => t.id === teamId);
+    if (!team) return;
+    const target = team.memberList.find(m => m.userId === targetUserId);
+    if (!target) return;
+
+    try {
+      if (newRole === 'captain') {
+        // Demote existing captain first
+        const oldCaptain = team.memberList.find(m => m.role === 'captain');
+        if (oldCaptain && oldCaptain.userId !== targetUserId) {
+          await apiUpdateMember(teamId, oldCaptain.userId, { role: 'member' });
+        }
+        // Promote new captain
+        await apiUpdateMember(teamId, targetUserId, { role: 'captain', can_bet: true });
+        // Update captain_id on the team row
+        await apiUpdateTeam(teamId, { captain_id: targetUserId }, adminUser.role);
+        // Update local state
+        setAdminTeams(prev => prev.map(t => {
+          if (t.id !== teamId) return t;
+          const updatedList = t.memberList.map(m => ({
+            ...m,
+            role: m.userId === targetUserId ? 'captain' : m.role === 'captain' ? 'member' : m.role,
+          }));
+          return { ...t, captain: target.name, memberList: updatedList };
+        }));
+        addAuditEntry(adminUser.role, 'Captain Changed', team.name, `New captain: ${target.name}`);
+        showToast(`${target.name} is now captain of ${team.name}`, 'success');
+      } else {
+        // Demote captain to member (only if there's another member to take over, or just demote)
+        await apiUpdateMember(teamId, targetUserId, { role: 'member' });
+        setAdminTeams(prev => prev.map(t => {
+          if (t.id !== teamId) return t;
+          return { ...t, memberList: t.memberList.map(m => m.userId === targetUserId ? { ...m, role: 'member' } : m) };
+        }));
+        addAuditEntry(adminUser.role, 'Member Demoted', team.name, `${target.name} changed to member`);
+        showToast(`${target.name} changed to member`, 'success');
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    }
   };
 
   // ── ADMIN USER / KYC ACTIONS ──────────────────────────────────────────────
@@ -2814,6 +2884,47 @@ export default function PuntingClub() {
                                 <span>Created: <span className="text-gray-300">{t.createdAt}</span></span>
                                 <span>Total Bet: <span className="text-green-400 font-semibold">{t.totalBet}</span></span>
                               </div>
+                              {/* Expandable member list (owner only) */}
+                              {adminUser?.role === 'owner' && t.memberList.length > 0 && (
+                                <button
+                                  onClick={() => setExpandedTeamIds(prev => {
+                                    const next = new Set(prev);
+                                    next.has(t.id) ? next.delete(t.id) : next.add(t.id);
+                                    return next;
+                                  })}
+                                  className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                >
+                                  {expandedTeamIds.has(t.id) ? '▲ Hide members' : '▼ Edit members'}
+                                </button>
+                              )}
+                              {expandedTeamIds.has(t.id) && (
+                                <div className="mt-3 space-y-1.5 border-t border-white/5 pt-3">
+                                  {t.memberList.map(m => (
+                                    <div key={m.userId} className="flex items-center justify-between gap-3 text-xs">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${m.role === 'captain' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : m.role === 'pending' ? 'bg-gray-500/20 text-gray-400 border border-gray-500/30' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                                          {m.role === 'captain' ? '★ Captain' : m.role === 'pending' ? 'Pending' : 'Member'}
+                                        </span>
+                                        <span className="text-gray-300 truncate">{m.name || 'Unknown'}</span>
+                                        {m.phone && <span className="text-gray-600 hidden sm:inline">{m.phone}</span>}
+                                        {m.depositPaid && <span className="text-green-500 text-xs">✓ Paid</span>}
+                                      </div>
+                                      {adminUser?.role === 'owner' && m.role !== 'captain' && m.role !== 'pending' && (
+                                        <button
+                                          onClick={() => handleChangeMemberRole(t.id, m.userId, 'captain')}
+                                          className="flex-shrink-0 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded text-xs hover:bg-amber-500/20"
+                                        >Make Captain</button>
+                                      )}
+                                      {adminUser?.role === 'owner' && m.role === 'captain' && t.memberList.filter(x => x.role !== 'pending').length > 1 && (
+                                        <button
+                                          onClick={() => handleChangeMemberRole(t.id, m.userId, 'member')}
+                                          className="flex-shrink-0 bg-gray-500/10 border border-gray-500/20 text-gray-400 px-2 py-0.5 rounded text-xs hover:bg-gray-500/20"
+                                        >Demote</button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             <div className="flex flex-col gap-1.5 flex-shrink-0">
                               {t.status === 'pending' && canAdmin('bets') && (
@@ -2895,6 +3006,34 @@ export default function PuntingClub() {
                                 <button onClick={() => setKycStatus(u.phone,'pending')} className="bg-amber-500/10 border border-amber-500/20 text-amber-500 px-2.5 py-1 rounded-lg text-xs">Re-review</button>
                               )}
                               <button onClick={() => resetPassword(u.phone)} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">Reset Pwd</button>
+                              {adminUser?.role === 'owner' && (
+                                <>
+                                  <button
+                                    onClick={async () => {
+                                      const newActive = !u.active;
+                                      setAdminUsers(prev => prev.map(x => x.id === u.id ? { ...x, active: newActive } : x));
+                                      try {
+                                        await apiUpdateUser(u.id, { active: newActive }, adminUser.role);
+                                        addAuditEntry(adminUser.role, newActive ? 'User Unsuspended' : 'User Suspended', u.name, '');
+                                        showToast(`${u.name} ${newActive ? 'unsuspended' : 'suspended'}`, 'success');
+                                      } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
+                                    }}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${u.active ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'}`}
+                                  >{u.active ? 'Suspend' : 'Unsuspend'}</button>
+                                  <button
+                                    onClick={async () => {
+                                      const newFlagged = !u.flagged;
+                                      setAdminUsers(prev => prev.map(x => x.id === u.id ? { ...x, flagged: newFlagged } : x));
+                                      try {
+                                        await apiUpdateUser(u.id, { flagged: newFlagged }, adminUser.role);
+                                        addAuditEntry(adminUser.role, newFlagged ? 'User Flagged' : 'User Unflagged', u.name, '');
+                                        showToast(`${u.name} ${newFlagged ? 'flagged' : 'unflagged'}`, 'success');
+                                      } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
+                                    }}
+                                    className={`px-2.5 py-1 rounded-lg text-xs border ${u.flagged ? 'bg-gray-500/10 border-gray-500/20 text-gray-400' : 'bg-orange-500/10 border-orange-500/20 text-orange-400'}`}
+                                  >{u.flagged ? 'Unflag' : 'Flag'}</button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -3130,15 +3269,32 @@ export default function PuntingClub() {
                                     {req.estimated_teams && <p>👥 ~{req.estimated_teams} teams · {req.buy_in ? `$${Number(req.buy_in).toLocaleString()} buy-in` : 'buy-in TBD'}</p>}
                                     {req.notes && <p className="text-gray-400 italic mt-1">"{req.notes}"</p>}
                                   </div>
+                                  {req.status === 'approved' && (() => {
+                                    const linkedComp = adminComps.find(c => c.name === req.comp_name && c.pub === req.pub_name);
+                                    return linkedComp?.admin_username ? (
+                                      <div className="mt-2 bg-green-900/20 border border-green-500/20 rounded-lg p-2 text-xs">
+                                        <p className="text-green-400 font-semibold mb-0.5">🔑 Pub Admin Credentials</p>
+                                        <p className="text-gray-300">Username: <span className="font-mono text-white">{linkedComp.admin_username}</span></p>
+                                        <p className="text-gray-300">Password: <span className="font-mono text-white">{linkedComp.admin_password}</span></p>
+                                        <p className="text-gray-300">Comp code: <span className="font-mono text-white">{linkedComp.code}</span></p>
+                                      </div>
+                                    ) : null;
+                                  })()}
                                 </div>
                                 {req.status === 'requested' && canAdmin('competitions') && (
                                   <div className="flex flex-col gap-1.5 flex-shrink-0">
                                     <button
                                       onClick={async () => {
                                         try {
-                                          await apiUpdateCompetitionRequest(req.id, 'approved', adminUser?.role);
+                                          const result = await apiUpdateCompetitionRequest(req.id, 'approved', adminUser?.role);
                                           setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'approved'} : r));
-                                          showToast(`Request from ${req.contact_name} approved`, 'success');
+                                          if (result?.adminCredentials) {
+                                            const { adminUsername, adminPassword, competitionCode } = result.adminCredentials;
+                                            showToast(`Approved! Competition code: ${competitionCode} | Admin login — user: ${adminUsername} pw: ${adminPassword}`, 'success');
+                                          } else {
+                                            showToast(`Request from ${req.contact_name} approved`, 'success');
+                                          }
+                                          refreshAdminData(adminUser?.role, adminUser?.competitionId);
                                         } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
                                       }}
                                       className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold"

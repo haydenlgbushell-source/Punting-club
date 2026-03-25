@@ -23,7 +23,7 @@ export const apiVerifySession  = (userId)        => call('auth', { action: 'veri
 
 // ── COMPETITIONS ─────────────────────────────────────────────
 export const apiGetActiveCompetitions   = ()      => call('data', { action: 'get_active_competitions' });
-export const apiGetAllCompetitions      = ()      => call('data', { action: 'get_all_competitions' });
+export const apiGetAllCompetitions      = (competitionId) => call('data', { action: 'get_all_competitions', ...(competitionId ? { competitionId } : {}) });
 export const apiCreateCompetition       = (comp, adminRole) => call('data', { action: 'create_competition', ...comp, adminRole });
 export const apiUpdateCompStatus        = (id, status, adminRole) => call('data', { action: 'update_competition_status', id, status, adminRole });
 export const apiDeleteCompetition       = (id, adminRole)         => call('data', { action: 'delete_competition', id, adminRole });
@@ -38,7 +38,7 @@ export const apiGetCompetitionByCode    = (code) => call('data', { action: 'get_
 export const apiGetTeam                = (teamId)                    => call('data', { action: 'get_team', teamId });
 export const apiCreateAdditionalTeam   = (payload)                   => call('data', { action: 'create_additional_team', ...payload });
 export const apiJoinExistingTeam       = (userId, teamCode)           => call('data', { action: 'join_existing_team', userId, teamCode });
-export const apiGetAllTeams   = ()              => call('data', { action: 'get_all_teams' });
+export const apiGetAllTeams   = (competitionId) => call('data', { action: 'get_all_teams', ...(competitionId ? { competitionId } : {}) });
 export const apiUpdateTeam    = (teamId, updates, adminRole) => call('data', { action: 'update_team', teamId, updates, adminRole });
 export const apiFinaliseTeam  = (teamId, depositPerMember) => call('data', { action: 'finalise_team', teamId, depositPerMember });
 
@@ -60,6 +60,8 @@ export const apiCorrectBet     = (betId, field, value, adminRole) => call('data'
 
 // ── LEADERBOARD ──────────────────────────────────────────────
 export const apiGetLeaderboard = (competitionId, currentWeek, startDate) => call('data', { action: 'get_leaderboard', competitionId, currentWeek, startDate });
+
+export const apiCheckPubAdminLogin = (username, password) => call('data', { action: 'check_pub_admin_login', username, password });
 
 // ── ADMIN ────────────────────────────────────────────────────
 export const apiGetAllUsers  = ()                        => call('data', { action: 'get_all_users' });
