@@ -585,6 +585,137 @@
     </div>
   </div>
 
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION: Competition Format Comparison                                  -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+  <div style="border-top:2px solid var(--border); margin:48px 0 32px;"></div>
+
+  <div class="section-title"><span></span>Competition Format Analysis — Which Frequency Wins?</div>
+  <p style="color:var(--muted);margin-bottom:24px;font-size:13px;">
+    Modelling 4 formats side-by-side — same pub growth, same team count — to find the optimal buy-in cadence.
+    Lower buy-ins run more frequently, generating higher commission velocity while keeping jackpots accessible.
+  </p>
+
+  <!-- Format intro cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:32px;">
+    <div class="kpi" style="border-top:3px solid #3b82f6;">
+      <div class="kpi-label">Annual</div>
+      <div class="kpi-value kpi-up" style="color:#3b82f6;font-size:22px;">$1,000</div>
+      <div class="kpi-sub">1 competition/yr · 52-week season</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Baseline model. Large jackpot, high barrier to entry. Max term deposit interest.</div>
+    </div>
+    <div class="kpi" style="border-top:3px solid #8b5cf6;">
+      <div class="kpi-label">Bi-Annual</div>
+      <div class="kpi-value" style="color:#8b5cf6;font-size:22px;">$600</div>
+      <div class="kpi-sub">2 competitions/yr · 26-week seasons</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Moderate entry point, two fresh starts per year. Marginally better than annual.</div>
+    </div>
+    <div class="kpi" style="border-top:3px solid #f59e0b;">
+      <div class="kpi-label">Quarterly</div>
+      <div class="kpi-value kpi-amber" style="color:#f59e0b;font-size:22px;">$350</div>
+      <div class="kpi-sub">4 competitions/yr · 13-week seasons</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Sweet spot — lower barrier, good commission volume, manageable overhead.</div>
+    </div>
+    <div class="kpi" style="border-top:3px solid #22c55e;background:rgba(34,197,94,0.05);">
+      <div class="kpi-label">Monthly ★ Recommended</div>
+      <div class="kpi-value kpi-up" style="font-size:22px;">$150</div>
+      <div class="kpi-sub">12 competitions/yr · 4-week seasons</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Highest commission velocity. 70% more cumulative profit than annual over 4 years.</div>
+    </div>
+  </div>
+
+  <!-- Net Profit comparison chart -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:24px;">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Net Profit — All 4 Formats</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:20px;">Monthly consistently outperforms from Year 2 onward</div>
+    <div style="height:320px;"><canvas id="formatNetChart"></canvas></div>
+  </div>
+
+  <!-- Revenue comparison chart -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Total Revenue by Format</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Commission drives monthly's revenue lead</div>
+      <div style="height:260px;"><canvas id="formatRevChart"></canvas></div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Cumulative 4-Year Profit</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Monthly: $263,790 vs Annual: $154,408</div>
+      <div style="height:260px;"><canvas id="cumProfitChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Detailed comparison table -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:24px;overflow-x:auto;">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;">Full P&amp;L Comparison — All Formats &amp; Years</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 12px;background:#0f172a;color:#94a3b8;border-bottom:1px solid var(--border);">Metric</th>
+          <th colspan="4" style="text-align:center;padding:8px 12px;background:rgba(59,130,246,0.15);color:#3b82f6;border-bottom:1px solid var(--border);">Annual ($1,000)</th>
+          <th colspan="4" style="text-align:center;padding:8px 12px;background:rgba(139,92,246,0.15);color:#8b5cf6;border-bottom:1px solid var(--border);">Bi-Annual ($600)</th>
+          <th colspan="4" style="text-align:center;padding:8px 12px;background:rgba(245,158,11,0.15);color:#f59e0b;border-bottom:1px solid var(--border);">Quarterly ($350)</th>
+          <th colspan="4" style="text-align:center;padding:8px 12px;background:rgba(34,197,94,0.15);color:#22c55e;border-bottom:1px solid var(--border);">Monthly ★ ($150)</th>
+        </tr>
+        <tr>
+          <th style="text-align:left;padding:6px 12px;background:#0f172a;color:#64748b;border-bottom:1px solid var(--border);">Year</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(59,130,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y1</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(59,130,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y2</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(59,130,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y3</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(59,130,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y4</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(139,92,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y1</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(139,92,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y2</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(139,92,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y3</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(139,92,246,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y4</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(245,158,11,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y1</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(245,158,11,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y2</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(245,158,11,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y3</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(245,158,11,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y4</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(34,197,94,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y1</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(34,197,94,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y2</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(34,197,94,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y3</th>
+          <th style="text-align:right;padding:6px 8px;background:rgba(34,197,94,0.08);color:#64748b;border-bottom:1px solid var(--border);">Y4</th>
+        </tr>
+      </thead>
+      <tbody id="formatTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Winner callout -->
+  <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:16px;">
+    <div style="font-size:16px;font-weight:800;color:var(--green);margin-bottom:10px;">★ Recommendation: Monthly Competitions ($150 buy-in)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:12px;color:var(--muted);">4-Year Cumulative Profit</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green);">$263,790</div>
+        <div style="font-size:11px;color:var(--muted);">vs $154,408 Annual (+71%)</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);">Year 4 Net Profit</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green);">$190,454</div>
+        <div style="font-size:11px;color:var(--muted);">vs $111,900 Annual (+70%)</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);">Year 4 Margin</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green);">27.0%</div>
+        <div style="font-size:11px;color:var(--muted);">vs 20.1% Annual (+6.9pp)</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);">Extra Profit vs Annual</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green);">+$109,382</div>
+        <div style="font-size:11px;color:var(--muted);">over 4 years</div>
+      </div>
+    </div>
+    <p style="font-size:13px;color:#a7f3d0;line-height:1.7;">
+      Monthly cadence generates <strong>3× more gross jackpot per pub</strong> ($18k vs $10k annually) through higher turnover,
+      driving proportionally more commission. Payment processing and overhead scale up, but are outweighed by revenue gains.
+      Additionally, a $150 buy-in is significantly more accessible for pub teams than $1,000, likely driving
+      <em>higher team participation</em> — an upside not yet modelled.
+    </p>
+  </div>
+
 </main>
 
 <footer>
@@ -779,6 +910,122 @@ new Chart(document.getElementById('marginChart'), {
       }
     }
   }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// COMPETITION FORMAT COMPARISON DATA
+// ══════════════════════════════════════════════════════════════════════════
+const fmtModels = ['Annual', 'Bi-Annual', 'Quarterly', 'Monthly'];
+const fmtColours = ['#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e'];
+
+const fmtData = {
+  Annual:    { rev: [15600,  50800,  186000, 558000], cost: [8528,  45438, 155926, 446100], net: [7072,   5362,  30074, 111900], margin: [45.3, 10.6, 16.2, 20.1] },
+  'Bi-Annual':{ rev: [16160,  52480,  191600, 574800], cost: [9078,  46938, 160426, 459000], net: [7082,   5542,  31174, 115800], margin: [43.8, 10.6, 16.3, 20.1] },
+  Quarterly: { rev: [17260,  55780,  202600, 607800], cost: [9828,  48888, 165926, 474300], net: [7432,   6892,  36674, 133500], margin: [43.1, 12.4, 18.1, 22.0] },
+  Monthly:   { rev: [20499,  65496,  234985, 704955], cost: [12128, 54588, 180926, 514500], net: [8370,  10907,  54059, 190454], margin: [40.8, 16.7, 23.0, 27.0] },
+};
+
+// ── Net Profit line chart ─────────────────────────────────────────────────
+new Chart(document.getElementById('formatNetChart'), {
+  type: 'line',
+  data: {
+    labels: YEARS,
+    datasets: fmtModels.map((name, i) => ({
+      label: name,
+      data: fmtData[name].net,
+      borderColor: fmtColours[i],
+      backgroundColor: fmtColours[i] + '18',
+      borderWidth: name === 'Monthly' ? 3 : 2,
+      pointRadius: 5,
+      fill: name === 'Monthly',
+      tension: 0.35,
+      borderDash: name === 'Annual' ? [5,3] : undefined,
+    }))
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: tickColor, font: defaultFont, boxWidth: 12 } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toLocaleString()}` } }
+    },
+    scales: {
+      x: { ticks: { color: tickColor, font: defaultFont }, grid: { color: gridColor } },
+      y: { ticks: { color: tickColor, font: defaultFont, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: gridColor } }
+    }
+  }
+});
+
+// ── Revenue bar chart ─────────────────────────────────────────────────────
+new Chart(document.getElementById('formatRevChart'), {
+  type: 'bar',
+  data: {
+    labels: YEARS,
+    datasets: fmtModels.map((name, i) => ({
+      label: name,
+      data: fmtData[name].rev,
+      backgroundColor: fmtColours[i] + 'AA',
+      borderColor: fmtColours[i],
+      borderWidth: 1,
+    }))
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: tickColor, font: defaultFont, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { color: tickColor, font: defaultFont }, grid: { color: gridColor } },
+      y: { ticks: { color: tickColor, font: defaultFont, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: gridColor } }
+    }
+  }
+});
+
+// ── Cumulative profit bar chart ───────────────────────────────────────────
+const cumProfit = fmtModels.map(name => fmtData[name].net.reduce((a,b) => a+b, 0));
+new Chart(document.getElementById('cumProfitChart'), {
+  type: 'bar',
+  data: {
+    labels: fmtModels,
+    datasets: [{
+      label: '4-Year Cumulative Net Profit',
+      data: cumProfit,
+      backgroundColor: fmtColours.map((c, i) => i === 3 ? c + 'DD' : c + '55'),
+      borderColor: fmtColours,
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: tickColor, font: defaultFont }, grid: { color: gridColor } },
+      y: { ticks: { color: tickColor, font: defaultFont, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: gridColor } }
+    }
+  }
+});
+
+// ── Comparison table ──────────────────────────────────────────────────────
+const tableRows = [
+  { label: 'Total Revenue',  key: 'rev',    fmt: v => '$' + v.toLocaleString() },
+  { label: 'Total Costs',    key: 'cost',   fmt: v => '$' + v.toLocaleString() },
+  { label: 'Net Profit',     key: 'net',    fmt: v => '$' + v.toLocaleString(), highlight: true },
+  { label: 'Net Margin %',   key: 'margin', fmt: v => v.toFixed(1) + '%',      highlight: true },
+];
+const tbody = document.getElementById('formatTableBody');
+tableRows.forEach(({ label, key, fmt, highlight }) => {
+  const tr = document.createElement('tr');
+  const allVals = fmtModels.flatMap(m => fmtData[m][key]);
+  const maxVal = Math.max(...allVals);
+  let html = `<td style="padding:7px 12px;border-bottom:1px solid #1e293b;font-weight:600;color:#cbd5e1;white-space:nowrap;">${label}</td>`;
+  fmtModels.forEach((name, mi) => {
+    fmtData[name][key].forEach(val => {
+      const isMax = highlight && val === maxVal;
+      const isNeg = val < 0;
+      const bg = isMax ? 'rgba(34,197,94,0.12)' : isNeg ? 'rgba(239,68,68,0.1)' : (mi % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)');
+      const fc = isMax ? '#22c55e' : isNeg ? '#ef4444' : '#e2e8f0';
+      html += `<td style="text-align:right;padding:7px 8px;border-bottom:1px solid #1e293b;background:${bg};color:${fc};font-weight:${isMax?700:400};">${fmt(val)}</td>`;
+    });
+  });
+  tr.innerHTML = html;
+  tbody.appendChild(tr);
 });
 </script>
 </body>
