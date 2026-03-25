@@ -1596,7 +1596,7 @@ export default function PuntingClub() {
               </div>
               <div className="flex flex-col sm:flex-row justify-center gap-3 mb-12">
                 <button
-                  onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName:'', contactPhone:'', contactEmail:'', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
+                  onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName: isLoggedIn ? `${currentUser?.first_name||''} ${currentUser?.last_name||''}`.trim() : '', contactPhone: isLoggedIn ? (currentUser?.phone||'') : '', contactEmail: isLoggedIn ? (currentUser?.email||'') : '', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
                   className="border border-amber-500/40 hover:border-amber-500/70 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
                 >
                   🏟 Request a Competition for your pub/club
@@ -3514,34 +3514,50 @@ export default function PuntingClub() {
                     {s < 3 && <div className={`h-0.5 flex-1 w-8 ${requestCompStep > s ? 'bg-amber-500' : 'bg-white/10'}`} />}
                   </div>
                 ))}
-                <span className="text-xs text-gray-500 ml-1">{requestCompStep === 1 ? 'Your Details' : requestCompStep === 2 ? 'Competition Setup' : 'Preferences'}</span>
+                <span className="text-xs text-gray-500 ml-1">{requestCompStep === 1 ? (isLoggedIn ? 'Venue Details' : 'Your Details') : requestCompStep === 2 ? 'Competition Setup' : 'Preferences'}</span>
               </div>
 
               {requestCompStep === 1 && (
                 <div className="space-y-3">
-                  <p className="text-gray-400 text-xs">Tell us about yourself and your venue.</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-amber-400 mb-1">Your Name *</label>
-                    <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="John Smith" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-amber-400 mb-1">Phone *</label>
-                      <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="0412 345 678" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-amber-400 mb-1">Email *</label>
-                      <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="john@rsl.com.au" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-amber-400 mb-1">Pub / Club Name *</label>
-                    <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
-                  </div>
+                  {isLoggedIn ? (
+                    <>
+                      <p className="text-gray-400 text-xs">Which pub or club is hosting this competition?</p>
+                      <div>
+                        <label className="block text-xs font-semibold text-amber-400 mb-1">Pub / Club Name *</label>
+                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-400 text-xs">Tell us about yourself and your venue.</p>
+                      <div>
+                        <label className="block text-xs font-semibold text-amber-400 mb-1">Your Name *</label>
+                        <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="John Smith" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-amber-400 mb-1">Phone *</label>
+                          <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="0412 345 678" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-amber-400 mb-1">Email *</label>
+                          <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="john@rsl.com.au" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-amber-400 mb-1">Pub / Club Name *</label>
+                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                      </div>
+                    </>
+                  )}
                   <button
                     onClick={() => {
-                      if (!requestCompForm.contactName.trim() || !requestCompForm.contactPhone.trim() || !requestCompForm.contactEmail.trim() || !requestCompForm.pubName.trim()) {
-                        setRequestCompError('Please fill in all required fields.'); return;
+                      if (isLoggedIn) {
+                        if (!requestCompForm.pubName.trim()) { setRequestCompError('Please enter your pub or club name.'); return; }
+                      } else {
+                        if (!requestCompForm.contactName.trim() || !requestCompForm.contactPhone.trim() || !requestCompForm.contactEmail.trim() || !requestCompForm.pubName.trim()) {
+                          setRequestCompError('Please fill in all required fields.'); return;
+                        }
                       }
                       setRequestCompError(null); setRequestCompStep(2);
                     }}
