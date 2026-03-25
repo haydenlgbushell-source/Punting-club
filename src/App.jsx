@@ -926,7 +926,8 @@ export default function PuntingClub() {
       if (bets.status === 'fulfilled' && bets.value) {
         setAdminBets(bets.value.map(b => ({
           id: b.id, team: b.teams?.team_name, status: b.overall_status,
-          stake: `$${b.stake || 0}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
+          stake: `$${((b.stake || 0) / 100).toFixed(2)}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
+          valid: b.submission_valid !== false,
           flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
           legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
         })));
@@ -2701,7 +2702,7 @@ export default function PuntingClub() {
                             <div key={b.id} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2">
                               <div>
                                 <p className="text-sm font-semibold text-red-300">Bet {b.id} — {b.team}</p>
-                                <p className="text-xs text-gray-500">Stake: {b.stake} · AI confidence: {b.aiConfidence}% · {b.valid ? '' : '⚠ Invalid submission'}</p>
+                                <p className="text-xs text-gray-500">Stake: {b.stake} · AI confidence: {b.aiConfidence != null ? `${b.aiConfidence}%` : 'N/A'} · {b.valid ? '' : '⚠ Invalid submission'}</p>
                               </div>
                               <div className="flex gap-2">
                                 <button onClick={() => confirmBetResult(b.id,'won')}  className="bg-green-500/20 border border-green-500/40 text-green-400 px-2 py-1 rounded text-xs font-semibold">Won</button>
