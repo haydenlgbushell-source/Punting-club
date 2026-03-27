@@ -908,7 +908,10 @@ export default function PuntingClub() {
   // ── Admin data loader (reusable) ────────────────────────────────────────
   const mapTeam = (t) => {
     const captain = t.users ? `${t.users.first_name} ${t.users.last_name}`.trim() : t.captain_id;
-    const members = Array.isArray(t.team_members) ? t.team_members : [];
+    // Explicitly filter to this team's members only (guards against any cross-team data)
+    const members = Array.isArray(t.team_members)
+      ? t.team_members.filter(m => !m.team_id || m.team_id === t.id)
+      : [];
     return {
       id: t.id, name: t.team_name, status: t.status || 'pending',
       captain, captainPhone: t.users?.phone || '',

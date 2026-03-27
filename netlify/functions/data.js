@@ -259,7 +259,8 @@ exports.handler = async (event) => {
         const result = teams.map(t => ({
           ...t,
           users: captainMap[t.captain_id] || null,
-          team_members: membersByTeam[t.id] || [],
+          // Explicitly filter so only this team's members are returned
+          team_members: (membersByTeam[t.id] || []).filter(m => m.team_id === t.id),
         }));
         return json(result);
       }
