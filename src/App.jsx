@@ -1502,7 +1502,10 @@ export default function PuntingClub() {
     if (myTeamInComp?.id && myTeamInComp.id !== currentTeamId) {
       try {
         const members = await apiGetTeamMembers(myTeamInComp.id);
-        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+        setTeamMembers(mapped);
+        const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
+        if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
         setCurrentTeamId(myTeamInComp.id);
       } catch (_) {}
     }
@@ -1514,7 +1517,10 @@ export default function PuntingClub() {
     if (teamId !== currentTeamId) {
       try {
         const members = await apiGetTeamMembers(teamId);
-        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+        setTeamMembers(mapped);
+        const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
+        if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
         setCurrentTeamId(teamId);
       } catch (_) {}
     }
