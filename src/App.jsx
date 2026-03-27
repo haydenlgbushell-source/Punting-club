@@ -10,7 +10,7 @@ import {
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
 } from './api.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2 } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut } from 'lucide-react';
 
 // ─── In-memory stores ────────────────────────────────────────────────────────
 // ── Data is now persisted in Supabase ──────────────────────────────────────
@@ -1705,74 +1705,147 @@ export default function PuntingClub() {
       )}
 
       {/* ── NAV ─────────────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 w-full bg-gray-950 border-b border-amber-500/20 z-50">
+      <nav className="fixed top-0 w-full bg-gray-950/95 backdrop-blur-md border-b border-white/[0.06] z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveNav('home'); setNavHistory([]); }}>
-              <Sparkles className="w-6 h-6 text-amber-500" />
-              <span className="text-xl font-black bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">PUNTING CLUB</span>
+
+            {/* Logo */}
+            <div className="flex items-center gap-2.5 cursor-pointer group flex-shrink-0" onClick={() => { setActiveNav('home'); setNavHistory([]); }}>
+              <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/25 flex items-center justify-center group-hover:bg-amber-500/25 transition-all duration-200">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </div>
+              <span className="text-lg font-black tracking-wide bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 bg-clip-text text-transparent">PUNTING CLUB</span>
             </div>
-            <div className="hidden md:flex items-center gap-1">
+
+            {/* Desktop Nav Links */}
+            <div className="hidden md:flex items-center gap-0.5 mx-6">
               {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
-                <button key={key} onClick={() => navigateTo(key)} className={`relative px-3 py-1.5 rounded-lg text-sm transition-all ${activeNav === key ? 'text-amber-400 bg-amber-500/10 font-semibold' : 'text-gray-400 hover:text-amber-300 hover:bg-white/5'}`}>
+                <button
+                  key={key}
+                  onClick={() => navigateTo(key)}
+                  className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    activeNav === key
+                      ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
+                  }`}
+                >
                   {label}
+                  {activeNav === key && (
+                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-400 rounded-full" />
+                  )}
                   {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
                   )}
                 </button>
               ))}
-              {/* Admin nav — always visible as a discreet entry point */}
+              {/* Admin nav — discreet entry point */}
               {isAdminLoggedIn ? (
-                <button onClick={() => setShowAdminPanel(p => !p)} className={`relative px-3 py-1.5 rounded-lg text-sm transition-all flex items-center gap-1.5 ${showAdminPanel ? 'text-red-400 bg-red-500/10 font-semibold' : 'text-red-500/70 hover:text-red-400 hover:bg-red-500/5'}`}>
+                <button onClick={() => setShowAdminPanel(p => !p)} className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 border ${showAdminPanel ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-red-500/50 hover:text-red-400 hover:bg-red-500/5 border-transparent'}`}>
                   <Shield className="w-3.5 h-3.5" />Admin
-                  {unreadNotifs > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{unreadNotifs}</span>}
+                  {unreadNotifs > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold">{unreadNotifs}</span>}
                 </button>
               ) : (
-                <button onClick={() => setShowAdminLogin(true)} className="px-2 py-1.5 rounded-lg text-gray-700 hover:text-gray-500 text-xs transition-all flex items-center gap-1" title="Admin login">
+                <button onClick={() => setShowAdminLogin(true)} className="p-2 rounded-lg text-gray-800 hover:text-gray-600 transition-all border border-transparent" title="Admin login">
                   <Lock className="w-3 h-3" />
                 </button>
               )}
+            </div>
+
+            {/* Desktop Right: User / Auth */}
+            <div className="hidden md:flex items-center gap-2 flex-shrink-0">
               {isLoggedIn ? (
-                <div className="flex items-center gap-3 ml-2">
-                  <div className="text-right">
-                    <p className="text-amber-400 text-xs font-bold leading-tight">{currentUser?.teamName}{currentUser?.role === 'captain' && <span className="ml-1">👑</span>}</p>
-                    <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName} · <PermissionBadge role={currentUser?.role} /></p>
+                <>
+                  {/* User Profile Chip */}
+                  <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] mr-1">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
+                      {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div className="leading-tight min-w-0">
+                      <p className="text-amber-400 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
+                        {currentUser?.teamName}
+                        {currentUser?.role === 'captain' && <Crown className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" />}
+                      </p>
+                      <p className="text-gray-500 text-[11px] leading-tight flex items-center gap-1 truncate">
+                        {currentUser?.firstName} · <PermissionBadge role={currentUser?.role} />
+                      </p>
+                    </div>
                   </div>
-                  <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">+ New Team</button>
-                  <button onClick={handleLogout} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">Logout</button>
-                </div>
+                  <button
+                    onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
+                    className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
+                  >
+                    + New Team
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:bg-red-500/8 border border-transparent hover:border-red-500/15"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />Logout
+                  </button>
+                </>
               ) : (
-                <div className="flex gap-2 ml-2">
-                  <button onClick={() => setShowLoginModal(true)} className="border border-amber-500/50 hover:border-amber-500 text-amber-400 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all">Login</button>
-                  <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-all">Sign Up</button>
-                </div>
+                <>
+                  <button onClick={() => setShowLoginModal(true)} className="text-gray-400 hover:text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:bg-white/5 border border-transparent">Login</button>
+                  <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 shadow-lg shadow-amber-500/20">Sign Up</button>
+                </>
               )}
             </div>
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-amber-500 p-1" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}>
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+
+            {/* Mobile Hamburger */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden text-gray-400 hover:text-amber-400 p-2 rounded-lg hover:bg-white/5 transition-all duration-200"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
+
+          {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden pb-4 space-y-1 border-t border-amber-500/20 pt-3 bg-gray-950">
-              {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
-                <button key={key} onClick={() => { navigateTo(key); setMobileMenuOpen(false); }} className="relative block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">
-                  {label}
-                  {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
-                    <span className="absolute top-2 right-3 w-5 h-5 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
-                  )}
-                </button>
-              ))}
-              <div className="border-t border-white/5 pt-3 space-y-2">
+            <div className="md:hidden border-t border-white/[0.06] bg-gray-950 pb-4">
+              {/* Nav Links */}
+              <div className="pt-2 space-y-0.5">
+                {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => { navigateTo(key); setMobileMenuOpen(false); }}
+                    className={`relative flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      activeNav === key ? 'text-amber-400 bg-amber-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors ${activeNav === key ? 'bg-amber-400' : 'bg-gray-700'}`} />
+                    {label}
+                    {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
+                      <span className="ml-auto w-5 h-5 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Mobile User / Auth */}
+              <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
                 {isLoggedIn ? (
                   <>
-                    <p className="text-amber-400 text-sm font-bold px-3">{currentUser?.teamName} ({currentUser?.firstName})</p>
-                    <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-400 px-4 py-2 rounded-lg text-sm font-semibold">+ Create Another Team</button>
-                    <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-2 rounded-lg text-sm font-semibold">Logout</button>
+                    <div className="flex items-center gap-3 px-3 py-2 mx-0">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-sm font-black flex-shrink-0">
+                        {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-amber-400 text-sm font-bold leading-tight flex items-center gap-1 truncate">
+                          {currentUser?.teamName}
+                          {currentUser?.role === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
+                        </p>
+                        <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Create Another Team</button>
+                    <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"><LogOut className="w-4 h-4" />Logout</button>
                   </>
                 ) : (
                   <>
-                    <button onClick={() => { setShowLoginModal(true); setMobileMenuOpen(false); }} className="w-full border border-amber-500/50 text-amber-400 px-4 py-2 rounded-lg text-sm font-semibold">Login</button>
-                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); setMobileMenuOpen(false); }} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-black px-4 py-2 rounded-lg text-sm font-bold">Sign Up</button>
+                    <button onClick={() => { setShowLoginModal(true); setMobileMenuOpen(false); }} className="w-full border border-white/10 text-gray-300 hover:text-white hover:border-white/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all">Login</button>
+                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); setMobileMenuOpen(false); }} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-black px-4 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-amber-500/20">Sign Up</button>
                   </>
                 )}
               </div>
