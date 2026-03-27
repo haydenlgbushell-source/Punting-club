@@ -419,6 +419,11 @@ export default function PuntingClub() {
   const [resultLog, setResultLog] = useState([]);
   const intervalRef = useRef(null);
 
+  // Captain join-request notifications
+  const [joinRequestNotifs, setJoinRequestNotifs] = useState([]);
+  const [showJoinRequestNotif, setShowJoinRequestNotif] = useState(false);
+  const knownPendingIdsRef = useRef(new Set()); // IDs already shown to captain
+
   // Toast notifications
   const [toasts, setToasts] = useState([]);
   const showToast = useCallback((message, type = 'info') => {
@@ -689,10 +694,20 @@ export default function PuntingClub() {
   }, [formData, signupMode]);
 
   // ── MEMBER MANAGEMENT ────────────────────────────────────────────────────
+  // Dismiss a single member from the join-request notification popup
+  const dismissJoinNotif = (userId) => {
+    setJoinRequestNotifs(prev => {
+      const next = prev.filter(m => m.user_id !== userId);
+      if (next.length === 0) setShowJoinRequestNotif(false);
+      return next;
+    });
+  };
+
   const approveMember = async (userId) => {
     try {
       await apiApproveMember(currentTeamId, userId);
       setPendingMembers(prev => prev.filter(m => m.user_id !== userId));
+      dismissJoinNotif(userId);
       // Reload members from DB
       const members = await apiGetTeamMembers(currentTeamId);
       setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
@@ -704,6 +719,7 @@ export default function PuntingClub() {
     try {
       await apiRejectMember(currentTeamId, userId);
       setPendingMembers(prev => prev.filter(m => m.user_id !== userId));
+      dismissJoinNotif(userId);
     } catch (err) { showToast(`Failed to reject member: ${err.message}`, 'error'); }
   };
 
@@ -1487,19 +1503,127 @@ export default function PuntingClub() {
           depositPaid: m.deposit_paid,
         }));
         setTeamMembers(mapped);
-        setPendingMembers(mapped.filter(m => m.role === 'pending'));
+        const pending = mapped.filter(m => m.role === 'pending');
+        setPendingMembers(pending);
         // Populate betting order from approved members (preserves DB ordering)
         const approved = mapped.filter(m => m.role !== 'pending' && m.name);
         if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
+        // Show join-request popup for captains if there are already pending members
+        if (currentUser?.role === 'captain' && pending.length > 0) {
+          setJoinRequestNotifs(pending.map(m => ({ user_id: m.user_id, name: m.name, phone: m.phone })));
+          setShowJoinRequestNotif(true);
+        }
+        // Seed known IDs so polling doesn't re-notify for these
+        knownPendingIdsRef.current = new Set(pending.map(m => m.user_id));
       })
       .catch(err => console.warn('Could not load team members (using demo data):', err));
   }, [isLoggedIn, currentUser?.teamId]);
+
+  // Poll for new join requests every 30 s (captains only)
+  useEffect(() => {
+    if (!isLoggedIn || currentUser?.role !== 'captain' || !currentTeamId) return;
+    const poll = async () => {
+      try {
+        const members = await apiGetTeamMembers(currentTeamId);
+        const pending = members.filter(m => m.role === 'pending');
+        const newOnes = pending.filter(m => !knownPendingIdsRef.current.has(m.user_id));
+        if (newOnes.length > 0) {
+          const notifs = newOnes.map(m => ({
+            user_id: m.user_id,
+            name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Someone',
+            phone: m.users?.phone || '',
+          }));
+          setJoinRequestNotifs(prev => [...prev, ...notifs]);
+          setShowJoinRequestNotif(true);
+          newOnes.forEach(m => knownPendingIdsRef.current.add(m.user_id));
+          // Keep pendingMembers in sync
+          setPendingMembers(pending.map(m => ({
+            ...m,
+            phone: m.users?.phone || m.user_id,
+            name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
+          })));
+        }
+      } catch (_) {}
+    };
+    const id = setInterval(poll, 30000);
+    return () => clearInterval(id);
+  }, [isLoggedIn, currentUser?.role, currentTeamId]);
 
   const allDepositsConfirmed = teamMembers.every(m => m.depositPaid || m.deposit_paid);
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden">
+
+      {/* ── CAPTAIN JOIN REQUEST NOTIFICATION POPUP ─────────────────────── */}
+      {showJoinRequestNotif && joinRequestNotifs.length > 0 && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-gray-950 border-2 border-amber-500/60 rounded-2xl w-full max-w-sm shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/8">
+              <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/40 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+                👥
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-black text-white text-base leading-tight">
+                  New Join Request{joinRequestNotifs.length > 1 ? 's' : ''}
+                </h2>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {joinRequestNotifs.length === 1
+                    ? 'Someone wants to join your team'
+                    : `${joinRequestNotifs.length} people want to join your team`}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowJoinRequestNotif(false)}
+                className="text-gray-600 hover:text-white transition-colors flex-shrink-0"
+                title="Dismiss (review later in My Team)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Member list */}
+            <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
+              {joinRequestNotifs.map(member => (
+                <div key={member.user_id} className="flex items-center gap-3 p-3 bg-white/4 rounded-xl border border-white/8">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400/30 to-amber-600/30 border border-amber-500/30 flex items-center justify-center font-black text-amber-400 text-sm flex-shrink-0">
+                    {(member.name || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-sm truncate">{member.name || 'Unknown'}</p>
+                    <p className="text-gray-500 text-xs truncate">{member.phone || 'No phone'}</p>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => approveMember(member.user_id)}
+                      className="bg-green-500/20 hover:bg-green-500/35 border border-green-500/40 text-green-400 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      onClick={() => rejectMember(member.user_id)}
+                      className="bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+                    >
+                      ✕ Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => { setShowJoinRequestNotif(false); navigateTo('team'); }}
+                className="w-full border border-white/10 hover:border-white/20 text-gray-400 hover:text-white py-2 rounded-xl text-xs font-semibold transition-all"
+              >
+                View My Team →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Landscape hint */}
       {showLandscapeHint && (
@@ -1519,7 +1643,12 @@ export default function PuntingClub() {
             </div>
             <div className="hidden md:flex items-center gap-1">
               {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
-                <button key={key} onClick={() => navigateTo(key)} className={`px-3 py-1.5 rounded-lg text-sm transition-all ${activeNav === key ? 'text-amber-400 bg-amber-500/10 font-semibold' : 'text-gray-400 hover:text-amber-300 hover:bg-white/5'}`}>{label}</button>
+                <button key={key} onClick={() => navigateTo(key)} className={`relative px-3 py-1.5 rounded-lg text-sm transition-all ${activeNav === key ? 'text-amber-400 bg-amber-500/10 font-semibold' : 'text-gray-400 hover:text-amber-300 hover:bg-white/5'}`}>
+                  {label}
+                  {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
+                  )}
+                </button>
               ))}
               {/* Admin nav — always visible as a discreet entry point */}
               {isAdminLoggedIn ? (
@@ -1555,7 +1684,12 @@ export default function PuntingClub() {
           {mobileMenuOpen && (
             <div className="md:hidden pb-4 space-y-1 border-t border-amber-500/20 pt-3 bg-gray-950">
               {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
-                <button key={key} onClick={() => { navigateTo(key); setMobileMenuOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">{label}</button>
+                <button key={key} onClick={() => { navigateTo(key); setMobileMenuOpen(false); }} className="relative block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">
+                  {label}
+                  {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
+                    <span className="absolute top-2 right-3 w-5 h-5 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
+                  )}
+                </button>
               ))}
               <div className="border-t border-white/5 pt-3 space-y-2">
                 {isLoggedIn ? (
