@@ -297,6 +297,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
 export default function PuntingClub() {
   // Nav
   const [activeNav, setActiveNav] = useState('home');
+  const [navHistory, setNavHistory] = useState([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Auth
@@ -512,7 +513,26 @@ export default function PuntingClub() {
     setTeamFinalised(false);
     setDepositPerMember(null);
     setActiveNav('home');
+    setNavHistory([]);
     try { localStorage.removeItem('pc_session'); } catch(e) {}
+  };
+
+  // Navigate to a page, pushing current page onto the history stack
+  const navigateTo = (key) => {
+    if (key === activeNav) return;
+    setNavHistory(prev => [...prev, activeNav]);
+    setActiveNav(key);
+  };
+
+  // Go back to the previous page in history
+  const goBack = () => {
+    setNavHistory(prev => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      const previous = next.pop();
+      setActiveNav(previous);
+      return next;
+    });
   };
 
   // ── CREATE ADDITIONAL TEAM ────────────────────────────────────────────────
@@ -1493,13 +1513,13 @@ export default function PuntingClub() {
       <nav className="fixed top-0 w-full bg-gray-950 border-b border-amber-500/20 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveNav('home')}>
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveNav('home'); setNavHistory([]); }}>
               <Sparkles className="w-6 h-6 text-amber-500" />
               <span className="text-xl font-black bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">PUNTING CLUB</span>
             </div>
             <div className="hidden md:flex items-center gap-1">
               {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
-                <button key={key} onClick={() => setActiveNav(key)} className={`px-3 py-1.5 rounded-lg text-sm transition-all ${activeNav === key ? 'text-amber-400 bg-amber-500/10 font-semibold' : 'text-gray-400 hover:text-amber-300 hover:bg-white/5'}`}>{label}</button>
+                <button key={key} onClick={() => navigateTo(key)} className={`px-3 py-1.5 rounded-lg text-sm transition-all ${activeNav === key ? 'text-amber-400 bg-amber-500/10 font-semibold' : 'text-gray-400 hover:text-amber-300 hover:bg-white/5'}`}>{label}</button>
               ))}
               {/* Admin nav — always visible as a discreet entry point */}
               {isAdminLoggedIn ? (
@@ -1535,7 +1555,7 @@ export default function PuntingClub() {
           {mobileMenuOpen && (
             <div className="md:hidden pb-4 space-y-1 border-t border-amber-500/20 pt-3 bg-gray-950">
               {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
-                <button key={key} onClick={() => { setActiveNav(key); setMobileMenuOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">{label}</button>
+                <button key={key} onClick={() => { navigateTo(key); setMobileMenuOpen(false); }} className="block w-full text-left px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-500/10 text-sm">{label}</button>
               ))}
               <div className="border-t border-white/5 pt-3 space-y-2">
                 {isLoggedIn ? (
@@ -1668,6 +1688,11 @@ export default function PuntingClub() {
       {(activeNav === 'competition' || activeNav === 'howto') && (
         <section className="pt-28 pb-16 px-4 sm:px-6">
           <div className="max-w-5xl mx-auto">
+            {navHistory.length > 0 && (
+              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
+                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+              </button>
+            )}
             <h1 className="text-4xl font-black mb-2">How to Play</h1>
             <p className="text-gray-400 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
 
@@ -1758,6 +1783,11 @@ export default function PuntingClub() {
         return (
         <section className="pt-28 pb-16 px-0 sm:px-0">
           <div className="max-w-5xl mx-auto px-2 sm:px-6">
+            {navHistory.length > 0 && (
+              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-4 px-2 transition-colors group">
+                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+              </button>
+            )}
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
               <div>
@@ -1995,6 +2025,12 @@ export default function PuntingClub() {
           <section className="pt-28 pb-16 px-4 sm:px-6">
             <div className="max-w-5xl mx-auto">
 
+              {navHistory.length > 0 && (
+                <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
+                  <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+                </button>
+              )}
+
               {/* Page header */}
               <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
               <p className="text-gray-500 mb-4 text-sm">
@@ -2230,6 +2266,11 @@ export default function PuntingClub() {
       {activeNav === 'team' && (
         <section className="pt-28 pb-16 px-4 sm:px-6">
           <div className="max-w-4xl mx-auto">
+            {navHistory.length > 0 && (
+              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
+                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+              </button>
+            )}
             {!isLoggedIn && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 text-center">
                 <p className="text-amber-300 text-sm">Showing demo data. <button onClick={() => setShowLoginModal(true)} className="underline font-semibold">Log in</button> to see your team.</p>
@@ -3508,7 +3549,7 @@ export default function PuntingClub() {
                 {items.map(item => (
                   <li key={item.label}>
                     <button
-                      onClick={() => { if (item.nav) setActiveNav(item.nav); else if (item.action) item.action(); }}
+                      onClick={() => { if (item.nav) navigateTo(item.nav); else if (item.action) item.action(); }}
                       className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-amber-400/70 cursor-pointer' : 'cursor-default'}`}
                     >{item.label}</button>
                   </li>
@@ -4409,7 +4450,7 @@ export default function PuntingClub() {
               <BetSlipCard bet={{ ...analyzedBet, type: analyzedBet.betType, overallStatus: 'pending' }} />
               <div className="flex flex-col sm:flex-row gap-3 mt-5">
                 <button onClick={() => { setShowBetResults(false); setShowBetAnalyzer(true); resetBetAnalyzer(); }} className="flex-1 border border-amber-500/40 text-amber-400 font-bold py-3 rounded-xl text-sm hover:bg-amber-500/10">Submit Another</button>
-                <button onClick={() => { setShowBetResults(false); setActiveNav('leaderboard'); resetBetAnalyzer(); }} className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-3 rounded-xl text-sm">View Leaderboard</button>
+                <button onClick={() => { setShowBetResults(false); navigateTo('leaderboard'); resetBetAnalyzer(); }} className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-3 rounded-xl text-sm">View Leaderboard</button>
               </div>
             </div>
           </div>
