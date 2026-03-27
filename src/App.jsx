@@ -493,7 +493,7 @@ export default function PuntingClub() {
           }
           setTeamMembers(mapped);
           const approved = mapped.filter(m => m.role !== 'pending');
-          if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
+          if (approved.length > 0) setBettingOrder(approved.filter(m => m.can_bet || m.canBet).map(m => m.name));
         } catch(e) { 
           // Fallback: at minimum show the logged-in user
           setTeamMembers([{ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone }]);
@@ -709,9 +709,12 @@ export default function PuntingClub() {
       await apiApproveMember(currentTeamId, userId);
       setPendingMembers(prev => prev.filter(m => m.user_id !== userId));
       dismissJoinNotif(userId);
-      // Reload members from DB
+      // Reload members from DB and rebuild betting order
       const members = await apiGetTeamMembers(currentTeamId);
-      setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+      const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+      setTeamMembers(mapped);
+      const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
+      if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
       showToast('Member approved!', 'success');
     } catch (err) { showToast(`Failed to approve member: ${err.message}`, 'error'); }
   };
@@ -1573,9 +1576,9 @@ export default function PuntingClub() {
         setTeamMembers(mapped);
         const pending = mapped.filter(m => m.role === 'pending');
         setPendingMembers(pending);
-        // Populate betting order from approved members (preserves DB ordering)
-        const approved = mapped.filter(m => m.role !== 'pending' && m.name);
-        if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
+        // Populate betting order from active members who can bet (excludes pending + view-only)
+        const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
+        if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
         // Show join-request popup for captains if there are already pending members
         if (currentUser?.role === 'captain' && pending.length > 0) {
           setJoinRequestNotifs(pending.map(m => ({ user_id: m.user_id, name: m.name, phone: m.phone })));
