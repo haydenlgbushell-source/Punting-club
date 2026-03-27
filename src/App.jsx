@@ -10,7 +10,7 @@ import {
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
 } from './api.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2 } from 'lucide-react';
 
 // ─── In-memory stores ────────────────────────────────────────────────────────
 // ── Data is now persisted in Supabase ──────────────────────────────────────
@@ -1451,6 +1451,43 @@ export default function PuntingClub() {
 
   const resetBetAnalyzer = () => { setUploadedImages([]); setAnalyzedBet(null); setSelectedTeamForBet(''); };
 
+  // Share a bet slip via Web Share API or clipboard fallback
+  const shareBet = async (bet) => {
+    const statusLabel = (() => {
+      const legs = bet.legs || [];
+      if (!legs.length) return (bet.overallStatus || 'pending').toUpperCase();
+      if (legs.some(l => l.status === 'in_progress')) return 'LIVE';
+      if (legs.every(l => l.status === 'won'))  return '✅ WON';
+      if (legs.some(l => l.status === 'lost'))  return '❌ LOST';
+      if (legs.some(l => l.status === 'pending')) return '⏳ PENDING';
+      return '⚡ PARTIAL';
+    })();
+    const legsText = (bet.legs || []).map((l, i) =>
+      `  ${i + 1}. ${l.selection}${l.market ? ` (${l.market})` : ''} @ ${l.odds}${l.status && l.status !== 'pending' ? ` — ${l.status.toUpperCase()}` : ''}`
+    ).join('\n');
+    const text = [
+      `🏆 PUNTING CLUB — ${myTeamName}`,
+      `📅 Week ${bet.weekNumber} ${bet.type || 'Multi'}`,
+      `💰 Stake: ${bet.stake}  |  Odds: ${bet.combinedOdds || bet.odds || '—'}  |  Return: ${bet.estimatedReturn || '—'}`,
+      `Result: ${statusLabel}`,
+      legsText ? `\nLegs:\n${legsText}` : '',
+      `\n🔗 ${typeof window !== 'undefined' ? window.location.origin : 'https://puntingclub.com'}`,
+    ].filter(Boolean).join('\n');
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${myTeamName} — Week ${bet.weekNumber} Bet`, text });
+        return;
+      } catch (_) { /* user cancelled or not supported */ }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Bet copied to clipboard!', 'success');
+    } catch (_) {
+      showToast('Could not copy — try selecting the text manually.', 'warning');
+    }
+  };
+
   // Switch which competition is displayed on leaderboard / weekly / team pages
   const switchViewedCompetition = useCallback(async (code) => {
     setViewedCompetitionCode(code);
@@ -2579,7 +2616,19 @@ export default function PuntingClub() {
                 const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
                 return thisWeekBets.length > 0 ? (
                   <div className="space-y-3">
-                    {thisWeekBets.map((bet, i) => <BetSlipCard key={i} bet={bet} onCheckBet={checkSingleBet} isChecking={checkingBetId === bet.id} />)}
+                    {thisWeekBets.map((bet, i) => (
+                      <div key={i}>
+                        <BetSlipCard bet={bet} onCheckBet={checkSingleBet} isChecking={checkingBetId === bet.id} />
+                        <div className="flex justify-end mt-1.5">
+                          <button
+                            onClick={() => shareBet(bet)}
+                            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-400 border border-white/8 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/8 px-3 py-1.5 rounded-lg transition-all"
+                          >
+                            <Share2 className="w-3 h-3" /> Share Bet
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -2635,6 +2684,13 @@ export default function PuntingClub() {
                                 <span className="text-gray-600 text-xs">{bet.submittedAt}</span>
                               </div>
                             </div>
+                            <button
+                              onClick={() => shareBet(bet)}
+                              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-400 border border-white/8 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/8 px-3 py-1.5 rounded-lg transition-all flex-shrink-0"
+                              title="Share this bet"
+                            >
+                              <Share2 className="w-3 h-3" /> Share
+                            </button>
                           </div>
                           {/* Full bet card */}
                           <div className="border-t border-white/5">
