@@ -374,6 +374,8 @@ export default function PuntingClub() {
 
   // Which competition is being viewed on leaderboard / weekly / team pages
   const [viewedCompetitionCode, setViewedCompetitionCode] = useState(null);
+  // Which specific team the user is viewing within the current competition (null = first team)
+  const [viewedTeamId, setViewedTeamId] = useState(null);
 
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -1385,8 +1387,9 @@ export default function PuntingClub() {
   // Switch which competition is displayed on leaderboard / weekly / team pages
   const switchViewedCompetition = useCallback(async (code) => {
     setViewedCompetitionCode(code);
+    setViewedTeamId(null); // reset per-team selection when switching competitions
     await refreshLeaderboard(code, activeCompetitions);
-    // Load team members for the user's team in the new competition
+    // Load team members for the user's first team in the new competition
     const comp = activeCompetitions.find(c => c.code === code);
     const myTeamInComp = (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id));
     if (myTeamInComp?.id && myTeamInComp.id !== currentTeamId) {
@@ -1398,6 +1401,18 @@ export default function PuntingClub() {
     }
   }, [activeCompetitions, currentUser?.allTeamIds, currentTeamId, refreshLeaderboard]);
 
+  // Switch between teams within the same competition
+  const switchViewedTeam = useCallback(async (teamId) => {
+    setViewedTeamId(teamId);
+    if (teamId !== currentTeamId) {
+      try {
+        const members = await apiGetTeamMembers(teamId);
+        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        setCurrentTeamId(teamId);
+      } catch (_) {}
+    }
+  }, [currentTeamId]);
+
   // ── DERIVED ───────────────────────────────────────────────────────────────
   // Effective competition being viewed (leaderboard / weekly / team)
   const effectiveViewedCode = viewedCompetitionCode || currentUser?.competitionCode;
@@ -1405,10 +1420,17 @@ export default function PuntingClub() {
   const userCompetitions = activeCompetitions.filter(c =>
     (c.teams || []).some(t => (currentUser?.allTeamIds || []).includes(t.id))
   );
-  // User's team entry inside the currently viewed competition
-  const viewedMyTeam = (() => {
+  // All user teams in the currently viewed competition (for multi-team toggle)
+  const teamsInViewedComp = (() => {
     const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
-    return (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id)) || null;
+    return (comp?.teams || []).filter(t => (currentUser?.allTeamIds || []).includes(t.id));
+  })();
+  // User's team entry inside the currently viewed competition (respects viewedTeamId selection)
+  const viewedMyTeam = (() => {
+    if (viewedTeamId) {
+      return teamsInViewedComp.find(t => t.id === viewedTeamId) || teamsInViewedComp[0] || null;
+    }
+    return teamsInViewedComp[0] || null;
   })();
   const myTeamName = (isLoggedIn && viewedMyTeam?.team_name) || currentUser?.teamName || '';
   const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
@@ -1774,6 +1796,19 @@ export default function PuntingClub() {
               </div>
             )}
 
+            {/* Team toggle — shown when user has multiple teams in the same competition */}
+            {isLoggedIn && teamsInViewedComp.length > 1 && (
+              <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
+                <span className="text-xs text-gray-500 font-semibold">Team:</span>
+                {teamsInViewedComp.map(t => (
+                  <button key={t.id} onClick={() => switchViewedTeam(t.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                    {t.team_name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* View toggle */}
             <div className="flex gap-1 mb-4 px-2">
               {[['current','This Week'],['season','Season View']].map(([v,l]) => (
@@ -1968,12 +2003,25 @@ export default function PuntingClub() {
 
               {/* Competition switcher */}
               {isLoggedIn && userCompetitions.length > 1 && (
-                <div className="flex items-center gap-2 flex-wrap mb-8">
+                <div className="flex items-center gap-2 flex-wrap mb-3">
                   <span className="text-xs text-gray-500 font-semibold">Competition:</span>
                   {userCompetitions.map(c => (
                     <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
                       {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Team toggle — shown when user has multiple teams in the same competition */}
+              {isLoggedIn && teamsInViewedComp.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap mb-8">
+                  <span className="text-xs text-gray-500 font-semibold">Team:</span>
+                  {teamsInViewedComp.map(t => (
+                    <button key={t.id} onClick={() => switchViewedTeam(t.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                      {t.team_name}
                     </button>
                   ))}
                 </div>
@@ -2190,12 +2238,25 @@ export default function PuntingClub() {
 
             {/* Competition switcher for My Team page */}
             {isLoggedIn && userCompetitions.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-5">
+              <div className="flex items-center gap-2 flex-wrap mb-3">
                 <span className="text-xs text-gray-500 font-semibold">Competition:</span>
                 {userCompetitions.map(c => (
                   <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
                     {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Team toggle — shown when user has multiple teams in the same competition */}
+            {isLoggedIn && teamsInViewedComp.length > 1 && (
+              <div className="flex items-center gap-2 flex-wrap mb-5">
+                <span className="text-xs text-gray-500 font-semibold">Team:</span>
+                {teamsInViewedComp.map(t => (
+                  <button key={t.id} onClick={() => switchViewedTeam(t.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                    {t.team_name}
                   </button>
                 ))}
               </div>
