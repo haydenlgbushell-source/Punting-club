@@ -396,6 +396,7 @@ export default function PuntingClub() {
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
+  const [expandedTeamId, setExpandedTeamId] = useState(null); // which team shows member list in admin
   const [editingCompId, setEditingCompId] = useState(null);   // comp being edited inline
   const [editCompForm, setEditCompForm] = useState({});        // edit form values
   const [adminLoadError, setAdminLoadError] = useState(null);
@@ -913,6 +914,7 @@ export default function PuntingClub() {
       captain, captainPhone: t.users?.phone || '',
       members: members.length,
       memberList: members.map(m => ({
+        userId: m.user_id,
         name: m.users ? `${m.users.first_name} ${m.users.last_name}`.trim() : '',
         role: m.role, phone: m.users?.phone, kyc: m.users?.kyc_status,
         depositPaid: m.deposit_paid, canBet: m.can_bet,
@@ -1203,6 +1205,32 @@ export default function PuntingClub() {
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
     try { await apiUpdateTeam(id, { flagged: newFlagged }, adminUser?.role); } catch(err) { console.error(err); }
+  };
+
+  // ── ADMIN MEMBER APPROVE / DECLINE ────────────────────────────────────────
+  const adminApproveMember = async (teamId, userId, teamName, memberName) => {
+    try {
+      await apiApproveMember(teamId, userId);
+      setAdminTeams(prev => prev.map(t => t.id === teamId ? {
+        ...t,
+        memberList: t.memberList.map(m => m.userId === userId ? { ...m, role: 'member', canBet: true } : m),
+      } : t));
+      addAuditEntry(adminUser?.role, 'Member Approved', `${memberName} → ${teamName}`, 'Admin approved member');
+      showToast(`${memberName} approved`, 'success');
+    } catch (err) { showToast(`Failed to approve: ${err.message}`, 'error'); }
+  };
+
+  const adminDeclineMember = async (teamId, userId, teamName, memberName) => {
+    try {
+      await apiRejectMember(teamId, userId);
+      setAdminTeams(prev => prev.map(t => t.id === teamId ? {
+        ...t,
+        memberList: t.memberList.filter(m => m.userId !== userId),
+        members: t.members - 1,
+      } : t));
+      addAuditEntry(adminUser?.role, 'Member Declined', `${memberName} → ${teamName}`, 'Admin declined member request');
+      showToast(`${memberName} declined`, 'info');
+    } catch (err) { showToast(`Failed to decline: ${err.message}`, 'error'); }
   };
 
   // ── ADMIN USER / KYC ACTIONS ──────────────────────────────────────────────
@@ -3033,39 +3061,132 @@ export default function PuntingClub() {
                           <p className="text-sm mt-1">Teams will appear here after signup.</p>
                         </div>
                       )}
-                      {filteredTeams.map(t => (
-                        <div key={t.id} className={`bg-gray-900 border rounded-xl p-4 ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <p className="font-bold text-sm">{t.name}</p>
-                                <StatusPill s={t.status} />
-                                {t.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
+                      {filteredTeams.map(t => {
+                        const isExpanded = expandedTeamId === t.id;
+                        const pendingCount = (t.memberList || []).filter(m => m.role === 'pending').length;
+                        return (
+                        <div key={t.id} className={`bg-gray-900 border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
+                          {/* ── Team header row ── */}
+                          <div className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <p className="font-bold text-sm">{t.name}</p>
+                                  <StatusPill s={t.status} />
+                                  {t.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
+                                  {pendingCount > 0 && (
+                                    <span className="bg-orange-500/20 border border-orange-500/40 text-orange-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                                      {pendingCount} pending
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gray-500">
+                                  <span>Captain: <span className="text-gray-300">{t.captain}</span></span>
+                                  <span>Members: <span className="text-gray-300">{t.members}</span></span>
+                                  <span>Deposits: <span className={t.depositsPaid === t.members ? 'text-green-400' : 'text-amber-400'}>{t.depositsPaid}/{t.members}</span></span>
+                                  <span>Comp: <span className="text-gray-300">{t.compCode || '—'}</span></span>
+                                  <span>Created: <span className="text-gray-300">{t.createdAt}</span></span>
+                                  <span>Total Bet: <span className="text-green-400 font-semibold">{t.totalBet}</span></span>
+                                </div>
                               </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gray-500">
-                                <span>Captain: <span className="text-gray-300">{t.captain}</span></span>
-                                <span>Members: <span className="text-gray-300">{t.members}</span></span>
-                                <span>Deposits: <span className={t.depositsPaid === t.members ? 'text-green-400' : 'text-amber-400'}>{t.depositsPaid}/{t.members}</span></span>
-                                <span>Comp: <span className="text-gray-300">{t.compCode || '—'}</span></span>
-                                <span>Created: <span className="text-gray-300">{t.createdAt}</span></span>
-                                <span>Total Bet: <span className="text-green-400 font-semibold">{t.totalBet}</span></span>
+                              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                                {t.status === 'pending' && canAdmin('bets') && (
+                                  <button onClick={() => verifyTeam(t.id)} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify</button>
+                                )}
+                                {t.status !== 'suspended' && canAdmin('bets') && (
+                                  <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
+                                )}
+                                {t.status === 'suspended' && canAdmin('bets') && (
+                                  <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
+                                )}
+                                <button onClick={() => flagTeam(t.id)} className="bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:text-amber-400 px-2.5 py-1 rounded-lg text-xs">🚩</button>
+                                <button
+                                  onClick={() => setExpandedTeamId(isExpanded ? null : t.id)}
+                                  className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                                >
+                                  {isExpanded ? '▲ Hide' : '▼ Members'}
+                                </button>
                               </div>
-                            </div>
-                            <div className="flex flex-col gap-1.5 flex-shrink-0">
-                              {t.status === 'pending' && canAdmin('bets') && (
-                                <button onClick={() => verifyTeam(t.id)} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify</button>
-                              )}
-                              {t.status !== 'suspended' && canAdmin('bets') && (
-                                <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
-                              )}
-                              {t.status === 'suspended' && canAdmin('bets') && (
-                                <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
-                              )}
-                              <button onClick={() => flagTeam(t.id)} className="bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:text-amber-400 px-2.5 py-1 rounded-lg text-xs">🚩</button>
                             </div>
                           </div>
+
+                          {/* ── Expanded member list ── */}
+                          {isExpanded && (
+                            <div className="border-t border-white/8 bg-black/20">
+                              <div className="px-4 py-3 flex items-center justify-between">
+                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Team Members ({t.memberList?.length || 0})</span>
+                                {pendingCount > 0 && (
+                                  <span className="text-xs text-orange-400 font-semibold">{pendingCount} awaiting approval</span>
+                                )}
+                              </div>
+                              {(!t.memberList || t.memberList.length === 0) ? (
+                                <p className="px-4 pb-4 text-gray-600 text-sm">No members found.</p>
+                              ) : (
+                                <div className="divide-y divide-white/5">
+                                  {t.memberList.map((m, mi) => {
+                                    const isPending = m.role === 'pending';
+                                    const roleBg = m.role === 'captain'
+                                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                      : isPending
+                                      ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                      : m.role === 'view-only'
+                                      ? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
+                                      : 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+                                    const kycBg = m.kyc === 'approved'
+                                      ? 'text-green-400'
+                                      : m.kyc === 'rejected'
+                                      ? 'text-red-400'
+                                      : 'text-amber-400';
+                                    return (
+                                      <div key={mi} className={`flex items-center gap-3 px-4 py-3 ${isPending ? 'bg-orange-500/5' : ''}`}>
+                                        {/* Avatar initial */}
+                                        <div className="w-8 h-8 rounded-full bg-white/8 border border-white/10 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
+                                          {(m.name || '?')[0].toUpperCase()}
+                                        </div>
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-semibold text-white truncate">{m.name || 'Unknown'}</span>
+                                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${roleBg}`}>{m.role}</span>
+                                          </div>
+                                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                                            <span className="text-xs text-gray-500">{m.phone || 'No phone'}</span>
+                                            <span className={`text-xs font-semibold ${kycBg}`}>KYC: {m.kyc || 'unknown'}</span>
+                                            <span className={`text-xs ${m.depositPaid ? 'text-green-400' : 'text-gray-600'}`}>
+                                              {m.depositPaid ? '✓ Deposit paid' : '— No deposit'}
+                                            </span>
+                                            <span className={`text-xs ${m.canBet ? 'text-blue-400' : 'text-gray-600'}`}>
+                                              {m.canBet ? '✓ Can bet' : '— No betting'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        {/* Pending approval actions */}
+                                        {isPending && canAdmin('bets') && (
+                                          <div className="flex gap-2 flex-shrink-0">
+                                            <button
+                                              onClick={() => adminApproveMember(t.id, m.userId, t.name, m.name)}
+                                              className="bg-green-500/20 hover:bg-green-500/35 border border-green-500/40 text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                            >
+                                              ✓ Approve
+                                            </button>
+                                            <button
+                                              onClick={() => adminDeclineMember(t.id, m.userId, t.name, m.name)}
+                                              className="bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                            >
+                                              ✕ Decline
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
