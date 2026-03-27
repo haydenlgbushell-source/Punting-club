@@ -392,7 +392,7 @@ export default function PuntingClub() {
   const [adminComps, setAdminComps] = useState([]);
   const [adminSearch, setAdminSearch] = useState('');
   const [adminAuditLog, setAdminAuditLog] = useState([]);
-  const [editingBet, setEditingBet] = useState(null); // bet being manually edited
+  const [editingBetField, setEditingBetField] = useState(null); // { betId, field } being inline-edited in admin
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
   const [legNotes, setLegNotes] = useState({}); // {legId: resultNote string}
   const [expandedCompId, setExpandedCompId] = useState(null); // which comp shows team list
@@ -493,7 +493,7 @@ export default function PuntingClub() {
           }
           setTeamMembers(mapped);
           const approved = mapped.filter(m => m.role !== 'pending');
-          if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
+          if (approved.length > 0) setBettingOrder(approved.filter(m => m.can_bet || m.canBet).map(m => m.name));
         } catch(e) { 
           // Fallback: at minimum show the logged-in user
           setTeamMembers([{ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone }]);
@@ -709,9 +709,12 @@ export default function PuntingClub() {
       await apiApproveMember(currentTeamId, userId);
       setPendingMembers(prev => prev.filter(m => m.user_id !== userId));
       dismissJoinNotif(userId);
-      // Reload members from DB
+      // Reload members from DB and rebuild betting order
       const members = await apiGetTeamMembers(currentTeamId);
-      setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`, phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+      const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+      setTeamMembers(mapped);
+      const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
+      if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
       showToast('Member approved!', 'success');
     } catch (err) { showToast(`Failed to approve member: ${err.message}`, 'error'); }
   };
@@ -1573,9 +1576,9 @@ export default function PuntingClub() {
         setTeamMembers(mapped);
         const pending = mapped.filter(m => m.role === 'pending');
         setPendingMembers(pending);
-        // Populate betting order from approved members (preserves DB ordering)
-        const approved = mapped.filter(m => m.role !== 'pending' && m.name);
-        if (approved.length > 0) setBettingOrder(approved.map(m => m.name));
+        // Populate betting order from active members who can bet (excludes pending + view-only)
+        const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
+        if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
         // Show join-request popup for captains if there are already pending members
         if (currentUser?.role === 'captain' && pending.length > 0) {
           setJoinRequestNotifs(pending.map(m => ({ user_id: m.user_id, name: m.name, phone: m.phone })));
@@ -3357,11 +3360,15 @@ export default function PuntingClub() {
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-xs text-gray-500 mb-2">
                                 <span>Type: <span className="text-gray-300">{b.type}</span></span>
-                                <span>Stake: {editingBet === b.id ? (
-                                  <input defaultValue={b.stake} onBlur={e => { correctBetField(b.id,'stake',e.target.value); setEditingBet(null); }} className="bg-black border border-amber-500/50 rounded px-1 text-amber-300 w-16 text-xs" autoFocus />
-                                ) : <span className="text-amber-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBet(b.id)}>{b.stake} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
-                                <span>Odds: <span className="text-gray-300">{b.odds}</span></span>
-                                <span>To Win: <span className="text-green-400">{b.toWin}</span></span>
+                                <span>Stake: {editingBetField?.betId === b.id && editingBetField?.field === 'stake' ? (
+                                  <input defaultValue={b.stake} onBlur={e => { correctBetField(b.id,'stake',e.target.value); setEditingBetField(null); }} className="bg-black border border-amber-500/50 rounded px-1 text-amber-300 w-20 text-xs" autoFocus />
+                                ) : <span className="text-amber-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'stake' })}>{b.stake} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
+                                <span>Odds: {editingBetField?.betId === b.id && editingBetField?.field === 'odds' ? (
+                                  <input defaultValue={b.odds} onBlur={e => { correctBetField(b.id,'combined_odds',e.target.value); setEditingBetField(null); }} className="bg-black border border-amber-500/50 rounded px-1 text-amber-300 w-20 text-xs" autoFocus />
+                                ) : <span className="text-gray-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'odds' })}>{b.odds} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
+                                <span>To Win: {editingBetField?.betId === b.id && editingBetField?.field === 'toWin' ? (
+                                  <input defaultValue={b.toWin} onBlur={e => { correctBetField(b.id,'estimated_return',e.target.value); setEditingBetField(null); }} className="bg-black border border-green-500/50 rounded px-1 text-green-400 w-24 text-xs" autoFocus />
+                                ) : <span className="text-green-400 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'toWin' })}>{b.toWin} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
                                 <span>Week: <span className="text-gray-300">{b.week}</span></span>
                                 <span>Submitted: <span className="text-gray-300">{b.submittedAt}</span></span>
                                 <span>AI Confidence: <span className={b.aiConfidence >= 90 ? 'text-green-400' : b.aiConfidence >= 70 ? 'text-amber-400' : 'text-red-400'}>{b.aiConfidence}%</span></span>
@@ -3375,7 +3382,7 @@ export default function PuntingClub() {
                               <button onClick={() => confirmBetResult(b.id,'won')}  className="bg-green-500/20 border border-green-500/40 text-green-400 px-3 py-1 rounded-lg text-xs font-semibold">✓ Confirm Won</button>
                               <button onClick={() => confirmBetResult(b.id,'lost')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-3 py-1 rounded-lg text-xs font-semibold">✗ Confirm Lost</button>
                               <button onClick={() => { const r = prompt('Rejection reason:','Invalid stake'); if(r) rejectBet(b.id,r); }} className="bg-gray-500/20 border border-gray-500/40 text-gray-400 px-3 py-1 rounded-lg text-xs font-semibold">Reject</button>
-                              <button onClick={() => setEditingBet(editingBet === b.id ? null : b.id)} className="ml-auto text-amber-500 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3"/>Edit Stake</button>
+                              <span className="ml-auto text-gray-600 text-xs italic">Click any value above to edit</span>
                             </div>
                           )}
                           {canAdmin('bets') && (b.status === 'won' || b.status === 'lost') && (
