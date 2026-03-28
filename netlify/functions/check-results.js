@@ -98,10 +98,10 @@ async function settleLegs(apiKey, summary, legs) {
     },
     body: JSON.stringify({
       model:       'claude-haiku-4-5-20251001',
-      max_tokens:  1024,
+      max_tokens:  512,
       tools: [{
         name:        'record_settlements',
-        description: 'Record the settlement result for each bet leg',
+        description: 'Settle bet legs',
         input_schema: {
           type: 'object',
           properties: {
@@ -124,20 +124,7 @@ async function settleLegs(apiKey, summary, legs) {
       tool_choice: { type: 'tool', name: 'record_settlements' },
       messages: [{
         role:    'user',
-        content: `Settle each bet leg based on this match summary.
-
-MATCH SUMMARY:
-${summary}
-
-BET LEGS:
-${legList}
-
-Rules:
-- Try/goal scorer: player in scorer list → won, not in list → lost
-- Match winner: selected team won → won, lost → lost
-- Not played / result not found → pending
-
-Call record_settlements now.`,
+        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle: scorer in list→won, not in list→lost, winner bet→won/lost, no result→pending.`,
       }],
     }),
   });
@@ -221,22 +208,11 @@ exports.handler = async (event) => {
       }).join('\n');
 
       const year = aestDate.getUTCFullYear();
-      const searchPrompt = `Today is ${todayStr} AEST. The following Australian sports matches have already been played — search for the final results.
+      const searchPrompt = `Today is ${todayStr} AEST. Search for the final result of each match below. For each: report the score and full try/goal scorer list.
 
-For EACH match, do a separate search and report:
-1. The final score
-2. The complete try scorer list (NRL) OR goal scorer list (AFL) OR other relevant stats
-
-MATCHES TO SEARCH:
 ${legsToSearch}
 
-Search each match individually using queries like:
-- "[Team A] vs [Team B] result ${year}"
-- "[Team A] vs [Team B] try scorers ${year}" (for NRL try scorer bets)
-- "[Team A] vs [Team B] goal scorers ${year}" (for AFL goal scorer bets)
-
-Check nrl.com, afl.com.au, foxsports.com.au, espn.com.au, or Google Sports.
-Report the result for EVERY match listed above — do not skip any.`;
+Report results for every match — do not skip any.`;
 
       console.log(`[check-results] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
       let summary;

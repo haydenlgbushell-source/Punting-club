@@ -51,41 +51,6 @@ const parseAnalysisJSON = (text) => {
   catch { return null; }
 };
 
-// Multi-turn Claude call that handles web_search tool_use blocks.
-const callClaudeWithSearch = async (prompt) => {
-  const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
-  let messages = [{ role: 'user', content: prompt }];
-  for (let turn = 0; turn < 6; turn++) {
-    const res = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, tools, messages }),
-    });
-    if (!res.ok) throw new Error(`Claude API error ${res.status}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (data.stop_reason === 'end_turn') {
-      return data.content?.find(b => b.type === 'text')?.text || null;
-    }
-    if (data.stop_reason === 'tool_use') {
-      messages = [
-        ...messages,
-        { role: 'assistant', content: data.content },
-        {
-          role: 'user',
-          content: data.content.filter(b => b.type === 'tool_use').map(b => ({
-            type: 'tool_result', tool_use_id: b.id,
-            content: `Search for "${b.input?.query || ''}" was executed.`,
-          })),
-        },
-      ];
-      continue;
-    }
-    return data.content?.find(b => b.type === 'text')?.text || null;
-  }
-  return null;
-};
-
 // Validate and normalise Australian mobile numbers
 // Accepts: 04XX XXX XXX, +614XX XXX XXX, 614XX XXX XXX
 const validatePhone = (raw) => {
@@ -1391,9 +1356,9 @@ export default function PuntingClub() {
     if (!uploadedImages.length) { showToast('Please upload at least one bet slip image.', 'warning'); return; }
     setAnalyzing(true);
     try {
-      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1600, messages:[{ role:'user', content:[
-        { type:'text', text:`You are a sports betting expert. Analyze this bet slip image carefully and return ONLY valid JSON in this exact format:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"2026-03-15","startTime":"19:30","status":"pending"}]\n}\nRules:\n- eventDate: REQUIRED — this is the date the MATCH/GAME is played, NOT the date the bet slip was printed or submitted. Look for the date shown specifically next to each individual leg/event (not a general slip date). Format: YYYY-MM-DD. If the year is not shown, assume the current year.\n- startTime: REQUIRED — the kick-off / start time for each individual event. Format: HH:MM in 24h. If not visible, use null.\n- dollar signs on money values, decimal odds\n- status for each leg must be one of: pending, won, lost, void\n- submissionValid = true if the bet was placed before the first leg started\n- Return ONLY valid JSON, no other text.` },
-        ...uploadedImages.map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
+      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1024, messages:[{ role:'user', content:[
+        { type:'text', text:`Extract this bet slip into JSON only — no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules: eventDate = match date (YYYY-MM-DD, assume current year if missing); startTime = event kick-off in 24h or null; status = pending/won/lost/void; submissionValid = true if bet placed before first leg started.` },
+        ...uploadedImages.slice(0, 2).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
       if (!res.ok || data.error || data.type === 'error') {
