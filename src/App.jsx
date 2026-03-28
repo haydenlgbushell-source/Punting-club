@@ -25,16 +25,25 @@ const localTeamStore = {};     // teamCode → team object
 // owner        → all privileges
 // campaign     → confirm/correct results, disputes, password help
 // pub_admin    → manage their own competition
+//
+// Credentials are read from Vite env vars (set in .env.local, never commit passwords).
+// Required vars: VITE_ADMIN_PW_OWNER, VITE_ADMIN_PW_CM, VITE_ADMIN_PW_PUB
 const ADMIN_USERS = {
-  'admin': { password: 'admin123', role: 'owner',    name: 'Owner Admin',       phone: 'admin' },
-  'cm':    { password: 'cm123',    role: 'campaign',  name: 'Campaign Manager',  phone: 'cm' },
-  'pub':   { password: 'pub123',   role: 'pub_admin', name: 'Pub Admin (RSL)',   phone: 'pub' },
+  'admin': { password: import.meta.env.VITE_ADMIN_PW_OWNER || '', role: 'owner',    name: 'Owner Admin',      phone: 'admin' },
+  'cm':    { password: import.meta.env.VITE_ADMIN_PW_CM    || '', role: 'campaign',  name: 'Campaign Manager', phone: 'cm' },
+  'pub':   { password: import.meta.env.VITE_ADMIN_PW_PUB   || '', role: 'pub_admin', name: 'Pub Admin (RSL)',  phone: 'pub' },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const genCode = (len = 6) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const result = [];
+  while (result.length < len) {
+    const byte = crypto.getRandomValues(new Uint8Array(1))[0];
+    // Reject values >= 252 to avoid modulo bias (256 % 36 = 4)
+    if (byte < 252) result.push(chars[byte % 36]);
+  }
+  return result.join('');
 };
 
 const parseAnalysisJSON = (text) => {
@@ -4604,16 +4613,11 @@ export default function PuntingClub() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-amber-400 mb-1.5">Admin ID</label>
-              <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="admin / cm / pub" autoComplete="off" />
+              <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin ID" autoComplete="off" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-amber-400 mb-1.5">Password</label>
               <input type="password" required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
-            </div>
-            <div className="bg-black/30 rounded-lg p-3 text-xs text-gray-600 space-y-0.5">
-              <p>Demo: <strong className="text-gray-500">admin</strong> / admin123 (Owner)</p>
-              <p>Demo: <strong className="text-gray-500">cm</strong> / cm123 (Campaign Mgr)</p>
-              <p>Demo: <strong className="text-gray-500">pub</strong> / pub123 (Pub Admin)</p>
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
               <Shield className="w-4 h-4"/>Login to Admin Panel
