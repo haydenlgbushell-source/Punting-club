@@ -125,7 +125,7 @@ async function settleLegs(apiKey, summary, legs) {
       tool_choice: { type: 'tool', name: 'record_settlements' },
       messages: [{
         role:    'user',
-        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle each leg. Rules:\n- scorer confirmed in official list → won\n- scorer confirmed NOT in official list (match finished) → lost\n- result is ambiguous, conflicting, or match not finished → pending\n- winner bet → won or lost based on match result\n- Set confidence 0-100. If confidence < 80, you MUST use status=pending regardless of your reading of the result.`,
+        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle each leg using ONLY the official scorer list as the source of truth. Rules:\n- Try/goal scorer bets: name appears in official scorer list → won; name absent from official scorer list AND match is finished → lost. Commentary, assists, near-misses, or play descriptions do NOT count — only the official scorer list.\n- Match winner bets: settle on final score.\n- If the official scorer list is unavailable or match is not finished → pending.\n- Set confidence 0-100 based solely on how clearly the official scorer list supports the result. If confidence < 80, use status=pending.`,
       }],
     }),
   });
@@ -209,11 +209,11 @@ exports.handler = async (event) => {
       }).join('\n');
 
       const year = aestDate.getUTCFullYear();
-      const searchPrompt = `Today is ${todayStr} AEST. Search for the FINAL confirmed result of each match below. Use official post-match sources (club websites, official NRL/AFL/sports league sites, major news outlets). For each match report: the final score AND the complete official try/goal scorer list. If reporting is preliminary, conflicting, or the match has not finished, say so explicitly — do not guess.
+      const searchPrompt = `Today is ${todayStr} AEST. For each match below, find the OFFICIAL post-match try/goal scorer list — not commentary, not play-by-play, not social media. Use the official NRL, AFL, or league match centre, or a major sports data provider. Report the final score and the complete official scorer list exactly as published. Do not infer scorers from match commentary or assist descriptions — only the official scorer list counts.
 
 ${legsToSearch}
 
-Report results for every match — do not skip any. If you find conflicting reports for a scorer, note the conflict.`;
+For every match: state the final score and list every try/goal scorer by name as recorded in the official match result. If the official scorer list is not yet available or the match has not finished, say so explicitly.`;
 
       console.log(`[check-results] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
       let summary;
