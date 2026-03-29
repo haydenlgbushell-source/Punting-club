@@ -6,3 +6,6 @@ netlify/functions/package-lock.json
 .env
 .env.local
 supabase/.temp/
+
+# Local Netlify folder
+.netlify
