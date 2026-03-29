@@ -332,7 +332,7 @@ export default function PuntingClub() {
   const [showFinaliseModal, setShowFinaliseModal] = useState(false);
   const [depositPerMember, setDepositPerMember] = useState(null); // calculated on finalise
   const [showCreateComp, setShowCreateComp] = useState(false);
-  const [newComp, setNewComp] = useState({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false });
+  const [newComp, setNewComp] = useState({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false, payoutStructure:'winner_takes_all' });
   const [phoneError, setPhoneError] = useState('');
 
   // Competition request (public home page)
@@ -2160,21 +2160,9 @@ export default function PuntingClub() {
                 </div>
               </div>
             </div>
-            <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-6">
-              <h3 className="text-lg font-bold mb-4 text-amber-400">Payout Structure</h3>
-              <div className="grid sm:grid-cols-3 gap-4">
-                {[['Under 10 teams','Winner takes all','(minus 10% admin fee)'],['10–20 teams','1st takes jackpot','2nd gets a runner-up prize'],['20+ teams','1st takes jackpot','2nd & 3rd split runner-up pool']].map(([t,f,s]) => (
-                  <div key={t} className="bg-black/30 rounded-lg p-4">
-                    <p className="text-amber-400 font-bold text-sm mb-2">{t}</p>
-                    <p className="text-white text-sm">{f}</p>
-                    <p className="text-gray-400 text-xs mt-1">{s}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 mb-8">
               <h3 className="text-lg font-bold mb-3 text-amber-400">The Punting Week</h3>
-              <p className="text-gray-300 text-sm">Each competition week runs <strong className="text-white">Monday 12:00AM → Sunday 11:59PM</strong>. Bets must be submitted before the first leg of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a <strong className="text-white">boosted bet limit</strong> — exact amounts are set by your competition host.</p>
+              <p className="text-gray-300 text-sm">Every competition week finishes <strong className="text-white">11:59PM Tuesday</strong> and starts <strong className="text-white">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a <strong className="text-white">boosted bet limit</strong> — exact amounts are set by your competition host.</p>
             </div>
 
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
@@ -3719,6 +3707,25 @@ export default function PuntingClub() {
                               })()}
                             </div>
                           </div>
+                          {/* Payout Structure */}
+                          <div>
+                            <label className="block text-xs font-semibold text-amber-400 mb-2">Payout Structure</label>
+                            <div className="grid grid-cols-1 gap-2">
+                              {[
+                                ['winner_takes_all',   '🥇 Winner Takes All',            'The top team takes the full prize pool (minus admin fee)'],
+                                ['top2',               '🥇🥈 1st + Runner-Up',            '1st takes the jackpot, 2nd gets a runner-up prize'],
+                                ['top3',               '🥇🥈🥉 1st + 2nd & 3rd Split',   '1st takes the jackpot, 2nd & 3rd split the runner-up pool'],
+                              ].map(([v, l, d]) => (
+                                <button key={v} type="button"
+                                  onClick={() => setNewComp(p => ({...p, payoutStructure: v}))}
+                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${newComp.payoutStructure === v ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                >
+                                  <div className="font-bold mb-0.5">{l}</div>
+                                  <div className="text-gray-500 text-xs">{d}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           {/* Private/Public toggle */}
                           <div>
                             <label className="block text-xs font-semibold text-amber-400 mb-2">Visibility</label>
@@ -3739,7 +3746,7 @@ export default function PuntingClub() {
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
+                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false, payoutStructure:'winner_takes_all' }); }} className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
                         </div>
                       )}
