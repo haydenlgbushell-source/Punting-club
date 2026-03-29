@@ -22,6 +22,24 @@ exports.handler = async (event) => {
   catch(e) { return error('Invalid JSON'); }
 
   try {
+    // Verify admin token for all admin-only operations
+    const ADMIN_ACTIONS = new Set([
+      'get_all_competitions','get_all_teams','get_all_users','get_all_bets','get_audit_log',
+      'create_competition','get_competition_requests','update_competition_request',
+      'delete_competition','update_competition_status','update_competition','advance_week',
+      'update_team','update_bet_result','update_bet_leg','reject_bet','correct_bet',
+      'update_kyc','update_user','add_audit',
+      'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
+    ]);
+    if (ADMIN_ACTIONS.has(action)) {
+      try {
+        const claims = verifyAdminToken(payload.adminToken);
+        payload.adminRole = claims.role; // verified server-side role overrides any client value
+      } catch (err) {
+        return error(err.message, err.status || 401);
+      }
+    }
+
     switch (action) {
 
       // ══════════════════════════════════════════════════════
@@ -764,6 +782,25 @@ const addAudit = async (adminRole, action, target, detail) => {
 // Helper: create admin notification
 const createAdminNotif = async (type, title, message, data = {}) => {
   await supabase.from('admin_notifications').insert({ type, title, message, data });
+};
+
+// Helper: verify signed admin token
+const verifyAdminToken = (token) => {
+  const { createHmac } = require('crypto');
+  if (!token) { const e = new Error('Admin token required'); e.status = 401; throw e; }
+  const secret = process.env.ADMIN_JWT_SECRET;
+  if (!secret) { const e = new Error('Admin auth not configured'); e.status = 500; throw e; }
+  const dot = String(token).lastIndexOf('.');
+  if (dot < 0) { const e = new Error('Invalid token format'); e.status = 401; throw e; }
+  const payloadB64 = String(token).slice(0, dot);
+  const sig        = String(token).slice(dot + 1);
+  const expected   = createHmac('sha256', secret).update(payloadB64).digest('hex');
+  if (sig !== expected) { const e = new Error('Invalid admin token'); e.status = 401; throw e; }
+  let claims;
+  try { claims = JSON.parse(Buffer.from(payloadB64, 'base64').toString()); }
+  catch(_) { const e = new Error('Invalid token payload'); e.status = 401; throw e; }
+  if (!claims.exp || Date.now() > claims.exp) { const e = new Error('Admin session expired, please log in again'); e.status = 401; throw e; }
+  return claims;
 };
 
 // Helper: generate random code (crypto-safe)

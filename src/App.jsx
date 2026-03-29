@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
-  apiSignUp, apiLogin, apiVerifySession,
+  apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
@@ -26,13 +26,8 @@ const localTeamStore = {};     // teamCode → team object
 // campaign     → confirm/correct results, disputes, password help
 // pub_admin    → manage their own competition
 //
-// Credentials are read from Vite env vars (set in .env.local, never commit passwords).
-// Required vars: VITE_ADMIN_PW_OWNER, VITE_ADMIN_PW_CM, VITE_ADMIN_PW_PUB
-const ADMIN_USERS = {
-  'admin': { password: import.meta.env.VITE_ADMIN_PW_OWNER || '', role: 'owner',    name: 'Owner Admin',      phone: 'admin' },
-  'cm':    { password: import.meta.env.VITE_ADMIN_PW_CM    || '', role: 'campaign',  name: 'Campaign Manager', phone: 'cm' },
-  'pub':   { password: import.meta.env.VITE_ADMIN_PW_PUB   || '', role: 'pub_admin', name: 'Pub Admin (RSL)',  phone: 'pub' },
-};
+// Admin credentials are validated server-side. Set ADMIN_PW_* and ADMIN_JWT_SECRET
+// in .env.local (server-only, never bundled into JS).
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const genCode = (len = 6) => {
@@ -358,6 +353,7 @@ export default function PuntingClub() {
   const [adminUser, setAdminUser] = useState(null);
   const [adminLoginId, setAdminLoginId] = useState('');
   const [adminLoginPw, setAdminLoginPw] = useState('');
+  const [adminToken, setAdminToken] = useState(null);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminTab, setAdminTab] = useState('dashboard'); // dashboard | teams | users | bets | competitions | security
   const [adminTeams, setAdminTeams] = useState([]);
@@ -919,19 +915,19 @@ export default function PuntingClub() {
     };
   };
 
-  const refreshAdminData = useCallback(async (adminRole) => {
+  const refreshAdminData = useCallback(async (token) => {
     // mapTeam and mapUser are inlined here to avoid stale closure
     setAdminLoading(true);
     setAdminLoadError(null);
     try {
       const [teams, users, bets, comps, audit, requests, dbNotifs] = await Promise.allSettled([
-        apiGetAllTeams(),
-        apiGetAllUsers(),
-        apiGetAllBets(),
-        apiGetAllCompetitions(),
-        apiGetAuditLog(100),
-        apiGetCompetitionRequests(adminRole || 'owner'),
-        apiGetAdminNotifications(adminRole || 'owner'),
+        apiGetAllTeams(token),
+        apiGetAllUsers(token),
+        apiGetAllBets(undefined, token),
+        apiGetAllCompetitions(token),
+        apiGetAuditLog(100, token),
+        apiGetCompetitionRequests(token),
+        apiGetAdminNotifications(token),
       ]);
       if (teams.status === 'fulfilled' && teams.value) {
         setAdminTeams(teams.value.map(mapTeam));
@@ -981,9 +977,9 @@ export default function PuntingClub() {
 
   // Load admin data when admin logs in
   useEffect(() => {
-    if (!isAdminLoggedIn) return;
-    refreshAdminData(adminUser?.role);
-  }, [isAdminLoggedIn, refreshAdminData, adminUser?.role]);
+    if (!isAdminLoggedIn || !adminToken) return;
+    refreshAdminData(adminToken);
+  }, [isAdminLoggedIn, adminToken, refreshAdminData]);
 
   // Close notification panel on outside click
   useEffect(() => {
@@ -1144,21 +1140,26 @@ export default function PuntingClub() {
   };
 
   // ── ADMIN AUTH ────────────────────────────────────────────────────────────
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    const a = ADMIN_USERS[adminLoginId.trim()];
-    if (!a || a.password !== adminLoginPw) { showToast('Invalid admin credentials.', 'error'); return; }
-    setIsAdminLoggedIn(true);
-    setAdminUser(a);
-    setShowAdminPanel(true);
-    setShowAdminLogin(false);
-    setAdminLoginId(''); setAdminLoginPw('');
-    addAuditEntry(a.role, 'Admin Login', a.name, 'Logged in to admin panel');
+    try {
+      const result = await apiAdminLogin(adminLoginId.trim(), adminLoginPw);
+      const a = { role: result.role, name: result.name, id: adminLoginId.trim() };
+      setAdminToken(result.token);
+      setAdminUser(a);
+      setIsAdminLoggedIn(true);
+      setShowAdminPanel(true);
+      setShowAdminLogin(false);
+      setAdminLoginId(''); setAdminLoginPw('');
+      addAuditEntry(result.role, 'Admin Login', result.name, 'Logged in to admin panel');
+    } catch(err) {
+      showToast(err.message || 'Invalid admin credentials.', 'error');
+    }
   };
 
   const handleAdminLogout = () => {
     if (adminUser) addAuditEntry(adminUser.role, 'Admin Logout', adminUser.name, '');
-    setIsAdminLoggedIn(false); setAdminUser(null); setShowAdminPanel(false);
+    setIsAdminLoggedIn(false); setAdminUser(null); setAdminToken(null); setShowAdminPanel(false);
   };
 
   const addAuditEntry = (role, action, target, detail) => {
@@ -1172,19 +1173,19 @@ export default function PuntingClub() {
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, status: 'verified' } : t));
     addAuditEntry(adminUser?.role, 'Team Verified', t?.name || id, 'Team status set to verified');
     setAdminNotifs(prev => [{ id: Date.now(), type:'success', msg:`${t?.name} verified`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateTeam(id, { status: 'verified' }, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { status: 'verified' }, adminToken); } catch(err) { console.error(err); }
   };
   const suspendTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, status: 'suspended', flagged: true } : t));
     addAuditEntry(adminUser?.role, 'Team Suspended', t?.name || id, 'Team suspended by admin');
-    try { await apiUpdateTeam(id, { status: 'suspended', flagged: true }, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { status: 'suspended', flagged: true }, adminToken); } catch(err) { console.error(err); }
   };
   const flagTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
-    try { await apiUpdateTeam(id, { flagged: newFlagged }, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { flagged: newFlagged }, adminToken); } catch(err) { console.error(err); }
   };
 
   // ── ADMIN MEMBER APPROVE / DECLINE ────────────────────────────────────────
@@ -1219,7 +1220,7 @@ export default function PuntingClub() {
     setAdminUsers(prev => prev.map(u => (u.id === userId || u.phone === userId) ? { ...u, kyc_status: status, kyc: status, active: status !== 'rejected' } : u));
     addAuditEntry(adminUser?.role, `KYC ${status}`, u?.name || u?.first_name || userId, `KYC status updated to ${status}`);
     setAdminNotifs(prev => [{ id: Date.now(), type: status === 'verified' ? 'success' : 'error', msg:`${u?.name || u?.first_name} KYC ${status}`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateKyc(u?.id || userId, status, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiUpdateKyc(u?.id || userId, status, adminToken); } catch(err) { console.error(err); }
   };
   const resetPassword = (phone) => {
     const u = adminUsers.find(x => x.phone === phone);
@@ -1233,19 +1234,19 @@ export default function PuntingClub() {
     setAdminBets(prev => prev.map(b => b.id === id ? { ...b, status: result, overall_status: result, flagged: false } : b));
     addAuditEntry(adminUser?.role, `Bet ${result}`, `${b?.team || b?.teams?.team_name} ${id}`, `Result manually set to ${result}`);
     setAdminNotifs(prev => [{ id: Date.now(), type: result === 'won' ? 'success' : 'warning', msg:`Bet marked ${result}`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateBetResult(id, result, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiUpdateBetResult(id, result, adminToken); } catch(err) { console.error(err); }
   };
   const correctBetField = async (id, field, value) => {
     const b = adminBets.find(x => x.id === id);
     setAdminBets(prev => prev.map(b => b.id === id ? { ...b, [field]: value, flagged: false } : b));
     addAuditEntry(adminUser?.role, 'Bet Corrected', `${b?.team || b?.teams?.team_name} ${id}`, `${field} changed to ${value}`);
-    try { await apiCorrectBet(id, field, value, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiCorrectBet(id, field, value, adminToken); } catch(err) { console.error(err); }
   };
   const rejectBet = async (id, reason) => {
     const b = adminBets.find(x => x.id === id);
     setAdminBets(prev => prev.map(bet => bet.id === id ? { ...bet, status: 'rejected', overall_status: 'rejected', flagged: false } : bet));
     addAuditEntry(adminUser?.role, 'Bet Rejected', `${b?.team || b?.teams?.team_name} ${id}`, reason);
-    try { await apiRejectBet(id, reason, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiRejectBet(id, reason, adminToken); } catch(err) { console.error(err); }
   };
 
   const overrideLegResult = async (betId, legId, status, resultNote) => {
@@ -1256,7 +1257,7 @@ export default function PuntingClub() {
       legs: (bet.legs || []).map(l => l.id !== legId ? l : { ...l, status, result_note: resultNote, resultNote }),
     }));
     addAuditEntry(adminUser?.role, 'Leg Override', `${b?.team} — Leg ${leg?.leg_number}`, `${leg?.selection} → ${status}${resultNote ? ': ' + resultNote : ''}`);
-    try { await apiUpdateBetLeg(legId, status, resultNote, adminUser?.role); } catch(err) { console.error(err); }
+    try { await apiUpdateBetLeg(legId, status, resultNote, adminToken); } catch(err) { console.error(err); }
   };
 
   // ── ADMIN COMPETITION ACTIONS ─────────────────────────────────────────────
@@ -1270,7 +1271,7 @@ export default function PuntingClub() {
     if (!weeksCalc || weeksCalc < 1) { showToast('Please set valid start and end dates.', 'warning'); return; }
 
     try {
-      const saved = await apiCreateCompetition({ ...comp, weeks: weeksCalc }, adminUser?.role);
+      const saved = await apiCreateCompetition({ ...comp, weeks: weeksCalc }, adminToken);
       const enriched = { ...saved, teams: saved.teams || 0, team_count: 0 };
       setAdminComps(prev => [...prev, enriched]);
       if (saved.status === 'active') setActiveCompetitions(prev => [...prev, enriched]);
@@ -1282,7 +1283,7 @@ export default function PuntingClub() {
   };
   const updateCompetition = async (id, fields) => {
     try {
-      const updated = await apiUpdateCompetition(id, fields, adminUser?.role);
+      const updated = await apiUpdateCompetition(id, fields, adminToken);
       setAdminComps(prev => prev.map(c => (c.id === id || c.code === id) ? { ...c, ...updated } : c));
       addAuditEntry(adminUser?.role, 'Competition Updated', id, Object.keys(fields).join(', '));
       const active = await apiGetActiveCompetitions();
@@ -1297,7 +1298,7 @@ export default function PuntingClub() {
     setAdminComps(prev => prev.map(c => c.id === id ? { ...c, status } : c));
     addAuditEntry(adminUser?.role, `Competition ${status}`, id, '');
     try {
-      await apiUpdateCompStatus(id, status, adminUser?.role);
+      await apiUpdateCompStatus(id, status, adminToken);
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
     } catch(err) { console.error(err); }
@@ -1305,7 +1306,7 @@ export default function PuntingClub() {
 
   const deleteCompetition = async (id, name) => {
     try {
-      await apiDeleteCompetition(id, adminUser?.role);
+      await apiDeleteCompetition(id, adminToken);
       setAdminComps(prev => prev.filter(c => c.id !== id));
       setActiveCompetitions(prev => prev.filter(c => c.id !== id));
       addAuditEntry(adminUser?.role, 'Competition Deleted', name, '');
@@ -1316,7 +1317,7 @@ export default function PuntingClub() {
   const advanceWeek = async (id, direction = 'forward') => {
     const label = direction === 'forward' ? 'Week Advanced' : 'Week Rolled Back';
     try {
-      const updated = await apiAdvanceWeek(id, adminUser?.role, direction);
+      const updated = await apiAdvanceWeek(id, adminToken, direction);
       setAdminComps(prev => prev.map(c => c.id === id ? { ...c, start_date: updated.start_date } : c));
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
@@ -1330,11 +1331,11 @@ export default function PuntingClub() {
 
   const markNotifRead = async (id) => {
     setAdminNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    try { await apiMarkNotificationRead(id, adminUser?.role || 'owner'); } catch(e) { /* non-critical */ }
+    try { await apiMarkNotificationRead(id, adminToken); } catch(e) { /* non-critical */ }
   };
   const markAllNotifsRead = async () => {
     setAdminNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    try { await apiMarkAllNotificationsRead(adminUser?.role || 'owner'); } catch(e) { /* non-critical */ }
+    try { await apiMarkAllNotificationsRead(adminToken); } catch(e) { /* non-critical */ }
   };
   const unreadNotifs = adminNotifs.filter(n => !n.read).length;
 
@@ -2959,7 +2960,7 @@ export default function PuntingClub() {
                 <div className="hidden sm:block text-gray-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
                 {adminLoading && <span className="text-xs text-amber-400 animate-pulse">Loading...</span>}
                 {adminLoadError && <span className="text-xs text-red-400 max-w-xs truncate" title={adminLoadError}>⚠ {adminLoadError}</span>}
-                <button onClick={refreshAdminData} className="text-gray-500 hover:text-gray-300 p-1.5 rounded-lg hover:bg-white/5" title="Refresh data">
+                <button onClick={() => refreshAdminData(adminToken)} className="text-gray-500 hover:text-gray-300 p-1.5 rounded-lg hover:bg-white/5" title="Refresh data">
                   <RefreshCw className={`w-3.5 h-3.5 ${adminLoading ? 'animate-spin' : ''}`} />
                 </button>
                 <button onClick={handleAdminLogout} style={{backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",padding:"6px 14px",borderRadius:"8px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>Logout</button>
@@ -3158,7 +3159,7 @@ export default function PuntingClub() {
                         <h2 className="text-xl font-black">Teams</h2>
                         <p className="text-gray-500 text-sm">{adminTeams.length} registered · {adminTeams.filter(t=>t.status==='pending').length} pending</p>
                       </div>
-                      <button onClick={refreshAdminData} className="bg-white/5 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5">
+                      <button onClick={() => refreshAdminData(adminToken)} className="bg-white/5 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5">
                         <RefreshCw className="w-3 h-3" /> Refresh
                       </button>
                     </div>
@@ -3606,7 +3607,7 @@ export default function PuntingClub() {
                                     <button
                                       onClick={async () => {
                                         try {
-                                          await apiUpdateCompetitionRequest(req.id, 'approved', adminUser?.role);
+                                          await apiUpdateCompetitionRequest(req.id, 'approved', adminToken);
                                           setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'approved'} : r));
                                           showToast(`Request from ${req.contact_name} approved`, 'success');
                                         } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
@@ -3616,7 +3617,7 @@ export default function PuntingClub() {
                                     <button
                                       onClick={async () => {
                                         try {
-                                          await apiUpdateCompetitionRequest(req.id, 'declined', adminUser?.role);
+                                          await apiUpdateCompetitionRequest(req.id, 'declined', adminToken);
                                           setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'declined'} : r));
                                           showToast(`Request declined`, 'success');
                                         } catch(err) { showToast(`Error: ${err.message}`, 'error'); }

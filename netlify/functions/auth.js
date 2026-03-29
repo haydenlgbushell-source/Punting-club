@@ -313,6 +313,37 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, teams })};
     }
 
+    // ── ADMIN LOGIN ──────────────────────────────────────────────────────────────
+    if (action === 'admin_login') {
+      const { createHmac } = require('crypto');
+      const { id, password } = payload;
+
+      const ADMIN_ACCOUNTS = {
+        'admin': { pw: process.env.ADMIN_PW_OWNER, role: 'owner',    name: 'Owner Admin' },
+        'cm':    { pw: process.env.ADMIN_PW_CM,    role: 'campaign',  name: 'Campaign Manager' },
+        'pub':   { pw: process.env.ADMIN_PW_PUB,   role: 'pub_admin', name: 'Pub Admin (RSL)' },
+      };
+
+      const cleanId = String(id || '').trim();
+      const acct    = ADMIN_ACCOUNTS[cleanId];
+
+      if (!acct || !acct.pw || acct.pw !== String(password || '')) {
+        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid admin credentials.' }) };
+      }
+
+      const secret = process.env.ADMIN_JWT_SECRET;
+      if (!secret) {
+        return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'Admin authentication not configured on server.' }) };
+      }
+
+      const exp          = Date.now() + 8 * 60 * 60 * 1000; // 8 hours
+      const tokenPayload = Buffer.from(JSON.stringify({ id: cleanId, role: acct.role, name: acct.name, exp })).toString('base64');
+      const sig          = createHmac('sha256', secret).update(tokenPayload).digest('hex');
+      const token        = `${tokenPayload}.${sig}`;
+
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ token, role: acct.role, name: acct.name }) };
+    }
+
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Unknown action: ${action}` }) };
 
   } catch (err) {
