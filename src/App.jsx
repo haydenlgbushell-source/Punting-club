@@ -10,7 +10,7 @@ import {
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
 } from './api.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2 } from 'lucide-react';
 
 // ─── In-memory stores ────────────────────────────────────────────────────────
 // ── Data is now persisted in Supabase ──────────────────────────────────────
@@ -83,8 +83,20 @@ const Badge = ({ status }) => {
     void:        'bg-gray-500/20 border-gray-500/60 text-gray-400',
     in_progress: 'bg-orange-500/20 border-orange-500/60 text-orange-400',
   };
-  const label = { won: '✓ Won', lost: '✗ Lost', partial: '⚡ Partial', pending: '⏳ Pending', void: '— Void', in_progress: '🔴 Live' };
-  return <span className={`border text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${map[status] || map.pending}`}>{label[status] || '⏳ Pending'}</span>;
+  const config = {
+    won:         { icon: <CheckCircle className="w-3 h-3" />, label: 'Won' },
+    lost:        { icon: <XCircle className="w-3 h-3" />, label: 'Lost' },
+    partial:     { icon: <Zap className="w-3 h-3" />, label: 'Partial' },
+    pending:     { icon: <Clock className="w-3 h-3" />, label: 'Pending' },
+    void:        { icon: <MinusCircle className="w-3 h-3" />, label: 'Void' },
+    in_progress: { icon: <span className="w-2 h-2 rounded-full bg-current animate-pulse inline-block" />, label: 'Live' },
+  };
+  const r = config[status] || config.pending;
+  return (
+    <span className={`border text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${map[status] || map.pending}`}>
+      {r.icon}{r.label}
+    </span>
+  );
 };
 
 const LegDot = ({ leg }) => {
@@ -145,7 +157,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const payoutLabel = allWon ? 'WINNINGS' : 'POTENTIAL';
   const payoutColor = allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#94a3b8';
 
-  const titleText  = allWon ? '🏆 WINNER!' : status === 'lost' ? '❌ BUST' : status === 'partial' ? '⚡ PARTIAL' : status === 'in_progress' ? '🔴 LIVE' : '⏳ PENDING';
+  const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
   const titleColor = allWon ? '#22c55e'    : status === 'lost' ? '#ef4444' : status === 'partial' ? '#eab308'   : status === 'in_progress' ? '#f97316'  : '#f59e0b';
   const cardBorder = allWon ? '#22c55e33'  : status === 'lost' ? '#ef444433' : status === 'partial' ? '#eab30833' : status === 'in_progress' ? '#f9731633' : '#f59e0b22';
   const cardBg     = allWon ? '#052e1680'  : status === 'lost' ? '#2d020280' : status === 'partial' ? '#42330080' : status === 'in_progress' ? '#43180080' : '#00000066';
@@ -160,13 +172,14 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
               {(bet.type || 'MULTI').toUpperCase()} BET
             </span>
             {bet.submittedBy && (
-              <span style={{ fontSize: 11, color: '#9ca3af', background: '#ffffff0d', border: '1px solid #ffffff12', borderRadius: 6, padding: '2px 8px' }}>
-                👤 {bet.submittedBy}
+              <span style={{ fontSize: 11, color: '#9ca3af', background: '#ffffff0d', border: '1px solid #ffffff12', borderRadius: 6, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                {bet.submittedBy}
               </span>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280' }}>⌛ {bet.submittedAt}</span>}
+            {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{bet.submittedAt}</span>}
             {onCheckBet && (status === 'pending' || status === 'in_progress') && (
               <button
                 onClick={() => onCheckBet(bet.id)}
@@ -238,7 +251,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, marginLeft: 10 }}>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#f59e0b' }}>@ {leg.odds}</div>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', padding: '2px 9px', borderRadius: 5, background: `${legColor}18`, color: legColor, border: `1px solid ${legColor}44` }}>
-                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '◉ LIVE' : leg.status === 'void' ? '— VOID' : '⏳'}
+                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : 'WAIT'}
                     </div>
                     {leg.resultNote && (
                       <button onClick={() => toggleLeg(i)} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: 11, cursor: 'pointer', padding: 0 }}>
@@ -248,8 +261,8 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                   </div>
                 </div>
                 {isOpen && leg.resultNote && (
-                  <div style={{ borderTop: '1px solid #1f2937', padding: '10px 14px 12px', display: 'flex', gap: 7, fontSize: 13, color: '#9ca3af', lineHeight: 1.5 }}>
-                    <span>{won ? '🟢' : lost ? '🔴' : '🟡'}</span>
+                  <div style={{ borderTop: '1px solid #1f2937', padding: '10px 14px 12px', display: 'flex', gap: 7, fontSize: 13, color: '#9ca3af', lineHeight: 1.5, alignItems: 'flex-start' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: won ? '#22c55e' : lost ? '#ef4444' : '#eab308', flexShrink: 0, marginTop: 4, display: 'inline-block' }} />
                     <span>{leg.resultNote}</span>
                   </div>
                 )}
@@ -1617,8 +1630,8 @@ export default function PuntingClub() {
           <div className="bg-gray-950 border-2 border-amber-500/60 rounded-2xl w-full max-w-sm shadow-2xl">
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-white/8">
-              <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/40 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
-                👥
+              <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/40 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Users className="w-5 h-5 text-amber-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="font-black text-white text-base leading-tight">
@@ -1684,8 +1697,8 @@ export default function PuntingClub() {
       {/* Landscape hint */}
       {showLandscapeHint && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
-          📱 Rotate to landscape for best view
-          <button onClick={() => setShowLandscapeHint(false)}><X className="w-3 h-3" /></button>
+          <Smartphone className="w-3.5 h-3.5 flex-shrink-0" /> Rotate to landscape for best view
+          <button onClick={() => setShowLandscapeHint(false)} className="cursor-pointer"><X className="w-3 h-3" /></button>
         </div>
       )}
 
@@ -1704,17 +1717,23 @@ export default function PuntingClub() {
 
             {/* Desktop Nav Links */}
             <div className="hidden md:flex items-center gap-0.5 mx-6">
-              {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
+              {[
+                ['home',        'Home',        <Home className="w-3.5 h-3.5" />],
+                ['competition', 'Rules',       <BookOpen className="w-3.5 h-3.5" />],
+                ['leaderboard', 'Leaderboard', <Trophy className="w-3.5 h-3.5" />],
+                ['weekly',      'Summary',     <BarChart3 className="w-3.5 h-3.5" />],
+                ['team',        'My Team',     <Users className="w-3.5 h-3.5" />],
+              ].map(([key, label, icon]) => (
                 <button
                   key={key}
                   onClick={() => navigateTo(key)}
-                  className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
                     activeNav === key
                       ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  {label}
+                  {icon}{label}
                   {activeNav === key && (
                     <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-400 rounded-full" />
                   )}
@@ -1791,15 +1810,21 @@ export default function PuntingClub() {
             <div className="md:hidden border-t border-white/[0.06] bg-gray-950 pb-4">
               {/* Nav Links */}
               <div className="pt-2 space-y-0.5">
-                {[['home','Home'],['competition','How To / Rules'],['leaderboard','Leaderboard'],['weekly','Summary'],['team','My Team']].map(([key, label]) => (
+                {[
+                  ['home',        'Home',        <Home className="w-4 h-4 flex-shrink-0" />],
+                  ['competition', 'Rules',       <BookOpen className="w-4 h-4 flex-shrink-0" />],
+                  ['leaderboard', 'Leaderboard', <Trophy className="w-4 h-4 flex-shrink-0" />],
+                  ['weekly',      'Summary',     <BarChart3 className="w-4 h-4 flex-shrink-0" />],
+                  ['team',        'My Team',     <Users className="w-4 h-4 flex-shrink-0" />],
+                ].map(([key, label, icon]) => (
                   <button
                     key={key}
                     onClick={() => { navigateTo(key); setMobileMenuOpen(false); }}
-                    className={`relative flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    className={`relative flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
                       activeNav === key ? 'text-amber-400 bg-amber-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors ${activeNav === key ? 'bg-amber-400' : 'bg-gray-700'}`} />
+                    <span className={`transition-colors ${activeNav === key ? 'text-amber-400' : 'text-gray-600'}`}>{icon}</span>
                     {label}
                     {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
                       <span className="ml-auto w-5 h-5 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
@@ -1843,16 +1868,28 @@ export default function PuntingClub() {
       {activeNav === 'home' && (
         <>
           <section className="relative pt-28 pb-16 px-4 sm:px-6 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-amber-900/10 to-transparent pointer-events-none" />
-            <div className="absolute top-20 right-10 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+            {/* Background radials */}
+            <div className="absolute inset-0 bg-gradient-to-b from-amber-900/12 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-32 right-0 w-72 h-72 bg-amber-600/4 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-32 left-0 w-72 h-72 bg-orange-600/4 rounded-full blur-3xl pointer-events-none" />
+
             <div className="max-w-5xl mx-auto text-center relative z-10">
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-b from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent leading-tight">
-                The Ultimate Sports Betting League
+              {/* Live badge */}
+              <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 rounded-full px-4 py-1.5 mb-6">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+                <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">Live Competitions Running</span>
+              </div>
+
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black mb-5 bg-gradient-to-b from-white via-amber-200 to-amber-500 bg-clip-text text-transparent leading-[1.05]">
+                The Ultimate<br />Sports Betting League
               </h1>
-              <p className="text-lg sm:text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-                Create a team, place bets, compete with friends. 8, 16, or 32 week seasons. AI-powered tracking.
+              <p className="text-base sm:text-lg text-gray-400 mb-8 max-w-xl mx-auto leading-relaxed">
+                Form a team, place weekly multi-bets, and compete for the jackpot. AI-powered tracking across 8, 16, or 32 week seasons.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+
+              {/* Primary CTAs */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
                 {isLoggedIn ? (
                   <>
                     <button
@@ -1867,9 +1904,9 @@ export default function PuntingClub() {
                         setPrivateCompLookupError(null);
                         setShowCreateTeamModal(true);
                       }}
-                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
                     >
-                      Join a Competition <ArrowRight className="w-5 h-5" />
+                      Join a Competition <ArrowRight className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => {
@@ -1883,65 +1920,98 @@ export default function PuntingClub() {
                         setPrivateCompLookupError(null);
                         setShowCreateTeamModal(true);
                       }}
-                      className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all"
+                      className="border border-amber-500/50 hover:border-amber-500 hover:bg-amber-500/8 text-amber-400 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer"
                     >
                       + New Team
                     </button>
                   </>
                 ) : (
                   <>
-                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2">
-                      Create Team <ArrowRight className="w-5 h-5" />
+                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
+                      Create a Team <ArrowRight className="w-4 h-4" />
                     </button>
-                    <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border-2 border-amber-500 hover:bg-amber-500/10 text-amber-400 px-8 py-4 rounded-xl font-bold text-lg transition-all">
+                    <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border border-amber-500/50 hover:border-amber-500 hover:bg-amber-500/8 text-amber-400 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer">
                       Join a Team
                     </button>
                   </>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row justify-center gap-3 mb-12">
+
+              {/* Secondary CTAs */}
+              <div className="flex flex-col sm:flex-row justify-center gap-2.5 mb-12">
                 <button
                   onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName: isLoggedIn ? `${currentUser?.first_name||''} ${currentUser?.last_name||''}`.trim() : '', contactPhone: isLoggedIn ? (currentUser?.phone||'') : '', contactEmail: isLoggedIn ? (currentUser?.email||'') : '', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
-                  className="border border-amber-500/40 hover:border-amber-500/70 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+                  className="border border-white/10 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/5 text-gray-400 hover:text-amber-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  🏟 Request a Competition for your pub/club
+                  <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Run a competition at your pub/club
                 </button>
                 <a
                   href="https://wa.me/61419163012"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="border border-green-500/40 hover:border-green-500/70 bg-green-500/5 hover:bg-green-500/10 text-green-400 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+                  className="border border-white/10 hover:border-green-500/30 bg-white/3 hover:bg-green-500/5 text-gray-400 hover:text-green-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{flexShrink:0}}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{flexShrink:0}}>
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                   </svg>
                   Message us on WhatsApp
                 </a>
               </div>
-              <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
-                {[['$1,000', 'Buy-In'], ['$50', 'Weekly Bet'], ['32 Wks', 'Full Season']].map(([v, l]) => (
-                  <div key={l} className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                    <div className="text-2xl font-black text-amber-400">{v}</div>
-                    <div className="text-gray-500 text-xs mt-1">{l}</div>
+
+              {/* Stats row */}
+              <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
+                {[
+                  { v: '$1,000', l: 'Season Buy-In', icon: <DollarSign className="w-4 h-4" /> },
+                  { v: '$50',    l: 'Weekly Bet',    icon: <TrendingUp className="w-4 h-4" /> },
+                  { v: '32 wk', l: 'Full Season',   icon: <CalendarRange className="w-4 h-4" /> },
+                ].map(({ v, l, icon }) => (
+                  <div key={l} className="bg-white/[0.03] border border-white/8 hover:border-amber-500/25 rounded-xl p-4 transition-colors group">
+                    <div className="text-amber-400/60 mb-1.5 flex justify-center group-hover:text-amber-400 transition-colors">{icon}</div>
+                    <div className="text-xl font-black text-amber-400" style={{fontFamily:"'Barlow Condensed', sans-serif"}}>{v}</div>
+                    <div className="text-gray-600 text-xs mt-0.5 font-medium">{l}</div>
                   </div>
                 ))}
               </div>
             </div>
           </section>
+
+          {/* Feature cards */}
           <section className="pb-20 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { icon: <Trophy className="w-7 h-7" />, title: 'Live Leaderboard', desc: 'Real-time rankings with instant updates' },
-                { icon: <Zap className="w-7 h-7" />, title: 'AI Bet Analysis', desc: 'Upload slips — AI reads and tracks results' },
-                { icon: <Users className="w-7 h-7" />, title: 'Team Management', desc: 'Roles, permissions, betting order & more' },
-                { icon: <TrendingUp className="w-7 h-7" />, title: 'Season Tracking', desc: 'Full quarter, half and full season views' },
-              ].map((f, i) => (
-                <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-6 hover:bg-amber-500/5 hover:border-amber-500/20 transition-all">
-                  <div className="text-amber-400 mb-3">{f.icon}</div>
-                  <h3 className="font-bold mb-1 text-sm">{f.title}</h3>
-                  <p className="text-gray-500 text-xs">{f.desc}</p>
-                </div>
-              ))}
+            <div className="max-w-5xl mx-auto">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', color: 'amber', nav: 'leaderboard' },
+                  { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', color: 'blue', nav: null },
+                  { icon: <Users className="w-6 h-6" />, title: 'Team Management', desc: 'Captain roles, betting order, member approvals', color: 'green', nav: 'team' },
+                  { icon: <TrendingUp className="w-6 h-6" />, title: 'Season Tracking', desc: 'Weekly summaries across quarter, half and full seasons', color: 'purple', nav: 'weekly' },
+                ].map((f, i) => {
+                  const colorMap = {
+                    amber:  { bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: 'text-amber-400', hover: 'hover:border-amber-500/40 hover:bg-amber-500/5' },
+                    blue:   { bg: 'bg-blue-500/10',  border: 'border-blue-500/20',  icon: 'text-blue-400',  hover: 'hover:border-blue-500/40  hover:bg-blue-500/5'  },
+                    green:  { bg: 'bg-green-500/10', border: 'border-green-500/20', icon: 'text-green-400', hover: 'hover:border-green-500/40 hover:bg-green-500/5' },
+                    purple: { bg: 'bg-purple-500/10',border: 'border-purple-500/20',icon: 'text-purple-400',hover: 'hover:border-purple-500/40 hover:bg-purple-500/5'},
+                  };
+                  const c = colorMap[f.color];
+                  return (
+                    <div
+                      key={i}
+                      onClick={f.nav ? () => navigateTo(f.nav) : undefined}
+                      className={`bg-white/[0.025] border ${c.border} rounded-xl p-5 ${c.hover} transition-all duration-200 group ${f.nav ? 'cursor-pointer' : ''}`}
+                    >
+                      <div className={`w-10 h-10 ${c.bg} border ${c.border} rounded-lg flex items-center justify-center ${c.icon} mb-4 group-hover:scale-105 transition-transform duration-200`}>
+                        {f.icon}
+                      </div>
+                      <h3 className="font-bold text-sm text-white mb-1.5">{f.title}</h3>
+                      <p className="text-gray-500 text-xs leading-relaxed">{f.desc}</p>
+                      {f.nav && (
+                        <div className={`mt-3 flex items-center gap-1 text-xs font-semibold ${c.icon} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                          View <ArrowRight className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </section>
         </>
@@ -1974,7 +2044,7 @@ export default function PuntingClub() {
                     <h3 className="font-bold text-base mb-1">{s.t}</h3>
                     <p className="text-gray-400 text-sm mb-2">{s.d}</p>
                     <ul className="space-y-1">
-                      {s.bullets.map((b, i) => <li key={i} className="text-gray-500 text-xs flex gap-1.5"><span className="text-amber-500">▸</span>{b}</li>)}
+                      {s.bullets.map((b, i) => <li key={i} className="text-gray-500 text-xs flex gap-1.5 items-start"><ChevronRight className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />{b}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -1989,7 +2059,7 @@ export default function PuntingClub() {
                 <h3 className="text-lg font-bold mb-4 text-amber-400">Betting Rules</h3>
                 <ul className="space-y-3 text-sm text-gray-300">
                   {[['$1,000 buy-in','per team (goes to jackpot)'],['$50/week max','split how you like across bets'],['Any sport or racing','you choose the platform'],['Submit before','first leg of the bet starts'],['Last week','$200 final bet'],['You keep','all winnings from your bets']].map(([b,r],i) => (
-                    <li key={i} className="flex gap-2"><span className="text-amber-500">▸</span><span><strong className="text-white">{b}</strong> {r}</span></li>
+                    <li key={i} className="flex gap-2 items-start"><ChevronRight className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" /><span><strong className="text-white">{b}</strong> {r}</span></li>
                   ))}
                 </ul>
               </div>
@@ -2132,7 +2202,7 @@ export default function PuntingClub() {
             <div className="space-y-1.5">
               {enrichedLeaderboardTeams.length === 0 && (
                 <div className="text-center py-16">
-                  <div className="text-5xl mb-4">🏆</div>
+                  <Trophy className="w-16 h-16 text-amber-500/30 mb-4 mx-auto" />
                   <p className="text-gray-400 font-semibold text-lg">No teams yet</p>
                   <p className="text-gray-600 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
                 </div>
@@ -2221,7 +2291,7 @@ export default function PuntingClub() {
                         {/* Member roster */}
                         {team.memberList?.length > 0 && (
                           <div className="mb-3 pb-3 border-b border-white/5">
-                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">👥 Members</p>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2 flex items-center gap-1"><Users className="w-3 h-3" /> Members</p>
                             <div className="flex flex-wrap gap-2">
                               {team.memberList.map((m, mi) => (
                                 <div key={mi} className="flex items-center gap-1.5 bg-white/5 rounded-full px-2.5 py-1">
@@ -2355,7 +2425,7 @@ export default function PuntingClub() {
                             <>
                               <div className="flex items-center gap-2 mb-2">
                                 <span className={`text-2xl font-black ${myPrevData.bet.overallStatus === 'won' ? 'text-green-400' : myPrevData.bet.overallStatus === 'lost' ? 'text-red-400' : 'text-amber-400'}`}>
-                                  {myPrevData.bet.overallStatus === 'won' ? '🏆 WON!' : myPrevData.bet.overallStatus === 'lost' ? '❌ Lost' : myPrevData.bet.overallStatus === 'partial' ? '⚡ Partial' : '⏳ Pending'}
+                                  {myPrevData.bet.overallStatus === 'won' ? 'WON!' : myPrevData.bet.overallStatus === 'lost' ? 'Lost' : myPrevData.bet.overallStatus === 'partial' ? 'Partial' : 'Pending'}
                                 </span>
                               </div>
                               <p className="text-sm text-gray-300">
@@ -2397,7 +2467,7 @@ export default function PuntingClub() {
                         {/* Winners first */}
                         {prevWinners.length > 0 && (
                           <div>
-                            <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">🏆 Winners</p>
+                            <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Trophy className="w-3 h-3" /> Winners</p>
                             <div className="space-y-2">
                               {prevWinners.map(({ team: t, bet }) => (
                                 <div key={t.id} className="bg-green-950/20 border border-green-500/15 rounded-lg px-3 py-2.5 flex items-start justify-between gap-3">
@@ -2429,7 +2499,7 @@ export default function PuntingClub() {
                         {/* Losers */}
                         {prevLosers.length > 0 && (
                           <div>
-                            <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">❌ Bust</p>
+                            <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1"><XCircle className="w-3 h-3" /> Bust</p>
                             <div className="space-y-2">
                               {prevLosers.map(({ team: t, bet }) => (
                                 <div key={t.id} className="bg-red-950/10 border border-red-500/10 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
@@ -2449,7 +2519,7 @@ export default function PuntingClub() {
                         {/* Pending */}
                         {prevPending.length > 0 && (
                           <div>
-                            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">⏳ Still Pending</p>
+                            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> Still Pending</p>
                             <div className="space-y-1">
                               {prevPending.map(({ team: t, bet }) => (
                                 <div key={t.id} className="bg-amber-950/10 border border-amber-500/10 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
@@ -2509,7 +2579,7 @@ export default function PuntingClub() {
                   {teamsNoBet.length > 0 && <p className="text-gray-600 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
                 </div>
                 <div className="bg-white/3 border border-white/8 rounded-xl p-5">
-                  <h3 className="font-bold text-amber-400 mb-2">🏆 Season Standings</h3>
+                  <h3 className="font-bold text-amber-400 mb-2 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> Season Standings</h3>
                   {leaderboardTeams.slice(0, 3).map((t, i) => (
                     <div key={t.id} className="flex items-center gap-2 py-1">
                       <span className={`text-xs font-black w-5 ${i === 0 ? 'text-amber-400' : 'text-gray-500'}`}>#{i + 1}</span>
@@ -2736,7 +2806,7 @@ export default function PuntingClub() {
                                 <span className="text-white text-sm font-semibold">{bet.type || 'Multi'}</span>
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded border ${resultCls}`}>{resultLabel}</span>
                                 {bet.submittedBy && (
-                                  <span className="text-xs text-gray-500 bg-white/5 border border-white/8 rounded px-2 py-0.5">👤 {bet.submittedBy}</span>
+                                  <span className="text-xs text-gray-500 bg-white/5 border border-white/8 rounded px-2 py-0.5 inline-flex items-center gap-1"><User className="w-3 h-3" /> {bet.submittedBy}</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-3 mt-0.5">
@@ -2768,7 +2838,7 @@ export default function PuntingClub() {
             {/* Pending approvals */}
             {pendingMembers.length > 0 && (
               <div className="bg-orange-950/20 border border-orange-500/30 rounded-xl p-5 mb-5">
-                <h3 className="font-bold text-orange-400 mb-3">⏳ Pending Approvals ({pendingMembers.length})</h3>
+                <h3 className="font-bold text-orange-400 mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Pending Approvals ({pendingMembers.length})</h3>
                 <div className="space-y-2">
                   {pendingMembers.map(m => (
                     <div key={m.phone} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2.5">
@@ -2791,7 +2861,7 @@ export default function PuntingClub() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   {teamFinalised && <CheckCircle className="w-4 h-4 text-green-400" />}
-                  <h3 className={`font-bold ${teamFinalised ? 'text-green-400' : 'text-amber-400'}`}>👥 Team Members</h3>
+                  <h3 className={`font-bold flex items-center gap-1.5 ${teamFinalised ? 'text-green-400' : 'text-amber-400'}`}><Users className="w-4 h-4" /> Team Members</h3>
                   {teamFinalised && depositPerMember && (
                     <span className="text-xs bg-green-500/15 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full font-semibold">${depositPerMember.toLocaleString()} / member</span>
                   )}
@@ -2880,13 +2950,13 @@ export default function PuntingClub() {
         };
 
         const tabs = [
-          { id:'dashboard',    label:'Dashboard',    icon:'📊', roles:['owner','campaign','pub_admin'] },
-          { id:'teams',        label:'Teams',        icon:'🏆', roles:['owner','campaign','pub_admin'] },
-          { id:'users',        label:'Users & KYC',  icon:'👤', roles:['owner','campaign'] },
-          { id:'bets',         label:'Bets',         icon:'🎯', roles:['owner','campaign'] },
-          { id:'competitions', label:'Competitions', icon:'🏟', roles:['owner','pub_admin'] },
-          { id:'security',     label:'Security',     icon:'🔒', roles:['owner'] },
-          { id:'audit',        label:'Audit Log',    icon:'📋', roles:['owner','campaign'] },
+          { id:'dashboard',    label:'Dashboard',    icon:<LayoutDashboard className="w-4 h-4" />, roles:['owner','campaign','pub_admin'] },
+          { id:'teams',        label:'Teams',        icon:<Trophy className="w-4 h-4" />,          roles:['owner','campaign','pub_admin'] },
+          { id:'users',        label:'Users & KYC',  icon:<UserCheck className="w-4 h-4" />,       roles:['owner','campaign'] },
+          { id:'bets',         label:'Bets',         icon:<FileText className="w-4 h-4" />,        roles:['owner','campaign'] },
+          { id:'competitions', label:'Competitions', icon:<Building2 className="w-4 h-4" />,       roles:['owner','pub_admin'] },
+          { id:'security',     label:'Security',     icon:<Shield className="w-4 h-4" />,          roles:['owner'] },
+          { id:'audit',        label:'Audit Log',    icon:<Activity className="w-4 h-4" />,        roles:['owner','campaign'] },
         ].filter(t => t.roles.includes(adminUser.role));
 
         const filteredTeams = adminTeams.filter(t => adminSearch === '' || t.name.toLowerCase().includes(adminSearch.toLowerCase()) || t.captain.toLowerCase().includes(adminSearch.toLowerCase()));
@@ -2953,7 +3023,7 @@ export default function PuntingClub() {
                             onMouseLeave={e => e.currentTarget.style.backgroundColor= n.read ? 'transparent' : 'rgba(255,255,255,0.03)'}
                           >
                             <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
-                              <span style={{fontSize:'16px',flexShrink:0,marginTop:'1px'}}>{n.notifType === 'new_team' ? '🏆' : n.notifType === 'competition_request' ? '📬' : '🔔'}</span>
+                              <span style={{flexShrink:0,marginTop:'1px',display:'flex',alignItems:'center'}}>{n.notifType === 'new_team' ? <Trophy style={{width:15,height:15,color:'#f59e0b'}} /> : n.notifType === 'competition_request' ? <Building2 style={{width:15,height:15,color:'#60a5fa'}} /> : <Bell style={{width:15,height:15,color:'#9ca3af'}} />}</span>
                               <div style={{flex:1,minWidth:0}}>
                                 <p style={{fontSize:'12px',fontWeight:n.read ? 500 : 700,color: n.read ? '#9ca3af' : '#f1f5f9',marginBottom:'2px',lineHeight:'1.4'}}>{n.msg}</p>
                                 {n.detail && <p style={{fontSize:'11px',color:'#6b7280',lineHeight:'1.4',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{n.detail}</p>}
@@ -3062,7 +3132,7 @@ export default function PuntingClub() {
                               onClick={() => { markNotifRead(n.id); if (n.notifType === 'new_team') setAdminTab('teams'); else if (n.notifType === 'competition_request') setAdminTab('competitions'); }}
                               className="flex items-start gap-3 bg-black/30 rounded-lg px-3 py-2.5 cursor-pointer hover:bg-black/50 transition-colors"
                             >
-                              <span className="text-base flex-shrink-0">{n.notifType === 'new_team' ? '🏆' : n.notifType === 'competition_request' ? '📬' : '🔔'}</span>
+                              <span className="flex-shrink-0 flex items-center">{n.notifType === 'new_team' ? <Trophy className="w-4 h-4 text-amber-400" /> : n.notifType === 'competition_request' ? <Building2 className="w-4 h-4 text-blue-400" /> : <Bell className="w-4 h-4 text-gray-400" />}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-white">{n.msg}</p>
                                 {n.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.detail}</p>}
@@ -3176,7 +3246,7 @@ export default function PuntingClub() {
                     <div className="space-y-2">
                       {filteredTeams.length === 0 && (
                         <div className="text-center py-12 text-gray-600">
-                          <p className="text-3xl mb-2">🏆</p>
+                          <Trophy className="w-10 h-10 text-gray-700 mb-2 mx-auto" />
                           <p className="font-semibold">No teams registered yet</p>
                           <p className="text-sm mt-1">Teams will appear here after signup.</p>
                         </div>
@@ -3340,7 +3410,7 @@ export default function PuntingClub() {
                     <div className="space-y-2">
                       {filteredUsers.length === 0 && (
                         <div className="text-center py-12 text-gray-600">
-                          <p className="text-3xl mb-2">👤</p>
+                          <User className="w-10 h-10 text-gray-700 mb-2 mx-auto" />
                           <p className="font-semibold">No users yet</p>
                           <p className="text-sm mt-1">Users will appear here after they sign up.</p>
                         </div>
@@ -3357,9 +3427,9 @@ export default function PuntingClub() {
                                 {u.flagged && <span className="text-red-400 text-xs">🚩</span>}
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-gray-500">
-                                <span>📱 {u.phone}</span>
-                                <span>🏆 {u.team}</span>
-                                <span>📅 DOB: {u.dob}</span>
+                                <span className="flex items-center gap-1"><Smartphone className="w-3 h-3" /> {u.phone}</span>
+                                <span className="flex items-center gap-1"><Trophy className="w-3 h-3" /> {u.team}</span>
+                                <span className="flex items-center gap-1"><CalendarRange className="w-3 h-3" /> DOB: {u.dob}</span>
                                 <span>📍 {u.postcode}</span>
                                 <span>📆 Joined: {u.joinedAt}</span>
                               </div>
@@ -3608,10 +3678,10 @@ export default function PuntingClub() {
                                     {req.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
                                   </div>
                                   <div className="text-xs text-gray-500 space-y-0.5">
-                                    <p>🏟 {req.pub_name}</p>
-                                    <p>👤 {req.contact_name} · 📞 {req.contact_phone} · ✉ {req.contact_email}</p>
-                                    {req.preferred_start_date && <p>📅 {req.preferred_start_date} → {req.preferred_end_date}</p>}
-                                    {req.estimated_teams && <p>👥 ~{req.estimated_teams} teams · {req.buy_in ? `$${Number(req.buy_in).toLocaleString()} buy-in` : 'buy-in TBD'}</p>}
+                                    <p className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {req.pub_name}</p>
+                                    <p className="flex items-center gap-1"><User className="w-3 h-3" /> {req.contact_name} · {req.contact_phone} · {req.contact_email}</p>
+                                    {req.preferred_start_date && <p className="flex items-center gap-1"><CalendarRange className="w-3 h-3" /> {req.preferred_start_date} → {req.preferred_end_date}</p>}
+                                    {req.estimated_teams && <p className="flex items-center gap-1"><Users className="w-3 h-3" /> ~{req.estimated_teams} teams · {req.buy_in ? `$${Number(req.buy_in).toLocaleString()} buy-in` : 'buy-in TBD'}</p>}
                                     {req.notes && <p className="text-gray-400 italic mt-1">"{req.notes}"</p>}
                                   </div>
                                 </div>
@@ -3649,7 +3719,7 @@ export default function PuntingClub() {
                       <div className="space-y-3">
                         {adminComps.length === 0 && (
                           <div className="text-center py-12 text-gray-600">
-                            <p className="text-3xl mb-2">🏟</p>
+                            <Building2 className="w-10 h-10 text-gray-700 mb-2 mx-auto" />
                             <p className="font-semibold">No competitions yet</p>
                             <p className="text-sm mt-1">Create your first competition using the form above.</p>
                           </div>
@@ -3674,16 +3744,16 @@ export default function PuntingClub() {
                                     {c.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
                                   </div>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
-                                    <span>🏟 {c.pub}</span>
-                                    <span>📅 {c.weeks} weeks</span>
+                                    <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {c.pub}</span>
+                                    <span className="flex items-center gap-1"><CalendarRange className="w-3 h-3" /> {c.weeks} weeks</span>
                                     <span>💰 Buy-in: {buyIn}</span>
                                     {c.start_date && <span>🗓 {c.start_date} → {c.end_date}</span>}
                                   </div>
                                   {/* Team registration bar */}
                                   <div className="mt-2">
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className="text-xs text-gray-400 font-semibold">
-                                        👥 {teamCount} / {maxTeams} teams registered
+                                      <span className="text-xs text-gray-400 font-semibold flex items-center gap-1">
+                                        <Users className="w-3 h-3" /> {teamCount} / {maxTeams} teams registered
                                       </span>
                                       {teamCount > 0 && (
                                         <button onClick={() => setShowTeams(!showTeams)} className="text-xs text-blue-400 hover:text-blue-300">
@@ -3965,7 +4035,7 @@ export default function PuntingClub() {
               <label className="block text-xs font-semibold text-amber-400 mb-1.5">Password</label>
               <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600" placeholder="Your password" />
             </div>
-            <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><span className="animate-spin inline-block">⏳</span> Logging in...</> : 'Log In'}</button>
+            <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Log In'}</button>
             <div className="text-center">
               <p className="text-gray-600 text-xs mb-1.5">Don't have an account?</p>
               <button type="button" onClick={() => { setShowLoginModal(false); setSignupMode('create'); setShowSignupModal(true); }} className="text-amber-400 hover:text-amber-300 text-sm font-semibold">Create Account</button>
@@ -3976,7 +4046,7 @@ export default function PuntingClub() {
 
       {/* REQUEST A COMPETITION MODAL */}
       {showRequestCompModal && (
-        <Modal title="🏟 Request a Competition" onClose={() => setShowRequestCompModal(false)} maxWidth="max-w-lg">
+        <Modal title="Request a Competition" onClose={() => setShowRequestCompModal(false)} maxWidth="max-w-lg">
           {requestCompSuccess ? (
             <div className="p-6 text-center space-y-4">
               <div className="text-5xl mb-2">🎉</div>
@@ -4143,7 +4213,7 @@ export default function PuntingClub() {
                       }}
                       className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold py-2.5 rounded-xl text-sm disabled:opacity-60"
                     >
-                      {requestCompLoading ? '⏳ Submitting...' : 'Submit Request'}
+                      {requestCompLoading ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1" />Submitting...</> : 'Submit Request'}
                     </button>
                   </div>
                 </div>
@@ -4155,7 +4225,7 @@ export default function PuntingClub() {
 
       {/* SIGNUP */}
       {showSignupModal && (
-        <Modal title={signupMode === 'create' ? '🏆 Create a Team' : '👋 Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
+        <Modal title={signupMode === 'create' ? 'Create a Team' : 'Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
           <form onSubmit={handleSubmitSignup} className="p-5 space-y-3">
             {apiError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm flex items-start gap-2">
@@ -4355,7 +4425,7 @@ export default function PuntingClub() {
 
             <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold py-3 rounded-xl transition-all text-sm disabled:opacity-60 flex items-center justify-center gap-2">
               {apiLoading
-                ? <><span className="animate-spin inline-block">⏳</span> {signupMode === 'create' ? 'Creating...' : 'Joining...'}</>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {signupMode === 'create' ? 'Creating...' : 'Joining...'}</>
                 : signupMode === 'create' ? 'Create Team & Register' : 'Request to Join Team'}
             </button>
           </form>
@@ -4534,7 +4604,7 @@ export default function PuntingClub() {
                   </div>
                 )}
                 <button onClick={analyzeBetSlips} disabled={analyzing || !uploadedImages.length} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-gray-700 disabled:to-gray-800 text-black disabled:text-gray-500 font-bold py-3 rounded-xl transition-all text-sm">
-                  {analyzing ? '⏳ Analyzing… (10–15 seconds)' : 'Analyze Bet Slip'}
+                  {analyzing ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />Analyzing… (10–15 seconds)</> : 'Analyze Bet Slip'}
                 </button>
               </>
             ) : (
@@ -4818,7 +4888,7 @@ export default function PuntingClub() {
             </div>
             <div className="flex-1 p-4 max-w-2xl mx-auto w-full">
               <div className="bg-green-950/40 border-2 border-green-500/50 rounded-xl p-5 mb-5 flex items-center gap-4">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-2xl flex-shrink-0">✓</div>
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0"><CheckCircle className="w-7 h-7 text-white" /></div>
                 <div>
                   <h2 className="text-xl font-bold text-green-400">Successfully Submitted!</h2>
                   <p className="text-green-300/70 text-sm">Bet submitted for <strong>{selectedTeamForBet}</strong></p>
