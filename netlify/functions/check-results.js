@@ -110,11 +110,12 @@ async function settleLegs(apiKey, summary, legs) {
               items: {
                 type: 'object',
                 properties: {
-                  legNumber: { type: 'number' },
-                  status:    { type: 'string', enum: ['won','lost','pending','void','in_progress'] },
-                  result:    { type: 'string' },
+                  legNumber:  { type: 'number' },
+                  status:     { type: 'string', enum: ['won','lost','pending','void','in_progress'] },
+                  result:     { type: 'string' },
+                  confidence: { type: 'number', description: '0-100. How confident are you the result is correct based on the search summary? Set status to pending if confidence < 80.' },
                 },
-                required: ['legNumber','status','result'],
+                required: ['legNumber','status','result','confidence'],
               },
             },
           },
@@ -124,7 +125,7 @@ async function settleLegs(apiKey, summary, legs) {
       tool_choice: { type: 'tool', name: 'record_settlements' },
       messages: [{
         role:    'user',
-        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle: scorer in list→won, not in list→lost, winner bet→won/lost, no result→pending.`,
+        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle each leg. Rules:\n- scorer confirmed in official list → won\n- scorer confirmed NOT in official list (match finished) → lost\n- result is ambiguous, conflicting, or match not finished → pending\n- winner bet → won or lost based on match result\n- Set confidence 0-100. If confidence < 80, you MUST use status=pending regardless of your reading of the result.`,
       }],
     }),
   });
@@ -208,11 +209,11 @@ exports.handler = async (event) => {
       }).join('\n');
 
       const year = aestDate.getUTCFullYear();
-      const searchPrompt = `Today is ${todayStr} AEST. Search for the final result of each match below. For each: report the score and full try/goal scorer list.
+      const searchPrompt = `Today is ${todayStr} AEST. Search for the FINAL confirmed result of each match below. Use official post-match sources (club websites, official NRL/AFL/sports league sites, major news outlets). For each match report: the final score AND the complete official try/goal scorer list. If reporting is preliminary, conflicting, or the match has not finished, say so explicitly — do not guess.
 
 ${legsToSearch}
 
-Report results for every match — do not skip any.`;
+Report results for every match — do not skip any. If you find conflicting reports for a scorer, note the conflict.`;
 
       console.log(`[check-results] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
       let summary;
@@ -252,6 +253,11 @@ Report results for every match — do not skip any.`;
         if (!origLeg) { console.warn(`[check-results] No leg for legNumber=${legNum}`); continue; }
         if (!UNSETTLED.includes(origLeg.status)) { console.log(`[check-results] Leg ${legNum} already settled as "${origLeg.status}", skipping`); continue; }
         if (origLeg.status === u.status) { console.log(`[check-results] Leg ${legNum} already "${u.status}"`); continue; }
+        const confidence = typeof u.confidence === 'number' ? u.confidence : 100;
+        if (confidence < 80 && !UNSETTLED.includes(u.status)) {
+          console.log(`[check-results] Leg ${legNum} confidence too low (${confidence}%) to settle as "${u.status}" — keeping pending`);
+          continue;
+        }
 
         console.log(`[check-results] Updating leg ${legNum}: "${origLeg.status}" → "${u.status}"`);
         const { error: legErr } = await supabase
