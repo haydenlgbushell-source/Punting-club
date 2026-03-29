@@ -1885,7 +1885,7 @@ export default function PuntingClub() {
                 The Ultimate<br />Sports Betting League
               </h1>
               <p className="text-base sm:text-lg text-gray-400 mb-8 max-w-xl mx-auto leading-relaxed">
-                Form a team, place weekly multi-bets, and compete for the jackpot. AI-powered tracking across 8, 16, or 32 week seasons.
+                Form a team, place weekly multi-bets, and compete for the jackpot. Flexible buy-ins, custom bet limits, and seasons from 8 to 32 weeks — set by your competition host.
               </p>
 
               {/* Primary CTAs */}
@@ -1961,14 +1961,15 @@ export default function PuntingClub() {
               {/* Stats row */}
               <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
                 {[
-                  { v: '$1,000', l: 'Season Buy-In', icon: <DollarSign className="w-4 h-4" /> },
-                  { v: '$50',    l: 'Weekly Bet',    icon: <TrendingUp className="w-4 h-4" /> },
-                  { v: '32 wk', l: 'Full Season',   icon: <CalendarRange className="w-4 h-4" /> },
-                ].map(({ v, l, icon }) => (
+                  { v: 'Flexible', l: 'Buy-In',        sub: 'set per competition', icon: <Settings2 className="w-4 h-4" /> },
+                  { v: 'Any Sport', l: 'Weekly Bets',   sub: 'custom limit',        icon: <TrendingUp className="w-4 h-4" /> },
+                  { v: '8–32 Wks', l: 'Season Length', sub: '8, 16 or 32 weeks',   icon: <CalendarRange className="w-4 h-4" /> },
+                ].map(({ v, l, sub, icon }) => (
                   <div key={l} className="bg-white/[0.03] border border-white/8 hover:border-amber-500/25 rounded-xl p-4 transition-colors group">
                     <div className="text-amber-400/60 mb-1.5 flex justify-center group-hover:text-amber-400 transition-colors">{icon}</div>
-                    <div className="text-xl font-black text-amber-400" style={{fontFamily:"'Barlow Condensed', sans-serif"}}>{v}</div>
-                    <div className="text-gray-600 text-xs mt-0.5 font-medium">{l}</div>
+                    <div className="text-lg font-black text-amber-400 leading-tight" style={{fontFamily:"'Barlow Condensed', sans-serif"}}>{v}</div>
+                    <div className="text-gray-500 text-xs mt-0.5 font-semibold">{l}</div>
+                    <div className="text-gray-700 text-[10px] mt-0.5 leading-tight">{sub}</div>
                   </div>
                 ))}
               </div>
@@ -2032,9 +2033,9 @@ export default function PuntingClub() {
             {/* Steps */}
             <div className="space-y-4 mb-12">
               {[
-                { n:'1', t:'Create or Join a Team', d:'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets:['Captain pays $1,000 buy-in or split among members','Invite up to 10+ members via your unique team code','Members must be approved by the captain before joining'] },
-                { n:'2', t:'Confirm Buy-In', d:'Before the season starts all team members must confirm their deposit contribution.', bullets:['Captain can track who has and hasn\'t paid','Competition doesn\'t officially start until all deposits confirmed','Special arrangements can be made via admin'] },
-                { n:'3', t:'Submit Your Weekly Bet', d:'Place your bet on any platform, then submit the screenshot via the website.', bullets:['$50 max per week (split how you like)','Must submit before first leg starts','Last week of competition: $200 bet','You keep all your winnings!'] },
+                { n:'1', t:'Create or Join a Team', d:'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets:['Buy-in set by your competition — paid by captain or split among members','Invite up to 10+ members via your unique team code','Members must be approved by the captain before joining'] },
+                { n:'2', t:'Confirm Buy-In', d:'Before the season starts all team members must confirm their deposit contribution.', bullets:['Buy-in amount is set by the competition host','Captain can track who has and hasn\'t paid','Competition doesn\'t officially start until all deposits confirmed'] },
+                { n:'3', t:'Submit Your Weekly Bet', d:'Place your bet on any platform, then submit the screenshot via the website.', bullets:['Weekly bet limit set per competition — split how you like across legs','Must submit before first leg starts','Final week has a boosted bet limit for a big finish','You keep all your winnings!'] },
                 { n:'4', t:'Track Results', d:'AI reads your bet slip and updates leg-by-leg results every 3 hours from the first event start.', bullets:['Green = won, Red = lost, Orange = in progress (live)','Team leaderboard updates in real-time','Click any team to see their full bet slip'] },
                 { n:'5', t:'Win the Jackpot', d:'Highest total winnings at season end takes the prize pool.', bullets:['Payout depends on number of teams','Final week has $200 bet for big finish','Top 2-3 teams paid depending on competition size'] },
               ].map(s => (
@@ -2058,7 +2059,7 @@ export default function PuntingClub() {
               <div className="bg-white/3 border border-white/8 rounded-xl p-6">
                 <h3 className="text-lg font-bold mb-4 text-amber-400">Betting Rules</h3>
                 <ul className="space-y-3 text-sm text-gray-300">
-                  {[['$1,000 buy-in','per team (goes to jackpot)'],['$50/week max','split how you like across bets'],['Any sport or racing','you choose the platform'],['Submit before','first leg of the bet starts'],['Last week','$200 final bet'],['You keep','all winnings from your bets']].map(([b,r],i) => (
+                  {[['Flexible buy-in','set per competition — goes to the jackpot'],['Custom weekly limit','split how you like across multiple bets'],['Any sport or racing','you choose the platform and bookmaker'],['Submit before','the first leg of your bet starts'],['Final week','boosted bet limit for the big finish'],['You keep','all winnings from your bets']].map(([b,r],i) => (
                     <li key={i} className="flex gap-2 items-start"><ChevronRight className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" /><span><strong className="text-white">{b}</strong> {r}</span></li>
                   ))}
                 </ul>
@@ -2078,7 +2079,7 @@ export default function PuntingClub() {
             <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-6">
               <h3 className="text-lg font-bold mb-4 text-amber-400">Payout Structure</h3>
               <div className="grid sm:grid-cols-3 gap-4">
-                {[['Under 10 teams','Winner takes all','(minus 10% admin fee)'],['10–20 teams','1st takes jackpot','2nd gets $1,000'],['20+ teams','1st takes jackpot','2nd & 3rd split runner-up pool']].map(([t,f,s]) => (
+                {[['Under 10 teams','Winner takes all','(minus 10% admin fee)'],['10–20 teams','1st takes jackpot','2nd gets a runner-up prize'],['20+ teams','1st takes jackpot','2nd & 3rd split runner-up pool']].map(([t,f,s]) => (
                   <div key={t} className="bg-black/30 rounded-lg p-4">
                     <p className="text-amber-400 font-bold text-sm mb-2">{t}</p>
                     <p className="text-white text-sm">{f}</p>
@@ -2089,7 +2090,7 @@ export default function PuntingClub() {
             </div>
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 mb-8">
               <h3 className="text-lg font-bold mb-3 text-amber-400">The Punting Week</h3>
-              <p className="text-gray-300 text-sm">Each competition week runs <strong className="text-white">Monday 12:00AM → Sunday 11:59PM</strong>. Bets must be submitted before the first leg of your multi starts. Teams can split the $50 across multiple bets (e.g. 2×$25 or 5×$10). Final week of the competition has a <strong className="text-white">$200 bet limit</strong>.</p>
+              <p className="text-gray-300 text-sm">Each competition week runs <strong className="text-white">Monday 12:00AM → Sunday 11:59PM</strong>. Bets must be submitted before the first leg of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a <strong className="text-white">boosted bet limit</strong> — exact amounts are set by your competition host.</p>
             </div>
 
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
