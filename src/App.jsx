@@ -25,56 +25,30 @@ const localTeamStore = {};     // teamCode → team object
 // owner        → all privileges
 // campaign     → confirm/correct results, disputes, password help
 // pub_admin    → manage their own competition
+//
+// Credentials are read from Vite env vars (set in .env.local, never commit passwords).
+// Required vars: VITE_ADMIN_PW_OWNER, VITE_ADMIN_PW_CM, VITE_ADMIN_PW_PUB
 const ADMIN_USERS = {
-  'admin': { password: 'admin123', role: 'owner',    name: 'Owner Admin',       phone: 'admin' },
-  'cm':    { password: 'cm123',    role: 'campaign',  name: 'Campaign Manager',  phone: 'cm' },
-  'pub':   { password: 'pub123',   role: 'pub_admin', name: 'Pub Admin (RSL)',   phone: 'pub' },
+  'admin': { password: import.meta.env.VITE_ADMIN_PW_OWNER || '', role: 'owner',    name: 'Owner Admin',      phone: 'admin' },
+  'cm':    { password: import.meta.env.VITE_ADMIN_PW_CM    || '', role: 'campaign',  name: 'Campaign Manager', phone: 'cm' },
+  'pub':   { password: import.meta.env.VITE_ADMIN_PW_PUB   || '', role: 'pub_admin', name: 'Pub Admin (RSL)',  phone: 'pub' },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const genCode = (len = 6) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const result = [];
+  while (result.length < len) {
+    const byte = crypto.getRandomValues(new Uint8Array(1))[0];
+    // Reject values >= 252 to avoid modulo bias (256 % 36 = 4)
+    if (byte < 252) result.push(chars[byte % 36]);
+  }
+  return result.join('');
 };
 
 const parseAnalysisJSON = (text) => {
   try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
   catch { return null; }
-};
-
-// Multi-turn Claude call that handles web_search tool_use blocks.
-const callClaudeWithSearch = async (prompt) => {
-  const tools = [{ type: 'web_search_20250305', name: 'web_search' }];
-  let messages = [{ role: 'user', content: prompt }];
-  for (let turn = 0; turn < 6; turn++) {
-    const res = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, tools, messages }),
-    });
-    if (!res.ok) throw new Error(`Claude API error ${res.status}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (data.stop_reason === 'end_turn') {
-      return data.content?.find(b => b.type === 'text')?.text || null;
-    }
-    if (data.stop_reason === 'tool_use') {
-      messages = [
-        ...messages,
-        { role: 'assistant', content: data.content },
-        {
-          role: 'user',
-          content: data.content.filter(b => b.type === 'tool_use').map(b => ({
-            type: 'tool_result', tool_use_id: b.id,
-            content: `Search for "${b.input?.query || ''}" was executed.`,
-          })),
-        },
-      ];
-      continue;
-    }
-    return data.content?.find(b => b.type === 'text')?.text || null;
-  }
-  return null;
 };
 
 // Validate and normalise Australian mobile numbers
@@ -1382,9 +1356,9 @@ export default function PuntingClub() {
     if (!uploadedImages.length) { showToast('Please upload at least one bet slip image.', 'warning'); return; }
     setAnalyzing(true);
     try {
-      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1600, messages:[{ role:'user', content:[
-        { type:'text', text:`You are a sports betting expert. Analyze this bet slip image carefully and return ONLY valid JSON in this exact format:\n{\n  "betType":"Multi",\n  "stake":"$50.00",\n  "combinedOdds":"3.50",\n  "estimatedReturn":"$175.00",\n  "submissionValid":true,\n  "legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"2026-03-15","startTime":"19:30","status":"pending"}]\n}\nRules:\n- eventDate: REQUIRED — this is the date the MATCH/GAME is played, NOT the date the bet slip was printed or submitted. Look for the date shown specifically next to each individual leg/event (not a general slip date). Format: YYYY-MM-DD. If the year is not shown, assume the current year.\n- startTime: REQUIRED — the kick-off / start time for each individual event. Format: HH:MM in 24h. If not visible, use null.\n- dollar signs on money values, decimal odds\n- status for each leg must be one of: pending, won, lost, void\n- submissionValid = true if the bet was placed before the first leg started\n- Return ONLY valid JSON, no other text.` },
-        ...uploadedImages.map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
+      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1024, messages:[{ role:'user', content:[
+        { type:'text', text:`Extract this bet slip into JSON only — no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/return: include $ sign; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
+        ...uploadedImages.slice(0, 2).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
       if (!res.ok || data.error || data.type === 'error') {
@@ -4604,16 +4578,11 @@ export default function PuntingClub() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-amber-400 mb-1.5">Admin ID</label>
-              <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="admin / cm / pub" autoComplete="off" />
+              <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin ID" autoComplete="off" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-amber-400 mb-1.5">Password</label>
               <input type="password" required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
-            </div>
-            <div className="bg-black/30 rounded-lg p-3 text-xs text-gray-600 space-y-0.5">
-              <p>Demo: <strong className="text-gray-500">admin</strong> / admin123 (Owner)</p>
-              <p>Demo: <strong className="text-gray-500">cm</strong> / cm123 (Campaign Mgr)</p>
-              <p>Demo: <strong className="text-gray-500">pub</strong> / pub123 (Pub Admin)</p>
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
               <Shield className="w-4 h-4"/>Login to Admin Panel

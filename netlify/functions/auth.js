@@ -106,6 +106,14 @@ exports.handler = async (event) => {
     // ── SIGNUP ──────────────────────────────────────────────────────────────
     if (action === 'signup') {
       const { phone, password, firstName, lastName, email, dob, postcode, teamName, teamCode, buyInMode, competitionCode } = payload;
+      if (!firstName || String(firstName).trim().length < 1 || String(firstName).length > 64)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'First name must be 1–64 characters.' }) };
+      if (!lastName  || String(lastName).trim().length < 1  || String(lastName).length > 64)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Last name must be 1–64 characters.' }) };
+      if (!password  || String(password).length < 8 || String(password).length > 128)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+      if (teamName && String(teamName).trim().length > 60)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Team name must be 60 characters or fewer.' }) };
       const cleanPhone = normalisePhone(phone);
       if (!cleanPhone || cleanPhone.length < 10) {
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number. Please use format: 0412 345 678' }) };
@@ -152,9 +160,19 @@ exports.handler = async (event) => {
           const { data: comp } = await supabase.from('competitions').select('id').eq('code', competitionCode).eq('status', 'active').maybeSingle();
           compId = comp?.id || null;
         }
+        const { randomBytes } = require('crypto');
+        const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        const genTeamCode = () => {
+          const result = [];
+          while (result.length < 6) {
+            const byte = randomBytes(1)[0];
+            if (byte < 252) result.push(CODE_CHARS[byte % 36]);
+          }
+          return result.join('');
+        };
         let teamCodeGen, attempts = 0;
         do {
-          teamCodeGen = Array.from({ length: 6 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+          teamCodeGen = genTeamCode();
           const { data: ex } = await supabase.from('teams').select('id').eq('team_code', teamCodeGen).maybeSingle();
           if (!ex) break;
         } while (++attempts < 10);

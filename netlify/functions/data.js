@@ -52,6 +52,10 @@ exports.handler = async (event) => {
 
       case 'create_competition': {
         const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
+        if (!name || String(name).trim().length < 1 || String(name).length > 120)
+          return error('Competition name must be 1–120 characters.');
+        if (pub && String(pub).length > 120)
+          return error('Venue name must be 120 characters or fewer.');
         const status = adminRole === 'owner' ? 'active' : 'pending';
         const code   = genCode(6);
         const insertRow = {
@@ -762,6 +766,16 @@ const createAdminNotif = async (type, title, message, data = {}) => {
   await supabase.from('admin_notifications').insert({ type, title, message, data });
 };
 
-// Helper: generate random code
-const genCode = (len) => Array.from({ length: len }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+// Helper: generate random code (crypto-safe)
+const { randomBytes } = require('crypto');
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const genCode = (len) => {
+  const result = [];
+  while (result.length < len) {
+    const byte = randomBytes(1)[0];
+    // Reject values that would cause modulo bias (256 % 36 = 4, so reject >= 252)
+    if (byte < 252) result.push(CHARS[byte % 36]);
+  }
+  return result.join('');
+};
 
