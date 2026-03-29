@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
-  apiGetAllTeams, apiUpdateTeam, apiFinaliseTeam,
+  apiGetAllTeams, apiUpdateTeam, apiDeleteTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
@@ -1186,6 +1186,16 @@ export default function PuntingClub() {
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
     try { await apiUpdateTeam(id, { flagged: newFlagged }, adminToken); } catch(err) { console.error(err); }
+  };
+  const deleteTeam = async (id) => {
+    const t = adminTeams.find(x => x.id === id);
+    if (!window.confirm(`Delete team "${t?.name}"? This will permanently remove the team, all members, and all bets. This cannot be undone.`)) return;
+    try {
+      await apiDeleteTeam(id, adminToken);
+      setAdminTeams(prev => prev.filter(x => x.id !== id));
+      addAuditEntry(adminUser?.role, 'Team Deleted', t?.name || id, 'Team permanently deleted by admin');
+      showToast(`${t?.name} deleted`, 'success');
+    } catch (err) { showToast(`Failed to delete team: ${err.message}`, 'error'); }
   };
 
   // ── ADMIN MEMBER APPROVE / DECLINE ────────────────────────────────────────
@@ -3210,6 +3220,9 @@ export default function PuntingClub() {
                                   <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
                                 )}
                                 <button onClick={() => flagTeam(t.id)} className="bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:text-amber-400 px-2.5 py-1 rounded-lg text-xs">🚩</button>
+                                {adminUser?.role === 'owner' && (
+                                  <button onClick={() => deleteTeam(t.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-300 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
+                                )}
                                 <button
                                   onClick={() => setExpandedTeamId(isExpanded ? null : t.id)}
                                   className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
