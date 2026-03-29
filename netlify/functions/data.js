@@ -30,6 +30,7 @@ exports.handler = async (event) => {
       'update_team','update_bet_result','update_bet_leg','reject_bet','correct_bet',
       'update_kyc','update_user','add_audit',
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
+      'delete_team',
     ]);
     if (ADMIN_ACTIONS.has(action)) {
       try {
@@ -188,6 +189,27 @@ exports.handler = async (event) => {
         if (delErr) return error(delErr.message);
         await addAudit(adminRole, 'Competition Deleted', comp.name, `Code: ${comp.code}, Teams removed: ${teamIds.length}`);
         return json({ success: true, name: comp.name });
+      }
+
+      case 'delete_team': {
+        const { id: teamId, adminRole: delTeamRole } = payload;
+        if (delTeamRole !== 'owner') return error('Only owner can delete teams', 403);
+        // Fetch team details for audit before deleting
+        const { data: teamData, error: teamFetchErr } = await supabase.from('teams').select('team_name, team_code').eq('id', teamId).single();
+        if (teamFetchErr) return error(teamFetchErr.message);
+        // Cascade delete: bet_legs → bets → betting_order → team_members → team
+        const { data: betRows } = await supabase.from('bets').select('id').eq('team_id', teamId);
+        const betIds = (betRows || []).map(b => b.id);
+        if (betIds.length) {
+          await supabase.from('bet_legs').delete().in('bet_id', betIds);
+          await supabase.from('bets').delete().in('id', betIds);
+        }
+        await supabase.from('betting_order').delete().eq('team_id', teamId);
+        await supabase.from('team_members').delete().eq('team_id', teamId);
+        const { error: delTeamErr } = await supabase.from('teams').delete().eq('id', teamId);
+        if (delTeamErr) return error(delTeamErr.message);
+        await addAudit(delTeamRole, 'Team Deleted', teamData.team_name, `Code: ${teamData.team_code}, Bets removed: ${betIds.length}`);
+        return json({ success: true, name: teamData.team_name });
       }
 
       case 'update_competition_status': {
