@@ -9,6 +9,7 @@ import {
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
+  apiUpdateProfile, apiChangePassword,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2 } from 'lucide-react';
 
@@ -387,6 +388,15 @@ export default function PuntingClub() {
   const [adminNotifs, setAdminNotifs] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
 
+  // Profile editing
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileTab, setProfileTab] = useState('details'); // 'details' | 'password'
+  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '', dob: '', postcode: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState(null);
+  const [profileSuccess, setProfileSuccess] = useState(null);
+  const [pwForm, setPwForm] = useState({ newPassword: '', confirmPassword: '' });
+
   // Bet Analyzer
   const [showBetAnalyzer, setShowBetAnalyzer] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
@@ -490,6 +500,80 @@ export default function PuntingClub() {
       setApiLoading(false);
     }
   }, [loginPhone, loginPassword]);
+
+  const handleOpenProfile = () => {
+    setProfileForm({
+      firstName: currentUser?.firstName || '',
+      lastName:  currentUser?.lastName  || '',
+      email:     currentUser?.email     || '',
+      dob:       currentUser?.dob       || '',
+      postcode:  currentUser?.postcode  || '',
+    });
+    setProfileTab('details');
+    setProfileError(null);
+    setProfileSuccess(null);
+    setPwForm({ newPassword: '', confirmPassword: '' });
+    setShowProfileModal(true);
+  };
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    if (!profileForm.firstName.trim()) { setProfileError('First name is required.'); return; }
+    if (!profileForm.lastName.trim())  { setProfileError('Last name is required.');  return; }
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+    try {
+      await apiUpdateProfile(currentUser.id, {
+        firstName: profileForm.firstName.trim(),
+        lastName:  profileForm.lastName.trim(),
+        email:     profileForm.email.trim() || null,
+        dob:       profileForm.dob || null,
+        postcode:  profileForm.postcode.trim() || null,
+      });
+      setCurrentUser(prev => ({
+        ...prev,
+        firstName: profileForm.firstName.trim(),
+        lastName:  profileForm.lastName.trim(),
+        email:     profileForm.email.trim() || null,
+      }));
+      // Update localStorage session
+      try {
+        const sess = JSON.parse(localStorage.getItem('pc_session') || '{}');
+        if (sess.user) {
+          sess.user.first_name = profileForm.firstName.trim();
+          sess.user.last_name  = profileForm.lastName.trim();
+          sess.user.email      = profileForm.email.trim() || null;
+          localStorage.setItem('pc_session', JSON.stringify(sess));
+        }
+      } catch(_) {}
+      setProfileSuccess('Profile updated successfully!');
+      showToast('Profile updated!', 'success');
+    } catch (err) {
+      setProfileError(err.message);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (!pwForm.newPassword || pwForm.newPassword.length < 8) { setProfileError('Password must be at least 8 characters.'); return; }
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setProfileError('Passwords do not match.'); return; }
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+    try {
+      await apiChangePassword(currentUser.id, pwForm.newPassword);
+      setPwForm({ newPassword: '', confirmPassword: '' });
+      setProfileSuccess('Password changed successfully!');
+      showToast('Password changed!', 'success');
+    } catch (err) {
+      setProfileError(err.message);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -1760,7 +1844,7 @@ export default function PuntingClub() {
               {isLoggedIn ? (
                 <>
                   {/* User Profile Chip */}
-                  <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] mr-1">
+                  <div onClick={handleOpenProfile} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] mr-1 cursor-pointer hover:border-amber-500/30 hover:bg-white/[0.07] transition-all duration-200" title="Edit profile">
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
                       {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
                     </div>
@@ -1837,16 +1921,16 @@ export default function PuntingClub() {
               <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
                 {isLoggedIn ? (
                   <>
-                    <div className="flex items-center gap-3 px-3 py-2 mx-0">
+                    <div onClick={() => { handleOpenProfile(); setMobileMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 mx-0 rounded-lg cursor-pointer hover:bg-white/[0.04] transition-all duration-200">
                       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-sm font-black flex-shrink-0">
                         {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-amber-400 text-sm font-bold leading-tight flex items-center gap-1 truncate">
                           {currentUser?.teamName}
                           {currentUser?.role === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
                         </p>
-                        <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName}</p>
+                        <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName} · <span className="text-amber-500/60">Edit profile</span></p>
                       </div>
                     </div>
                     <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Create Another Team</button>
@@ -4877,6 +4961,134 @@ export default function PuntingClub() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* PROFILE EDIT MODAL */}
+      {showProfileModal && (
+        <Modal title="My Profile" onClose={() => { setShowProfileModal(false); setProfileError(null); setProfileSuccess(null); }}>
+          {/* Tabs */}
+          <div className="flex border-b border-white/[0.08]">
+            {[['details', 'Personal Details'], ['password', 'Change Password']].map(([tab, label]) => (
+              <button
+                key={tab}
+                onClick={() => { setProfileTab(tab); setProfileError(null); setProfileSuccess(null); }}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors ${profileTab === tab ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-5">
+            {/* Feedback */}
+            {profileError && (
+              <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm flex items-start gap-2">
+                <span className="flex-shrink-0 mt-0.5">✗</span>{profileError}
+              </div>
+            )}
+            {profileSuccess && (
+              <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2.5 text-green-400 text-sm flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 flex-shrink-0" />{profileSuccess}
+              </div>
+            )}
+
+            {/* Personal Details Tab */}
+            {profileTab === 'details' && (
+              <form onSubmit={handleProfileSave} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">First Name *</label>
+                    <input
+                      type="text" required value={profileForm.firstName}
+                      onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Last Name *</label>
+                    <input
+                      type="text" required value={profileForm.lastName}
+                      onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Email</label>
+                  <input
+                    type="email" value={profileForm.email}
+                    onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Date of Birth</label>
+                    <input
+                      type="date" value={profileForm.dob}
+                      onChange={e => setProfileForm(p => ({ ...p, dob: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-amber-400 mb-1">Postcode</label>
+                    <input
+                      type="text" maxLength={10} value={profileForm.postcode}
+                      onChange={e => setProfileForm(p => ({ ...p, postcode: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                      placeholder="2000"
+                    />
+                  </div>
+                </div>
+                <div className="pt-1">
+                  <p className="text-gray-600 text-xs mb-3">Mobile number cannot be changed. Contact support if needed.</p>
+                  <button
+                    type="submit" disabled={profileSaving}
+                    className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {profileSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Change Password Tab */}
+            {profileTab === 'password' && (
+              <form onSubmit={handlePasswordChange} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">New Password *</label>
+                  <input
+                    type="password" required minLength={8} value={pwForm.newPassword}
+                    onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 placeholder-gray-600"
+                    placeholder="Min 8 characters"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-amber-400 mb-1">Confirm New Password *</label>
+                  <input
+                    type="password" required minLength={8} value={pwForm.confirmPassword}
+                    onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                    className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${pwForm.confirmPassword ? (pwForm.newPassword === pwForm.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-amber-500/50'}`}
+                    placeholder="Re-enter new password"
+                  />
+                  {pwForm.confirmPassword && (
+                    pwForm.newPassword === pwForm.confirmPassword
+                      ? <p className="text-green-400 text-xs mt-1">✓ Passwords match</p>
+                      : <p className="text-red-400 text-xs mt-1">✗ Passwords don't match</p>
+                  )}
+                </div>
+                <button
+                  type="submit" disabled={profileSaving}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {profileSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating...</> : 'Change Password'}
+                </button>
+              </form>
+            )}
+          </div>
+        </Modal>
       )}
 
       {/* BET SUBMITTED CONFIRMATION */}

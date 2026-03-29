@@ -21,6 +21,8 @@ export const apiLogin          = (phone, password) => call('auth', { action: 'lo
 export const apiResetPassword  = (phone)         => call('auth', { action: 'reset_password', phone });
 export const apiVerifySession  = (userId)        => call('auth', { action: 'verify_session', userId });
 export const apiAdminLogin     = (id, password)  => call('auth', { action: 'admin_login', id, password });
+export const apiUpdateProfile  = (userId, updates) => call('auth', { action: 'update_profile', userId, ...updates });
+export const apiChangePassword = (userId, newPassword) => call('auth', { action: 'change_password', userId, newPassword });
 
 // ── COMPETITIONS ─────────────────────────────────────────────
 export const apiGetActiveCompetitions   = ()      => call('data', { action: 'get_active_competitions' });

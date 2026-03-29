@@ -344,6 +344,41 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ token, role: acct.role, name: acct.name }) };
     }
 
+    // ── UPDATE PROFILE ───────────────────────────────────────────────────────
+    if (action === 'update_profile') {
+      const { userId, firstName, lastName, email, dob, postcode } = payload;
+      if (!userId) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'userId is required.' }) };
+      if (!firstName || String(firstName).trim().length < 1 || String(firstName).length > 64)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'First name must be 1–64 characters.' }) };
+      if (!lastName || String(lastName).trim().length < 1 || String(lastName).length > 64)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Last name must be 1–64 characters.' }) };
+
+      const updates = {
+        first_name: String(firstName).trim(),
+        last_name:  String(lastName).trim(),
+        email:      email ? String(email).trim() : null,
+        dob:        dob   ? String(dob).trim()   : null,
+        postcode:   postcode ? String(postcode).trim() : null,
+      };
+
+      const { data: updated, error: updateErr } = await supabase
+        .from('users').update(updates).eq('id', userId).select().single();
+      if (updateErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: updateErr.message }) };
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user: updated }) };
+    }
+
+    // ── CHANGE PASSWORD ──────────────────────────────────────────────────────
+    if (action === 'change_password') {
+      const { userId, newPassword } = payload;
+      if (!userId) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'userId is required.' }) };
+      if (!newPassword || String(newPassword).length < 8 || String(newPassword).length > 128)
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+
+      const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password: newPassword });
+      if (pwErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: pwErr.message }) };
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true }) };
+    }
+
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Unknown action: ${action}` }) };
 
   } catch (err) {
