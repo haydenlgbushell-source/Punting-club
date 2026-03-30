@@ -181,17 +181,6 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{bet.submittedAt}</span>}
-            {onCheckBet && (status === 'pending' || status === 'in_progress') && (
-              <button
-                onClick={() => onCheckBet(bet.id)}
-                disabled={isChecking}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, background: isChecking ? '#1e3a5f' : '#1e3a5f', border: '1px solid #2563eb66', borderRadius: 6, color: '#60a5fa', fontSize: 11, fontWeight: 700, fontFamily: BC, letterSpacing: '0.08em', padding: '3px 10px', cursor: isChecking ? 'not-allowed' : 'pointer', opacity: isChecking ? 0.7 : 1 }}
-              >
-                {isChecking
-                  ? <><span style={{ width: 10, height: 10, border: '2px solid #60a5fa', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />CHECKING…</>
-                  : <>↻ CHECK RESULT</>}
-              </button>
-            )}
           </div>
         </div>
         <div style={{ fontFamily: BC, fontWeight: 800, fontSize: compact ? 30 : 44, lineHeight: 1, color: titleColor, marginBottom: 4 }}>
@@ -888,38 +877,35 @@ export default function PuntingClub() {
   // (one bet at a time keeps each call within the 26s Netlify timeout).
   const reviewBetResults = useCallback(async (teams) => {
     const UNSETTLED = ['pending', 'in_progress'];
-    const pendingBets = teams.flatMap(t => t.bets).filter(b => b.legs?.some(l => UNSETTLED.includes(l.status)));
-    if (!pendingBets.length) { setLastChecked(new Date()); showToast('No pending bets to check', 'info'); return; }
+    const hasPendingBets = (teams || []).some(t =>
+      (t.bets || []).some(b => (b.legs || []).some(l => UNSETTLED.includes(l.status)))
+    );
+    if (!hasPendingBets) return; // no pending bets — silently skip
 
     setCheckingResults(true);
-    showToast(`Checking ${pendingBets.length} bet(s) — searching live sports data…`, 'info');
 
-    let totalLegsUpdated = 0;
-    for (const bet of pendingBets) {
-      try {
-        const res = await fetch('/api/check-results', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ betId: bet.id }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          totalLegsUpdated += data.legsUpdated || 0;
+    try {
+      // Single batch call — backend deduplicates shared events across all bet slips
+      const res = await fetch('/api/check-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const totalLegsUpdated = data.legsUpdated || 0;
+        await refreshLeaderboard();
+        setLastChecked(new Date());
+        if (totalLegsUpdated > 0) {
+          showToast('Results updated — leaderboard refreshed!', 'success');
+          setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${totalLegsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
         }
-      } catch (e) {
-        console.warn('[check-results] error for bet', bet.id, e.message);
       }
-      await refreshLeaderboard();
+    } catch (e) {
+      console.warn('[check-results] batch error:', e.message);
     }
 
     setCheckingResults(false);
-    setLastChecked(new Date());
-    if (totalLegsUpdated > 0) {
-      showToast('Results updated — leaderboard refreshed!', 'success');
-      setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${totalLegsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
-    } else {
-      showToast('No new results — matches may still be in progress', 'info');
-    }
   }, [refreshLeaderboard, showToast]);
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
@@ -1114,6 +1100,13 @@ export default function PuntingClub() {
   // Smart auto-check: fire every 3 hours from the first event's start time
   useEffect(() => {
     if (!leaderboardTeams.length) return;
+
+    // Only schedule the timer when there are actually pending/in-progress bets
+    const hasPendingBets = leaderboardTeams.some(t =>
+      (t.bets || []).some(b => (b.legs || []).some(l => ['pending', 'in_progress'].includes(l.status)))
+    );
+    if (!hasPendingBets) return;
+
     const THREE_HOURS = 3 * 60 * 60 * 1000;
 
     // Find the earliest event start across all pending/in-progress legs
@@ -2212,9 +2205,6 @@ export default function PuntingClub() {
                 {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button onClick={checkResultsNow} disabled={checkingResults} aria-label="Check results now" className="flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-50">
-                  {checkingResults ? <><span className="animate-spin w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full inline-block" />Checking…</> : <><RotateCcw className="w-3 h-3" />Check Results</>}
-                </button>
                 <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
                   Submit Bet
                 </button>
@@ -2380,7 +2370,7 @@ export default function PuntingClub() {
                             </div>
                           </div>
                         )}
-                        {weekBet ? <BetSlipCard bet={weekBet} onCheckBet={checkSingleBet} isChecking={checkingBetId === weekBet.id} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
+                        {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
                       </div>
                     )}
                   </div>
@@ -2811,12 +2801,6 @@ export default function PuntingClub() {
             <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-green-400">📊 This Week's Bets</h3>
-                <div className="flex items-center gap-2">
-                  {lastChecked && <p className="text-gray-700 text-xs">Checked {lastChecked.toLocaleTimeString()}</p>}
-                  <button onClick={checkResultsNow} disabled={checkingResults} className="flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-400 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-50">
-                    {checkingResults ? <><span className="animate-spin w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full inline-block"/>Checking</> : <><RotateCcw className="w-3 h-3"/>Refresh</>}
-                  </button>
-                </div>
               </div>
               {(() => {
                 const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
@@ -2824,7 +2808,7 @@ export default function PuntingClub() {
                   <div className="space-y-3">
                     {thisWeekBets.map((bet, i) => (
                       <div key={i}>
-                        <BetSlipCard bet={bet} onCheckBet={checkSingleBet} isChecking={checkingBetId === bet.id} />
+                        <BetSlipCard bet={bet} />
                         <div className="flex justify-end mt-1.5">
                           <button
                             onClick={() => shareBet(bet)}
