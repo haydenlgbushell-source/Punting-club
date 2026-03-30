@@ -4040,50 +4040,6 @@ export default function PuntingClub() {
         );
       })()}
 
-      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 bg-black/30 py-10 px-4 sm:px-6">
-        <div className="max-w-5xl mx-auto grid sm:grid-cols-4 gap-8 mb-6">
-          <div>
-            <div className="flex items-center gap-2 mb-3"><Sparkles className="w-5 h-5 text-amber-500" /><span className="font-black text-amber-400">PUNTING CLUB</span></div>
-            <p className="text-gray-600 text-xs">The ultimate sports betting league for teams and friends.</p>
-          </div>
-          {[
-            ['Competition',[
-              { label:'How It Works', nav:'competition' },
-              { label:'Leaderboards', nav:'leaderboard' },
-              { label:'Competition Rules', nav:'competition' },
-              { label:'Weekly Summary', nav:'weekly' },
-            ]],
-            ['Features',[
-              { label:'Team Management', nav:'team' },
-              { label:'AI Bet Analysis', action:() => setShowBetAnalyzer(true) },
-              { label:'Result Tracking', nav:'leaderboard' },
-              { label:'Season History', nav:'leaderboard' },
-            ]],
-            ['Contact',[
-              { label:'support@puntingclub.com' },
-              { label:'WhatsApp: +61 XXX XXX XXX' },
-              { label:'FAQ', nav:'competition' },
-            ]],
-          ].map(([h, items]) => (
-            <div key={h}>
-              <h4 className="font-bold text-amber-400/80 text-sm mb-3">{h}</h4>
-              <ul className="space-y-1.5">
-                {items.map(item => (
-                  <li key={item.label}>
-                    <button
-                      onClick={() => { if (item.nav) navigateTo(item.nav); else if (item.action) item.action(); }}
-                      className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-amber-400/70 cursor-pointer' : 'cursor-default'}`}
-                    >{item.label}</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-        <div className="border-t border-white/5 pt-6 text-center text-gray-700 text-xs">© 2025 Punting Club. Please gamble responsibly. Must be 18+</div>
-      </footer>
-
       {/* ═══════════════════════════════════════════════════════════════════
           MODALS
       ═══════════════════════════════════════════════════════════════════ */}
@@ -5298,6 +5254,50 @@ export default function PuntingClub() {
           </div>
         </section>
       )}
+
+      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
+      <footer className="border-t border-white/5 bg-black/30 py-10 px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto grid sm:grid-cols-4 gap-8 mb-6">
+          <div>
+            <div className="flex items-center gap-2 mb-3"><Sparkles className="w-5 h-5 text-amber-500" /><span className="font-black text-amber-400">PUNTING CLUB</span></div>
+            <p className="text-gray-600 text-xs">The ultimate sports betting league for teams and friends.</p>
+          </div>
+          {[
+            ['Competition',[
+              { label:'How It Works', nav:'competition' },
+              { label:'Leaderboards', nav:'leaderboard' },
+              { label:'Competition Rules', nav:'competition' },
+              { label:'Weekly Summary', nav:'weekly' },
+            ]],
+            ['Features',[
+              { label:'Team Management', nav:'team' },
+              { label:'AI Bet Analysis', action:() => setShowBetAnalyzer(true) },
+              { label:'Result Tracking', nav:'leaderboard' },
+              { label:'Season History', nav:'leaderboard' },
+            ]],
+            ['Contact',[
+              { label:'support@puntingclub.com' },
+              { label:'WhatsApp: +61 XXX XXX XXX' },
+              { label:'FAQ', nav:'competition' },
+            ]],
+          ].map(([h, items]) => (
+            <div key={h}>
+              <h4 className="font-bold text-amber-400/80 text-sm mb-3">{h}</h4>
+              <ul className="space-y-1.5">
+                {items.map(item => (
+                  <li key={item.label}>
+                    <button
+                      onClick={() => { if (item.nav) navigateTo(item.nav); else if (item.action) item.action(); }}
+                      className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-amber-400/70 cursor-pointer' : 'cursor-default'}`}
+                    >{item.label}</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-white/5 pt-6 text-center text-gray-700 text-xs">© 2025 Punting Club. Please gamble responsibly. Must be 18+</div>
+      </footer>
     </div>
   );
 
