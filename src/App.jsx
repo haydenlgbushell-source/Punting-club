@@ -610,12 +610,15 @@ export default function PuntingClub() {
         competitionCode: createTeamForm.competitionCode || null,
         buyInMode:       createTeamForm.buyInMode || 'split',
       });
-      // Switch to the new team
-      const enrichedUser = { ...currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain' };
+      // Switch to the new team — preserve allTeamIds so competition switcher keeps working
+      const updatedAllTeamIds = [...new Set([...(currentUser.allTeamIds || [currentUser.teamId]).filter(Boolean), team.id])];
+      const newCompCode = createTeamForm.competitionCode || null;
+      const enrichedUser = { ...currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', allTeamIds: updatedAllTeamIds, competitionCode: newCompCode || currentUser.competitionCode };
       setCurrentUser(enrichedUser);
       setCurrentTeamId(team.id);
+      if (newCompCode) setViewedCompetitionCode(newCompCode);
       setTeamMembers([{ user_id: currentUser.id, role: 'captain', can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${currentUser.firstName} ${currentUser.lastName}`, users: { id: currentUser.id, first_name: currentUser.firstName, last_name: currentUser.lastName } }]);
-      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: createTeamForm.competitionCode || null, token: 'ok' })); } catch(_) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: newCompCode || currentUser.competitionCode, token: 'ok', allTeamIds: updatedAllTeamIds })); } catch(_) {}
       setShowCreateTeamModal(false);
       setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' });
       setActiveNav('team');
