@@ -393,6 +393,15 @@ exports.handler = async (event) => {
         if (!userId)   return error('Not logged in');
         if (!teamName?.trim()) return error('Team name is required');
 
+        // Only a captain of an existing team with this name may register it in another competition
+        const { data: captainedTeam } = await supabase
+          .from('teams')
+          .select('id')
+          .eq('captain_id', userId)
+          .ilike('team_name', teamName.trim())
+          .maybeSingle();
+        if (!captainedTeam) return error('You must be the captain of an existing team with this name to register it in another competition.');
+
         // Resolve competition
         let compId = null;
         if (competitionCode) {

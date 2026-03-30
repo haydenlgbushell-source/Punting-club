@@ -610,12 +610,15 @@ export default function PuntingClub() {
         competitionCode: createTeamForm.competitionCode || null,
         buyInMode:       createTeamForm.buyInMode || 'split',
       });
-      // Switch to the new team
-      const enrichedUser = { ...currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain' };
+      // Switch to the new team — preserve allTeamIds so competition switcher keeps working
+      const updatedAllTeamIds = [...new Set([...(currentUser.allTeamIds || [currentUser.teamId]).filter(Boolean), team.id])];
+      const newCompCode = createTeamForm.competitionCode || null;
+      const enrichedUser = { ...currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', allTeamIds: updatedAllTeamIds, competitionCode: newCompCode || currentUser.competitionCode };
       setCurrentUser(enrichedUser);
       setCurrentTeamId(team.id);
+      if (newCompCode) setViewedCompetitionCode(newCompCode);
       setTeamMembers([{ user_id: currentUser.id, role: 'captain', can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${currentUser.firstName} ${currentUser.lastName}`, users: { id: currentUser.id, first_name: currentUser.firstName, last_name: currentUser.lastName } }]);
-      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: createTeamForm.competitionCode || null, token: 'ok' })); } catch(_) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: newCompCode || currentUser.competitionCode, token: 'ok', allTeamIds: updatedAllTeamIds })); } catch(_) {}
       setShowCreateTeamModal(false);
       setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' });
       setActiveNav('team');
@@ -1852,12 +1855,14 @@ export default function PuntingClub() {
                       </p>
                     </div>
                   </div>
+                  {currentUser?.role === 'captain' && (
                   <button
-                    onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
+                    onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
                     className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
                   >
-                    + New Team
+                    + New Competition
                   </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:bg-red-500/8 border border-transparent hover:border-red-500/15"
@@ -1928,7 +1933,9 @@ export default function PuntingClub() {
                         <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName} · <span className="text-amber-500/60">Edit profile</span></p>
                       </div>
                     </div>
-                    <button onClick={() => { setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Create Another Team</button>
+                    {currentUser?.role === 'captain' && (
+                    <button onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Enter Another Competition</button>
+                    )}
                     <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"><LogOut className="w-4 h-4" />Logout</button>
                   </>
                 ) : (
@@ -1971,6 +1978,7 @@ export default function PuntingClub() {
               <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
                 {isLoggedIn ? (
                   <>
+                    {currentUser?.role === 'captain' && (
                     <button
                       onClick={() => {
                         setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' });
@@ -1985,24 +1993,9 @@ export default function PuntingClub() {
                       }}
                       className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
                     >
-                      Join a Competition <ArrowRight className="w-4 h-4" />
+                      Enter Another Competition <ArrowRight className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => {
-                        setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' });
-                        setCreateTeamError(null);
-                        setJoinTeamCode('');
-                        setJoinTeamError(null);
-                        setJoinTeamSuccess(null);
-                        setTeamModalTab('create');
-                        setPrivateCompLookup(null);
-                        setPrivateCompLookupError(null);
-                        setShowCreateTeamModal(true);
-                      }}
-                      className="border border-amber-500/50 hover:border-amber-500 hover:bg-amber-500/8 text-amber-400 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer"
-                    >
-                      + New Team
-                    </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -4759,7 +4752,7 @@ export default function PuntingClub() {
           <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <h2 className="text-lg font-bold text-white">New Team</h2>
+              <h2 className="text-lg font-bold text-white">{teamModalTab === 'create' ? 'Enter Another Competition' : 'Join a Team'}</h2>
               <button onClick={() => { setShowCreateTeamModal(false); setPrivateCompLookup(null); setPrivateCompLookupError(null); }} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
@@ -4792,7 +4785,7 @@ export default function PuntingClub() {
                   />
                   {currentUser?.teamName && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Using your current name <button type="button" className="text-amber-400 hover:underline" onClick={() => setCreateTeamForm(p => ({ ...p, teamName: currentUser.teamName }))}>{currentUser.teamName}</button> or enter a new one.
+                      Must match your existing team name. <button type="button" className="text-amber-400 hover:underline" onClick={() => setCreateTeamForm(p => ({ ...p, teamName: currentUser.teamName }))}>{currentUser.teamName}</button>
                     </p>
                   )}
                 </div>
