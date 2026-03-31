@@ -33,10 +33,73 @@
       ::-webkit-scrollbar { width: 6px; height: 6px; }
       ::-webkit-scrollbar-track { background: #111; }
       ::-webkit-scrollbar-thumb { background: #f59e0b55; border-radius: 3px; }
-      @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-      @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-      .bc-ticker { animation: ticker 30s linear infinite; display: inline-block; }
-      .bc-fadeup { animation: fadeUp 0.35s ease both; }
+
+      /* ── Keyframes ──────────────────────────────────────────────────────── */
+      @keyframes ticker {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+      }
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(14px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.94) translateY(10px); }
+        to   { opacity: 1; transform: scale(1)    translateY(0); }
+      }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes floatHint {
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+        50%       { transform: translateX(-50%) translateY(-5px); }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+
+      /* ── Animation classes ──────────────────────────────────────────────── */
+      .bc-ticker {
+        animation: ticker 30s linear infinite;
+        display: inline-block;
+        will-change: transform;
+      }
+      .bc-fadeup {
+        animation: fadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+        will-change: opacity, transform;
+      }
+      /* Modal content entrance — scale + fade */
+      .bc-modal {
+        animation: scaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+        will-change: opacity, transform;
+      }
+      /* Modal backdrop — fade in */
+      .bc-backdrop {
+        animation: fadeIn 0.18s ease both;
+      }
+      /* Toast slide-up entrance */
+      .bc-toast {
+        animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+        will-change: opacity, transform;
+      }
+      /* Landscape hint — gentle float (fixes translateX conflict with animate-bounce) */
+      .bc-landscape-hint {
+        animation: floatHint 2.2s ease-in-out infinite;
+        will-change: transform;
+      }
+
+      /* ── Reduced motion ─────────────────────────────────────────────────── */
+      @media (prefers-reduced-motion: reduce) {
+        .bc-ticker        { animation: none; }
+        .bc-fadeup        { animation: none; opacity: 1; transform: none; }
+        .bc-modal         { animation: none; opacity: 1; transform: none; }
+        .bc-backdrop      { animation: none; opacity: 1; }
+        .bc-toast         { animation: none; opacity: 1; transform: none; }
+        .bc-landscape-hint{ animation: none; }
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
     </style>
   </head>
   <body>

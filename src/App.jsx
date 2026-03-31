@@ -62,9 +62,9 @@ const WEEK_BUDGET = 50;
 
 // ─── Shared UI ───────────────────────────────────────────────────────────────
 const Modal = ({ onClose, title, children, maxWidth = 'max-w-md' }) => (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur z-[100] overflow-y-auto">
+  <div className="fixed inset-0 bg-black/80 backdrop-blur z-[100] overflow-y-auto bc-backdrop">
     <div className="flex min-h-full items-start justify-center p-2 sm:p-4 py-4">
-      <div className={`bg-gray-950 border-2 border-amber-500 rounded-xl w-full ${maxWidth} flex flex-col shadow-2xl shadow-amber-900/20`}>
+      <div className={`bg-gray-950 border-2 border-amber-500 rounded-xl w-full ${maxWidth} flex flex-col shadow-2xl shadow-amber-900/20 bc-modal`}>
         <div className="sticky top-0 bg-gray-950 border-b border-amber-500/30 p-4 flex justify-between items-center z-10 rounded-t-xl">
           <h2 className="text-lg font-bold text-white">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-amber-400 transition-colors"><X className="w-5 h-5" /></button>
@@ -1776,7 +1776,7 @@ export default function PuntingClub() {
 
       {/* Landscape hint */}
       {showLandscapeHint && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
+        <div className="fixed bottom-4 left-1/2 z-50 bg-amber-500 text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 bc-landscape-hint">
           <Smartphone className="w-3.5 h-3.5 flex-shrink-0" /> Rotate to landscape for best view
           <button onClick={() => setShowLandscapeHint(false)} className="cursor-pointer"><X className="w-3 h-3" /></button>
         </div>
@@ -4935,7 +4935,7 @@ export default function PuntingClub() {
       {toasts.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex flex-col-reverse gap-2 items-center w-full max-w-sm px-4 pointer-events-none">
           {toasts.map(t => (
-            <div key={t.id} className={`pointer-events-auto w-full flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold transition-all
+            <div key={t.id} className={`pointer-events-auto w-full flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold bc-toast
               ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :
                 t.type === 'error'   ? 'bg-red-950/95 border border-red-500/50 text-red-200' :
                 t.type === 'warning' ? 'bg-amber-950/95 border border-amber-500/50 text-amber-200' :
