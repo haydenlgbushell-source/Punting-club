@@ -26,6 +26,7 @@ export const apiChangePassword = (userId, newPassword) => call('auth', { action:
 
 // ── COMPETITIONS ─────────────────────────────────────────────
 export const apiGetActiveCompetitions   = ()      => call('data', { action: 'get_active_competitions' });
+export const apiGetClosedCompetitions   = ()      => call('data', { action: 'get_closed_competitions' });
 export const apiGetAllCompetitions      = (adminToken) => call('data', { action: 'get_all_competitions', adminToken });
 export const apiCreateCompetition       = (comp, adminToken) => call('data', { action: 'create_competition', ...comp, adminToken });
 export const apiUpdateCompStatus        = (id, status, adminToken) => call('data', { action: 'update_competition_status', id, status, adminToken });

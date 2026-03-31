@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
-  apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
+  apiGetActiveCompetitions, apiGetClosedCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiDeleteTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
@@ -344,6 +344,10 @@ export default function PuntingClub() {
   const [privateCompLookup, setPrivateCompLookup] = useState(null);
   const [privateCompLookupLoading, setPrivateCompLookupLoading] = useState(false);
   const [privateCompLookupError, setPrivateCompLookupError] = useState(null);
+
+  // Closed (finished) competitions
+  const [closedCompetitions, setClosedCompetitions] = useState([]);
+  const [closedCompLeaderboards, setClosedCompLeaderboards] = useState({}); // { compId: teams[] }
 
   // Which competition is being viewed on leaderboard / weekly / team pages
   const [viewedCompetitionCode, setViewedCompetitionCode] = useState(null);
@@ -861,7 +865,7 @@ export default function PuntingClub() {
     const code = compCode || currentUser?.competitionCode;
     const competitions = comps || activeCompetitions;
     if (!code) return;
-    const comp = competitions.find(c => c.code === code);
+    const comp = competitions.find(c => c.code === code) || closedCompetitions.find(c => c.code === code);
     if (!comp?.id) return;
     const weekNum = calcCurrentWeek(comp.start_date);
     try {
@@ -873,7 +877,7 @@ export default function PuntingClub() {
       }
     } catch(e) { console.error('Leaderboard refresh failed:', e); }
     return null;
-  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
+  }, [currentUser?.competitionCode, activeCompetitions, closedCompetitions, mapLeaderboardData]);
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
   // Calls the synchronous /api/check-results function once per pending bet
@@ -917,6 +921,11 @@ export default function PuntingClub() {
     apiGetActiveCompetitions()
       .then(data => setActiveCompetitions(data || []))
       .catch(err => console.error('Failed to load competitions:', err));
+
+    // Load finished competitions for previous results
+    apiGetClosedCompetitions()
+      .then(data => setClosedCompetitions(data || []))
+      .catch(() => {});
 
     // Restore session from localStorage so refresh doesn't log out
     try {
@@ -1402,8 +1411,9 @@ export default function PuntingClub() {
     addAuditEntry(adminUser?.role, `Competition ${status}`, id, '');
     try {
       await apiUpdateCompStatus(id, status, adminToken);
-      const active = await apiGetActiveCompetitions();
+      const [active, closed] = await Promise.all([apiGetActiveCompetitions(), apiGetClosedCompetitions()]);
       setActiveCompetitions(active);
+      setClosedCompetitions(closed || []);
     } catch(err) { console.error(err); }
   };
 
@@ -1605,6 +1615,12 @@ export default function PuntingClub() {
   const userCompetitions = activeCompetitions.filter(c =>
     (c.teams || []).some(t => (currentUser?.allTeamIds || []).includes(t.id))
   );
+  // Finished competitions this user has a team in (for Previous Competition Results)
+  const userClosedCompetitions = closedCompetitions.filter(c =>
+    (c.teams || []).some(t => (currentUser?.allTeamIds || []).includes(t.id))
+  );
+  // Whether the currently viewed competition is closed/finished
+  const isViewedCompClosed = closedCompetitions.some(c => c.code === effectiveViewedCode);
   // All user teams in the currently viewed competition (for multi-team toggle)
   const teamsInViewedComp = (() => {
     const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
@@ -1667,6 +1683,22 @@ export default function PuntingClub() {
       })
       .catch(err => console.warn('Could not load team members (using demo data):', err));
   }, [isLoggedIn, currentUser?.teamId]);
+
+  // Load leaderboard data for closed competitions when My Team page is visited
+  useEffect(() => {
+    if (activeNav !== 'team' || !isLoggedIn || !userClosedCompetitions.length) return;
+    userClosedCompetitions.forEach(async (comp) => {
+      if (closedCompLeaderboards[comp.id]) return; // already loaded
+      try {
+        const weekNum = calcCurrentWeek(comp.start_date);
+        const data = await apiGetLeaderboard(comp.id, weekNum, comp.start_date);
+        if (data?.length) {
+          const mapped = mapLeaderboardData(data);
+          setClosedCompLeaderboards(prev => ({ ...prev, [comp.id]: mapped }));
+        }
+      } catch (_) {}
+    });
+  }, [activeNav, isLoggedIn, userClosedCompetitions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll for new join requests every 30 s (captains only)
   useEffect(() => {
@@ -2182,26 +2214,43 @@ export default function PuntingClub() {
                 <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
               </button>
             )}
+            {/* Finished competition banner */}
+            {isViewedCompClosed && (
+              <div className="bg-gray-800/60 border border-gray-600/40 rounded-xl px-4 py-3 mb-5 flex items-center gap-3 mx-2">
+                <span className="text-2xl">🏁</span>
+                <div>
+                  <p className="font-bold text-gray-300 text-sm">Competition Finished</p>
+                  <p className="text-gray-500 text-xs">This competition has ended. Showing final standings.</p>
+                </div>
+              </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
               <div>
-                <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
+                <h1 className="text-3xl font-black mb-1">{isViewedCompClosed ? 'Final Standings' : 'Live Leaderboard'}</h1>
                 <p className="text-gray-500 text-sm">
                   {(() => {
-                    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
+                    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode)
+                      || closedCompetitions.find(c => c.code === effectiveViewedCode);
+                    if (isViewedCompClosed) {
+                      return `${comp?.name || ''} · ${comp?.weeks || '—'} week competition · Ended`;
+                    }
                     const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
                     const total = comp?.weeks || '—';
                     return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
                   })()}
                 </p>
-                {lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
-                {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
+                {!isViewedCompClosed && lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
+                {!isViewedCompClosed && resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
-                  Submit Bet
-                </button>
-              </div>
+              {!isViewedCompClosed && (
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
+                    Submit Bet
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Competition switcher — shown when user is in multiple competitions */}
@@ -2975,6 +3024,66 @@ export default function PuntingClub() {
                 </div>
               )}
             </div>
+
+            {/* ── PREVIOUS COMPETITION RESULTS ─────────────────────── */}
+            {isLoggedIn && userClosedCompetitions.length > 0 && (
+              <div className="mt-6">
+                <h3 className="font-bold text-gray-400 mb-4 flex items-center gap-2">
+                  <Trophy className="w-4 h-4" /> Previous Competition Results
+                </h3>
+                <div className="space-y-3">
+                  {userClosedCompetitions.map(comp => {
+                    const compTeams = closedCompLeaderboards[comp.id] || [];
+                    const userTeamInComp = (comp.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id));
+                    const teamData = compTeams.find(t => t.id === userTeamInComp?.id || t.team === userTeamInComp?.team_name);
+                    const totalBets = (teamData?.bets || []).length;
+                    const wonBets = (teamData?.bets || []).filter(b => {
+                      const legs = b.legs || [];
+                      if (!legs.length) return b.overallStatus === 'won';
+                      return legs.every(l => l.status === 'won');
+                    }).length;
+                    return (
+                      <div key={comp.id} className="bg-white/3 border border-white/8 rounded-xl p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-white">{comp.name}</h4>
+                            {comp.pub && <p className="text-gray-500 text-xs mt-0.5">{comp.pub}</p>}
+                            <p className="text-gray-600 text-xs">{comp.weeks} week competition</p>
+                          </div>
+                          <span className="bg-gray-700/40 border border-gray-600/30 text-gray-400 text-xs font-bold px-2.5 py-1 rounded-full">Finished</span>
+                        </div>
+                        {compTeams.length === 0 ? (
+                          <p className="text-gray-600 text-sm italic">Loading results…</p>
+                        ) : teamData ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="bg-black/30 rounded-lg p-3 text-center">
+                              <p className="text-gray-500 text-xs mb-1">Final Position</p>
+                              <p className="text-amber-400 font-black text-2xl">#{teamData.rank}</p>
+                              <p className="text-gray-600 text-xs">of {compTeams.length} teams</p>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 text-center">
+                              <p className="text-gray-500 text-xs mb-1">Total Won</p>
+                              <p className="text-green-400 font-black text-2xl">{teamData.total}</p>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 text-center">
+                              <p className="text-gray-500 text-xs mb-1">Bets Won</p>
+                              <p className="text-white font-black text-2xl">{wonBets}<span className="text-gray-500 font-normal text-sm">/{totalBets}</span></p>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 text-center">
+                              <p className="text-gray-500 text-xs mb-1">Team</p>
+                              <p className="text-blue-400 font-bold text-sm truncate">{userTeamInComp?.team_name || teamData.team}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-600 text-sm italic">No results found for your team.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
           </div>
         </section>
       )}

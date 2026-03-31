@@ -59,6 +59,17 @@ exports.handler = async (event) => {
         return json(enriched);
       }
 
+      case 'get_closed_competitions': {
+        const { data, error: e } = await supabase
+          .from('competitions')
+          .select('*, teams(id, team_name, team_code, status)')
+          .eq('status', 'closed')
+          .order('created_at', { ascending: false });
+        if (e) return error(e.message);
+        const enriched = (data || []).map(c => ({ ...c, team_count: c.teams?.length || 0 }));
+        return json(enriched);
+      }
+
       case 'get_all_competitions': {
         const { data, error: e } = await supabase
           .from('competitions')
