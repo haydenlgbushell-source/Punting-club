@@ -5,7 +5,7 @@ import {
   apiGetAllTeams, apiUpdateTeam, apiDeleteTeam, apiFinaliseTeam,
   apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
-  apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiGetAuditLog, apiUpdateCompetition,
+  apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiDeleteUser, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
@@ -1329,6 +1329,17 @@ export default function PuntingClub() {
     const u = adminUsers.find(x => x.phone === phone);
     addAuditEntry(adminUser?.role, 'Password Reset', u?.name || phone, 'Temporary password issued');
     showToast(`Password reset SMS sent to ${u?.name || phone}.`, 'info');
+  };
+  const deleteUser = async (userId) => {
+    const u = adminUsers.find(x => x.id === userId);
+    if (!window.confirm(`Delete user "${u?.name || userId}" (${u?.phone || ''})?\n\nThis will permanently remove their account so they can re-register. This cannot be undone.`)) return;
+    try {
+      await apiDeleteUser(userId, adminToken);
+      setAdminUsers(prev => prev.filter(x => x.id !== userId));
+      showToast(`User deleted. They can now re-register.`, 'success');
+    } catch(err) {
+      showToast(`Delete failed: ${err.message}`, 'error');
+    }
   };
 
   // ── ADMIN BET ACTIONS ─────────────────────────────────────────────────────
@@ -3495,6 +3506,9 @@ export default function PuntingClub() {
                                 <button onClick={() => setKycStatus(u.phone,'pending')} className="bg-amber-500/10 border border-amber-500/20 text-amber-500 px-2.5 py-1 rounded-lg text-xs">Re-review</button>
                               )}
                               <button onClick={() => resetPassword(u.phone)} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">Reset Pwd</button>
+                              {adminUser?.role === 'owner' && (
+                                <button onClick={() => deleteUser(u.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-300 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
+                              )}
                             </div>
                           </div>
                         </div>
