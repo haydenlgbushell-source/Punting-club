@@ -130,11 +130,22 @@ exports.handler = async (event) => {
         email:    authEmail,
         password,
       });
-      if (signUpError || !signUpData?.user) {
+      let authData;
+      if (signUpError && /already registered|user already/i.test(signUpError.message)) {
+        // Orphaned auth user: Supabase Auth has the account but the users table doesn't.
+        // This happens when a previous signup partially failed. Try signing in with the
+        // same credentials to recover the auth user ID and complete the registration.
+        const { data: recoveredSession, error: recoveryErr } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+        if (recoveryErr || !recoveredSession?.user) {
+          return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'This mobile number has a partial registration on file. Please contact support or try a different number.' }) };
+        }
+        authData = { user: recoveredSession.user };
+      } else if (signUpError || !signUpData?.user) {
         const msg = signUpError?.message || 'Signup failed — no user returned';
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: msg }) };
+      } else {
+        authData = { user: signUpData.user };
       }
-      const authData = { user: signUpData.user };
 
       // Insert user profile
       const { data: user, error: userError } = await supabase.from('users').insert({
