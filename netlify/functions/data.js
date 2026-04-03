@@ -367,6 +367,9 @@ exports.handler = async (event) => {
           .from('team_members').delete()
           .eq('team_id', teamId).eq('user_id', userId);
         if (e) return error(e.message);
+        // Also remove from betting_order so they don't linger in the rotation
+        await supabase.from('betting_order').delete()
+          .eq('team_id', teamId).eq('user_id', userId);
         return json({ success: true });
       }
 
