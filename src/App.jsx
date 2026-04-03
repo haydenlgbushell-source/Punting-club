@@ -1978,7 +1978,6 @@ export default function PuntingClub() {
               <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
                 {isLoggedIn ? (
                   <>
-                    {currentUser?.role === 'captain' && (
                     <button
                       onClick={() => {
                         setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' });
@@ -1986,16 +1985,15 @@ export default function PuntingClub() {
                         setJoinTeamCode('');
                         setJoinTeamError(null);
                         setJoinTeamSuccess(null);
-                        setTeamModalTab('create');
+                        setTeamModalTab(currentUser?.role === 'captain' ? 'create' : 'join');
                         setPrivateCompLookup(null);
                         setPrivateCompLookupError(null);
                         setShowCreateTeamModal(true);
                       }}
                       className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
                     >
-                      Enter Another Competition <ArrowRight className="w-4 h-4" />
+                      {currentUser?.role === 'captain' ? 'Enter Another Competition' : 'Join a Competition'} <ArrowRight className="w-4 h-4" />
                     </button>
-                    )}
                   </>
                 ) : (
                   <>
