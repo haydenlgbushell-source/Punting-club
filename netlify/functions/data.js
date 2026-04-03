@@ -624,19 +624,28 @@ exports.handler = async (event) => {
         const currentWeek = payload.currentWeek || 1;
 
         // Derive which competition week a bet belongs to from its upload timestamp.
-        // Wednesday 12:00 AEST marks the boundary between weeks — same logic as the frontend.
+        // Wednesday 12:00 Sydney time marks the boundary between weeks — same logic as the frontend.
+        // Uses Australia/Sydney timezone to handle both AEST (UTC+10) and AEDT (UTC+11).
+        const toSydneyUTC = (utcMs) => {
+          const parts = new Intl.DateTimeFormat('en-AU', {
+            timeZone: 'Australia/Sydney',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false,
+          }).formatToParts(new Date(utcMs)).reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+          return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+        };
         const calcWeekFromTimestamp = (submittedAt, compStartDate) => {
           if (!submittedAt || !compStartDate) return null;
-          const AEST = 10 * 60 * 60 * 1000;
-          const submittedAEST = new Date(submittedAt).getTime() + AEST;
-          const startAEST    = new Date(compStartDate).getTime() + AEST;
-          let boundary = new Date(startAEST);
+          const submittedSyd = toSydneyUTC(new Date(submittedAt).getTime());
+          const startSyd     = toSydneyUTC(new Date(compStartDate).getTime());
+          let boundary = new Date(startSyd);
           boundary.setUTCHours(12, 0, 0, 0);
           const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
           boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-          if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-          if (submittedAEST < boundary.getTime()) return 1;
-          return Math.floor((submittedAEST - boundary.getTime()) / (7 * 86400000)) + 2;
+          if (boundary.getTime() <= startSyd) boundary = new Date(boundary.getTime() + 7 * 86400000);
+          if (submittedSyd < boundary.getTime()) return 1;
+          return Math.floor((submittedSyd - boundary.getTime()) / (7 * 86400000)) + 2;
         };
 
         // Compute overall_status from actual leg statuses — keeps display in sync

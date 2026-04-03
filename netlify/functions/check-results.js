@@ -164,9 +164,8 @@ exports.handler = async (event) => {
 
   try {
     const now = new Date();
-    const aestDate = new Date(now.getTime() + 10 * 60 * 60 * 1000);
-    const pad = n => String(n).padStart(2, '0');
-    const todayStr = `${aestDate.getUTCFullYear()}-${pad(aestDate.getUTCMonth()+1)}-${pad(aestDate.getUTCDate())}`;
+    // Use Australia/Sydney timezone (handles both AEST UTC+10 and AEDT UTC+11)
+    const todayStr = now.toLocaleDateString('sv', { timeZone: 'Australia/Sydney' }); // 'sv' gives YYYY-MM-DD
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
     let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
@@ -253,7 +252,16 @@ exports.handler = async (event) => {
         const startedLegs = unsettledLegs.filter(l => {
           if (!l.event_date) return true;
           const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-          const start = new Date(`${l.event_date}T${t}:00+10:00`);
+          // Parse as Sydney local time (handles both AEST UTC+10 and AEDT UTC+11)
+          const [ey, em, ed] = l.event_date.split('-').map(Number);
+          const [eh, emin]   = t.split(':').map(Number);
+          const fakeUTC = Date.UTC(ey, em - 1, ed, eh, emin, 0);
+          const sydParts = new Intl.DateTimeFormat('en-AU', {
+            timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+          }).formatToParts(new Date(fakeUTC)).reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+          const sydOffset = Date.UTC(+sydParts.year, +sydParts.month - 1, +sydParts.day, +sydParts.hour, +sydParts.minute, +sydParts.second) - fakeUTC;
+          const start = new Date(fakeUTC - sydOffset);
           return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
         });
         if (!startedLegs.length) { console.log(`[check-results] Bet ${bet.id} not started yet`); continue; }

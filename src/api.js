@@ -94,6 +94,6 @@ export const apiCheckBetResults = (legs) => call('claude', {
   max_tokens: 500,
   messages: [{
     role: 'user',
-    content: `Today: ${new Date().toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}.\n\nBet legs:\n${legs.map(l => `Leg ${l.leg_number}: ${l.selection} — ${l.event} — ${l.market} @ ${l.odds} — status: ${l.status}`).join('\n')}\n\nFor each pending leg determine if concluded. Return ONLY JSON array:\n[{"legId":"uuid","legNumber":1,"status":"won|lost|void|pending","result":"brief note"}]\nOnly settle if confident. Return all legs.`,
+    content: `Today: ${new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Sydney', weekday:'long', year:'numeric', month:'long', day:'numeric' })}.\n\nBet legs:\n${legs.map(l => `Leg ${l.leg_number}: ${l.selection} — ${l.event} — ${l.market} @ ${l.odds} — status: ${l.status}`).join('\n')}\n\nFor each pending leg determine if concluded. Return ONLY JSON array:\n[{"legId":"uuid","legNumber":1,"status":"won|lost|void|pending","result":"brief note"}]\nOnly settle if confident. Return all legs.`,
   }],
 });

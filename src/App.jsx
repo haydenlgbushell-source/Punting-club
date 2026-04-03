@@ -812,34 +812,49 @@ export default function PuntingClub() {
     catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
   };
 
-  // ── WEEK CALCULATION (Wednesday 12:00 AEST boundary) ─────────────────────
-  // A week ends every Wednesday at 12:00 AEST; a new one begins at 12:01.
-  const calcCurrentWeek = (startDate) => {
-    if (!startDate) return 1;
-    const AEST = 10 * 60 * 60 * 1000; // UTC+10 in ms
-    const nowAEST  = Date.now() + AEST;
-    const startAEST = new Date(startDate).getTime() + AEST;
+  // ── WEEK CALCULATION (Wednesday 12:00 AEST/AEDT boundary) ───────────────
+  // A week ends every Wednesday at 12:00 Sydney time; a new one begins at 12:01.
+  // Uses Australia/Sydney timezone to correctly handle both AEST (UTC+10) and
+  // AEDT (UTC+11) so DST transitions don't shift the cutoff.
 
-    // Find the first Wednesday 12:00 AEST that is strictly after startAEST
-    let boundary = new Date(startAEST);
-    boundary.setUTCHours(12, 0, 0, 0); // noon in AEST-shifted date
-    const daysToWed = (3 - boundary.getUTCDay() + 7) % 7; // 3 = Wednesday
-    boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-    if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-
-    if (nowAEST < boundary.getTime()) return 1;
-    return Math.floor((nowAEST - boundary.getTime()) / (7 * 86400000)) + 2;
+  // Convert a UTC timestamp to a "fake UTC" value whose UTC fields read as Sydney local time.
+  const toSydneyUTC = (utcMs) => {
+    const parts = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Sydney',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date(utcMs)).reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+    return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
   };
 
-  // Next Wednesday 12:00 AEST cutoff from now (for display)
+  const calcCurrentWeek = (startDate) => {
+    if (!startDate) return 1;
+    const nowSyd   = toSydneyUTC(Date.now());
+    const startSyd = toSydneyUTC(new Date(startDate).getTime());
+
+    // Find the first Wednesday 12:00 Sydney time strictly after startSyd
+    let boundary = new Date(startSyd);
+    boundary.setUTCHours(12, 0, 0, 0);
+    const daysToWed = (3 - boundary.getUTCDay() + 7) % 7; // 3 = Wednesday
+    boundary = new Date(boundary.getTime() + daysToWed * 86400000);
+    if (boundary.getTime() <= startSyd) boundary = new Date(boundary.getTime() + 7 * 86400000);
+
+    if (nowSyd < boundary.getTime()) return 1;
+    return Math.floor((nowSyd - boundary.getTime()) / (7 * 86400000)) + 2;
+  };
+
+  // Next Wednesday 12:00 Sydney time cutoff from now (for display)
   const nextWedCutoff = (() => {
-    const AEST = 10 * 60 * 60 * 1000;
-    let d = new Date(Date.now() + AEST);
+    const nowSyd = toSydneyUTC(Date.now());
+    let d = new Date(nowSyd);
     d.setUTCHours(12, 0, 0, 0);
     const daysToWed = (3 - d.getUTCDay() + 7) % 7;
     d = new Date(d.getTime() + daysToWed * 86400000);
-    if (d.getTime() <= Date.now() + AEST) d = new Date(d.getTime() + 7 * 86400000);
-    return new Date(d.getTime() - AEST); // back to real UTC for display
+    if (d.getTime() <= nowSyd) d = new Date(d.getTime() + 7 * 86400000);
+    // Convert back to real UTC: subtract the Sydney offset from the "fake UTC"
+    const sydOffset = toSydneyUTC(Date.now()) - Date.now();
+    return new Date(d.getTime() - sydOffset);
   })();
 
   // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
@@ -853,7 +868,7 @@ export default function PuntingClub() {
       id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
       estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
       weekNumber: b.week_number,
-      submittedAt: new Date(b.submitted_at).toLocaleString(),
+      submittedAt: new Date(b.submitted_at).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }),
       submittedBy: b.submitted_by_name || null,
       legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
     })),
@@ -1032,7 +1047,7 @@ export default function PuntingClub() {
           id: b.id, team: b.teams?.team_name, status: b.overall_status,
           stake: `$${((b.stake || 0) / 100).toFixed(2)}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
           valid: b.submission_valid !== false,
-          flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
+          flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU', { timeZone: 'Australia/Sydney' }),
           legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
         })));
       }
@@ -1040,7 +1055,7 @@ export default function PuntingClub() {
         setAdminComps(comps.value.map(c => ({ ...c, buyIn: `$${(c.buy_in||0).toLocaleString()}`, maxTeams: c.max_teams, startDate: c.start_date, endDate: c.end_date })));
       }
       if (audit.status === 'fulfilled' && audit.value) {
-        setAdminAuditLog(audit.value.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
+        setAdminAuditLog(audit.value.map(e => ({ ts: new Date(e.created_at).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
       }
       if (requests.status === 'fulfilled' && requests.value) {
         setAdminCompRequests(requests.value);
@@ -1054,7 +1069,7 @@ export default function PuntingClub() {
           msg:     n.title,
           detail:  n.message,
           data:    n.data || {},
-          time:    new Date(n.created_at).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }),
+          time:    new Date(n.created_at).toLocaleString('en-AU', { timeZone: 'Australia/Sydney', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }),
           read:    n.read,
         })));
       }
