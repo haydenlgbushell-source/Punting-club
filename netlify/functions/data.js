@@ -28,7 +28,7 @@ exports.handler = async (event) => {
       'create_competition','get_competition_requests','update_competition_request',
       'delete_competition','update_competition_status','update_competition','advance_week',
       'update_team','update_bet_result','update_bet_leg','reject_bet','correct_bet',
-      'update_kyc','update_user','add_audit',
+      'update_kyc','update_user','delete_user','add_audit',
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
       'delete_team',
     ]);
@@ -736,6 +736,30 @@ exports.handler = async (event) => {
         if (e) return error(e.message);
         if (adminRole) await addAudit(adminRole, 'User Updated', `${data.first_name} ${data.last_name}`, JSON.stringify(updates));
         return json(data);
+      }
+
+      case 'delete_user': {
+        const { userId, adminRole } = payload;
+        if (adminRole !== 'owner') return error('Only owner can delete users', 403);
+        if (!userId) return error('userId is required');
+
+        // Fetch user details for audit log before deletion
+        const { data: userToDelete } = await supabase.from('users').select('first_name, last_name, phone').eq('id', userId).maybeSingle();
+        const userName = userToDelete ? `${userToDelete.first_name} ${userToDelete.last_name} (${userToDelete.phone})` : userId;
+
+        // Remove team memberships
+        await supabase.from('team_members').delete().eq('user_id', userId);
+
+        // Delete the user profile row
+        const { error: delErr } = await supabase.from('users').delete().eq('id', userId);
+        if (delErr) return error(delErr.message);
+
+        // Delete from Supabase auth
+        const { error: authDelErr } = await supabase.auth.admin.deleteUser(userId);
+        if (authDelErr) console.error('Auth delete error:', authDelErr.message);
+
+        await addAudit(adminRole, 'User Deleted', userName, 'User account permanently deleted to allow re-registration');
+        return json({ success: true });
       }
 
       // ══════════════════════════════════════════════════════

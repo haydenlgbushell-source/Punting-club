@@ -69,6 +69,7 @@ export const apiGetLeaderboard = (competitionId, currentWeek, startDate) => call
 export const apiGetAllUsers  = (adminToken)              => call('data', { action: 'get_all_users', adminToken });
 export const apiUpdateKyc    = (userId, kycStatus, adminToken) => call('data', { action: 'update_kyc', userId, kycStatus, adminToken });
 export const apiUpdateUser   = (userId, updates, adminToken)   => call('data', { action: 'update_user', userId, updates, adminToken });
+export const apiDeleteUser   = (userId, adminToken)            => call('data', { action: 'delete_user', userId, adminToken });
 export const apiGetAuditLog  = (limit, adminToken)       => call('data', { action: 'get_audit_log', limit, adminToken });
 export const apiAddAudit     = (adminToken, action, target, detail) => call('data', { action: 'add_audit', adminToken, action, target, detail });
 export const apiGetAdminNotifications    = (adminToken, unreadOnly = false) => call('data', { action: 'get_admin_notifications', adminToken, unreadOnly });
