@@ -1088,7 +1088,7 @@ export default function PuntingClub() {
 
   // Load leaderboard when the viewed competition (or available competitions) changes
   useEffect(() => {
-    const code = viewedCompetitionCode || currentUser?.competitionCode;
+    const code = viewedCompetitionCode || currentUser?.competitionCode || activeCompetitions[0]?.code;
     if (!code || !activeCompetitions.length) return;
     refreshLeaderboard(code, activeCompetitions);
   }, [viewedCompetitionCode, currentUser?.competitionCode, activeCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1096,7 +1096,7 @@ export default function PuntingClub() {
   // Re-fetch leaderboard from DB when user navigates to leaderboard or weekly summary tab
   // (picks up results written by the scheduled check-results function)
   useEffect(() => {
-    const code = viewedCompetitionCode || currentUser?.competitionCode;
+    const code = viewedCompetitionCode || currentUser?.competitionCode || activeCompetitions[0]?.code;
     if ((activeNav === 'leaderboard' || activeNav === 'weekly') && code) {
       refreshLeaderboard(code, activeCompetitions);
     }
@@ -1627,7 +1627,7 @@ export default function PuntingClub() {
 
   // ── DERIVED ───────────────────────────────────────────────────────────────
   // Effective competition being viewed (leaderboard / weekly / team)
-  const effectiveViewedCode = viewedCompetitionCode || currentUser?.competitionCode;
+  const effectiveViewedCode = viewedCompetitionCode || currentUser?.competitionCode || activeCompetitions[0]?.code;
   // Competitions this user has a team in (drives the switcher)
   const userCompetitions = activeCompetitions.filter(c =>
     (c.teams || []).some(t => (currentUser?.allTeamIds || []).includes(t.id))
@@ -2302,11 +2302,11 @@ export default function PuntingClub() {
               </div>
             </div>
 
-            {/* Competition switcher — shown when user is in multiple competitions */}
-            {isLoggedIn && userCompetitions.length > 1 && (
+            {/* Competition switcher — shown whenever there are multiple active competitions */}
+            {activeCompetitions.length > 1 && (
               <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
                 <span className="text-xs text-gray-500 font-semibold">Competition:</span>
-                {userCompetitions.map(c => (
+                {activeCompetitions.map(c => (
                   <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
                     {c.name}
@@ -2526,11 +2526,11 @@ export default function PuntingClub() {
                 Week {thisWeek} of {totalWeeks}{comp?.name ? ` · ${comp.name}` : ''}
               </p>
 
-              {/* Competition switcher */}
-              {isLoggedIn && userCompetitions.length > 1 && (
+              {/* Competition switcher — shown whenever there are multiple active competitions */}
+              {activeCompetitions.length > 1 && (
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <span className="text-xs text-gray-500 font-semibold">Competition:</span>
-                  {userCompetitions.map(c => (
+                  {activeCompetitions.map(c => (
                     <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
                       {c.name}
