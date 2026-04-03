@@ -349,6 +349,8 @@ export default function PuntingClub() {
   const [viewedCompetitionCode, setViewedCompetitionCode] = useState(null);
   // Which specific team the user is viewing within the current competition (null = first team)
   const [viewedTeamId, setViewedTeamId] = useState(null);
+  // Controls the profile-chip team-switcher dropdown
+  const [showTeamSwitcher, setShowTeamSwitcher] = useState(false);
 
   // Admin state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -1609,6 +1611,20 @@ export default function PuntingClub() {
     }
   }, [currentTeamId]);
 
+  // Switch the actively managed team from the profile chip (cross-competition)
+  const switchActiveTeam = useCallback(async (team) => {
+    setViewedCompetitionCode(team.compCode);
+    setViewedTeamId(team.id);
+    await refreshLeaderboard(team.compCode, activeCompetitions);
+    if (team.id !== currentTeamId) {
+      try {
+        const members = await apiGetTeamMembers(team.id);
+        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
+        setCurrentTeamId(team.id);
+      } catch (_) {}
+    }
+  }, [currentTeamId, activeCompetitions, refreshLeaderboard]);
+
   // ── DERIVED ───────────────────────────────────────────────────────────────
   // Effective competition being viewed (leaderboard / weekly / team)
   const effectiveViewedCode = viewedCompetitionCode || currentUser?.competitionCode;
@@ -1630,6 +1646,18 @@ export default function PuntingClub() {
   })();
   const myTeamName = (isLoggedIn && viewedMyTeam?.team_name) || currentUser?.teamName || '';
   const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
+  // Role the current user holds in the actively viewed team — syncs automatically when teamMembers loads
+  const viewedRole = (() => {
+    if (!currentUser?.id || teamMembers.length === 0) return currentUser?.role || 'member';
+    const me = teamMembers.find(m => m.user_id === currentUser.id);
+    return me?.role || currentUser?.role || 'member';
+  })();
+  // All teams across every competition the user belongs to (drives the profile-chip switcher)
+  const allUserTeams = userCompetitions.flatMap(c =>
+    (c.teams || [])
+      .filter(t => (currentUser?.allTeamIds || []).includes(t.id))
+      .map(t => ({ ...t, compName: c.name, compCode: c.code }))
+  );
 
   // Enrich leaderboard with member names for current user's team
   const enrichedLeaderboardTeams = leaderboardTeams.map(t => {
@@ -1681,7 +1709,7 @@ export default function PuntingClub() {
 
   // Poll for new join requests every 30 s (captains only)
   useEffect(() => {
-    if (!isLoggedIn || currentUser?.role !== 'captain' || !currentTeamId) return;
+    if (!isLoggedIn || viewedRole !== 'captain' || !currentTeamId) return;
     const poll = async () => {
       try {
         const members = await apiGetTeamMembers(currentTeamId);
@@ -1707,7 +1735,7 @@ export default function PuntingClub() {
     };
     const id = setInterval(poll, 30000);
     return () => clearInterval(id);
-  }, [isLoggedIn, currentUser?.role, currentTeamId]);
+  }, [isLoggedIn, viewedRole, currentTeamId]);
 
   const allDepositsConfirmed = teamMembers.every(m => m.depositPaid || m.deposit_paid);
 
@@ -1829,7 +1857,7 @@ export default function PuntingClub() {
                   {activeNav === key && (
                     <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-400 rounded-full" />
                   )}
-                  {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
+                  {key === 'team' && pendingMembers.length > 0 && viewedRole === 'captain' && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
                   )}
                 </button>
@@ -1851,22 +1879,59 @@ export default function PuntingClub() {
             <div className="hidden md:flex items-center gap-2 flex-shrink-0">
               {isLoggedIn ? (
                 <>
-                  {/* User Profile Chip */}
-                  <div onClick={handleOpenProfile} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] mr-1 cursor-pointer hover:border-amber-500/30 hover:bg-white/[0.07] transition-all duration-200" title="Edit profile">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
-                      {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+                  {/* User Profile Chip with team switcher */}
+                  <div className="relative mr-1">
+                    <div
+                      onClick={() => allUserTeams.length > 1 ? setShowTeamSwitcher(p => !p) : handleOpenProfile()}
+                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:border-amber-500/30 hover:bg-white/[0.07] transition-all duration-200"
+                      title={allUserTeams.length > 1 ? 'Switch team' : 'Edit profile'}
+                    >
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
+                        {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className="leading-tight min-w-0">
+                        <p className="text-amber-400 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
+                          {myTeamName || currentUser?.teamName}
+                          {viewedRole === 'captain' && <Crown className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" />}
+                        </p>
+                        <p className="text-gray-500 text-[11px] leading-tight flex items-center gap-1 truncate">
+                          {currentUser?.firstName} · <PermissionBadge role={viewedRole} />
+                        </p>
+                      </div>
+                      {allUserTeams.length > 1 && <ChevronDown className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform duration-200 ${showTeamSwitcher ? 'rotate-180' : ''}`} />}
                     </div>
-                    <div className="leading-tight min-w-0">
-                      <p className="text-amber-400 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
-                        {currentUser?.teamName}
-                        {currentUser?.role === 'captain' && <Crown className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" />}
-                      </p>
-                      <p className="text-gray-500 text-[11px] leading-tight flex items-center gap-1 truncate">
-                        {currentUser?.firstName} · <PermissionBadge role={currentUser?.role} />
-                      </p>
-                    </div>
+                    {/* Team switcher dropdown */}
+                    {showTeamSwitcher && allUserTeams.length > 1 && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowTeamSwitcher(false)} />
+                        <div className="absolute top-full right-0 mt-1.5 bg-gray-900 border border-white/10 rounded-xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
+                          <div className="px-3 pt-2.5 pb-1.5">
+                            <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-wider">Switch Team</p>
+                          </div>
+                          {allUserTeams.map(t => {
+                            const isActive = viewedMyTeam?.id === t.id;
+                            return (
+                              <button
+                                key={t.id}
+                                onClick={() => { switchActiveTeam(t); setShowTeamSwitcher(false); }}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition-all ${isActive ? 'bg-amber-500/10 text-amber-400' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold truncate">{t.team_name}</div>
+                                  <div className="text-gray-600 text-[10px] truncate">{t.compName}</div>
+                                </div>
+                                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+                              </button>
+                            );
+                          })}
+                          <div className="border-t border-white/[0.06] px-3 py-2">
+                            <button onClick={() => { handleOpenProfile(); setShowTeamSwitcher(false); }} className="text-gray-500 hover:text-gray-300 text-[10px] transition-colors">Edit profile</button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  {currentUser?.role === 'captain' && (
+                  {viewedRole === 'captain' && (
                   <button
                     onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
                     className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
@@ -1921,7 +1986,7 @@ export default function PuntingClub() {
                   >
                     <span className={`transition-colors ${activeNav === key ? 'text-amber-400' : 'text-gray-600'}`}>{icon}</span>
                     {label}
-                    {key === 'team' && pendingMembers.length > 0 && currentUser?.role === 'captain' && (
+                    {key === 'team' && pendingMembers.length > 0 && viewedRole === 'captain' && (
                       <span className="ml-auto w-5 h-5 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
                     )}
                   </button>
@@ -1938,13 +2003,37 @@ export default function PuntingClub() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-amber-400 text-sm font-bold leading-tight flex items-center gap-1 truncate">
-                          {currentUser?.teamName}
-                          {currentUser?.role === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
+                          {myTeamName || currentUser?.teamName}
+                          {viewedRole === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
                         </p>
-                        <p className="text-gray-500 text-xs leading-tight">{currentUser?.firstName} · <span className="text-amber-500/60">Edit profile</span></p>
+                        <p className="text-gray-500 text-xs leading-tight flex items-center gap-1">
+                          {currentUser?.firstName} · <PermissionBadge role={viewedRole} /> · <span className="text-amber-500/60">Edit profile</span>
+                        </p>
                       </div>
                     </div>
-                    {currentUser?.role === 'captain' && (
+                    {/* Mobile team switcher — shown when user belongs to multiple teams */}
+                    {allUserTeams.length > 1 && (
+                      <div className="px-3 pb-1">
+                        <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-wider mb-1.5">Switch Team</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {allUserTeams.map(t => {
+                            const isActive = viewedMyTeam?.id === t.id;
+                            return (
+                              <button
+                                key={t.id}
+                                onClick={() => { switchActiveTeam(t); setMobileMenuOpen(false); }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isActive ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}
+                              >
+                                {t.team_name}
+                                {isActive && <span className="ml-1 opacity-60">·</span>}
+                                <span className="ml-1 text-[10px] opacity-50">{t.compName}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {viewedRole === 'captain' && (
                     <button onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Enter Another Competition</button>
                     )}
                     <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"><LogOut className="w-4 h-4" />Logout</button>
@@ -1996,14 +2085,14 @@ export default function PuntingClub() {
                         setJoinTeamCode('');
                         setJoinTeamError(null);
                         setJoinTeamSuccess(null);
-                        setTeamModalTab(currentUser?.role === 'captain' ? 'create' : 'join');
+                        setTeamModalTab(viewedRole === 'captain' ? 'create' : 'join');
                         setPrivateCompLookup(null);
                         setPrivateCompLookupError(null);
                         setShowCreateTeamModal(true);
                       }}
                       className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
                     >
-                      {currentUser?.role === 'captain' ? 'Enter Another Competition' : 'Join a Competition'} <ArrowRight className="w-4 h-4" />
+                      {viewedRole === 'captain' ? 'Enter Another Competition' : 'Join a Competition'} <ArrowRight className="w-4 h-4" />
                     </button>
                   </>
                 ) : (
@@ -2708,7 +2797,7 @@ export default function PuntingClub() {
               <div>
                 <h1 className="text-3xl font-black mb-1">{myTeamName}</h1>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <PermissionBadge role={currentUser?.role || 'member'} />
+                  <PermissionBadge role={viewedRole} />
                   <span className="text-gray-500 text-sm">·</span>
                   <span className="text-gray-400 text-sm">#{myTeamData?.rank || 1} on leaderboard</span>
                   {effectiveViewedCode && (
@@ -2722,15 +2811,15 @@ export default function PuntingClub() {
                 {!teamFinalised && (
                   <button onClick={() => setShowInviteModal(true)} className="bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
                 )}
-                {currentUser?.role === 'captain' && (
+                {viewedRole === 'captain' && (
                   <button onClick={() => setShowOrderModal(true)} className="bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-xs font-semibold">Betting Order</button>
                 )}
-                {currentUser?.role === 'captain' && !teamFinalised && (
+                {viewedRole === 'captain' && !teamFinalised && (
                   <button onClick={() => setShowFinaliseModal(true)} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5" />Finalise Team
                   </button>
                 )}
-                {currentUser?.role === 'captain' && teamFinalised && (
+                {viewedRole === 'captain' && teamFinalised && (
                   <button onClick={unfinaliseTeam} className="bg-gray-500/20 border border-gray-500/30 text-gray-400 px-3 py-2 rounded-lg text-xs font-semibold">Re-open Team</button>
                 )}
                 <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Submit Bet</button>
@@ -2738,7 +2827,7 @@ export default function PuntingClub() {
             </div>
 
             {/* Captain tip — only shown if team has no members yet */}
-            {currentUser?.role === 'captain' && teamMembers.length <= 1 && !teamFinalised && (
+            {viewedRole === 'captain' && teamMembers.length <= 1 && !teamFinalised && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start gap-3">
                 <span className="text-xl flex-shrink-0">👑</span>
                 <div>
@@ -2759,7 +2848,7 @@ export default function PuntingClub() {
             </div>
 
             {/* ── DEPOSIT BANNER (pre-finalise only) ─────────────────────── */}
-            {currentUser?.role === 'captain' && !teamFinalised && (
+            {viewedRole === 'captain' && !teamFinalised && (
               <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <span className="text-xl flex-shrink-0">💰</span>
@@ -2776,7 +2865,7 @@ export default function PuntingClub() {
             <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-amber-400">🎯 Betting Order</h3>
-                {currentUser?.role === 'captain' && <button onClick={() => setShowOrderModal(true)} className="text-gray-500 hover:text-amber-400 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>}
+                {viewedRole === 'captain' && <button onClick={() => setShowOrderModal(true)} className="text-gray-500 hover:text-amber-400 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>}
               </div>
               <div className="space-y-2">
                 {bettingOrder.map((name, i) => {
@@ -2927,7 +3016,7 @@ export default function PuntingClub() {
                     <span className="text-xs bg-green-500/15 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full font-semibold">${depositPerMember.toLocaleString()} / member</span>
                   )}
                 </div>
-                {teamFinalised && currentUser?.role === 'captain' && (
+                {teamFinalised && viewedRole === 'captain' && (
                   <button onClick={unfinaliseTeam} className="text-gray-600 hover:text-gray-400 text-xs border border-gray-700 px-2 py-1 rounded-lg">Re-open</button>
                 )}
               </div>
@@ -2956,7 +3045,7 @@ export default function PuntingClub() {
                         {m.canBet && m.role !== 'view-only' && <span className="text-blue-400 text-xs">Can bet</span>}
                       </div>
                     </div>
-                    {currentUser?.role === 'captain' && m.role !== 'captain' && (
+                    {viewedRole === 'captain' && m.role !== 'captain' && (
                       <div className="flex gap-1 flex-shrink-0">
                         <select value={m.role} onChange={e => updateMemberRole(m.phone, e.target.value)} className="bg-black/50 border border-white/10 text-gray-300 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-amber-500/50">
                           <option value="member">Member</option>
