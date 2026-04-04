@@ -3520,6 +3520,15 @@ export default function PuntingClub() {
                                             </button>
                                           </div>
                                         )}
+                                        {/* Remove approved non-captain member */}
+                                        {!isPending && m.role !== 'captain' && canAdmin('bets') && (
+                                          <button
+                                            onClick={() => adminDeclineMember(t.id, m.userId, t.name, m.name)}
+                                            className="bg-red-500/10 hover:bg-red-500/25 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0"
+                                          >
+                                            Remove
+                                          </button>
+                                        )}
                                       </div>
                                     );
                                   })}
