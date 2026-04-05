@@ -204,7 +204,6 @@ exports.handler = async (event) => {
         return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
       }).join('\n');
 
-      const year = aestDate.getUTCFullYear();
       const searchPrompt = `Today is ${todayStr} AEST. Search for the final result of each match below. For each: report the score and full try/goal scorer list.
 
 ${legsToSearch}
