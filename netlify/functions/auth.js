@@ -301,7 +301,7 @@ exports.handler = async (event) => {
     // ── RESET PASSWORD ───────────────────────────────────────────────────────
     if (action === 'reset_password') {
       const { phone } = payload;
-      const cleanPhone = (phone || '').trim().replace(/\s+/g, '');
+      const cleanPhone = normalisePhone(phone);
       const authEmail  = `${cleanPhone}@puntingclub.app`;
       const { error } = await supabase.auth.admin.generateLink({ type: 'recovery', email: authEmail });
       if (error) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: error.message }) };
