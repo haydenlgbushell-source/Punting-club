@@ -15,9 +15,10 @@ const normalisePhone = (raw) => {
   return digits; // return as-is if unrecognised — let DB constraint catch it
 };
 
+const ALLOWED_ORIGIN = process.env.URL || process.env.ALLOWED_ORIGIN || '*';
 const HEADERS = {
   'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
@@ -161,7 +162,10 @@ exports.handler = async (event) => {
         kyc_status:    'pending',
         active:        true,
       }).select().single();
-      if (userError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: userError.message }) };
+      if (userError) {
+        console.error('User profile insert error:', userError.message);
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Failed to create user profile. Please try again.' }) };
+      }
 
       let team = null;
 
@@ -285,7 +289,10 @@ exports.handler = async (event) => {
 
       // Step 2: Fetch user profile
       const { data: user, error: userErr } = await supabase.from('users').select('*').eq('phone', cleanPhone).maybeSingle();
-      if (userErr) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: userErr.message }) };
+      if (userErr) {
+        console.error('User lookup error:', userErr.message);
+        return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'Failed to load user data. Please try again.' }) };
+      }
       if (!user) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'User profile not found. Please contact support.' }) };
 
       // Step 3: Resolve teams
@@ -338,7 +345,12 @@ exports.handler = async (event) => {
       const cleanId = String(id || '').trim();
       const acct    = ADMIN_ACCOUNTS[cleanId];
 
-      if (!acct || !acct.pw || acct.pw !== String(password || '')) {
+      // Use timing-safe comparison to prevent timing-based enumeration of admin IDs
+      const { timingSafeEqual } = require('crypto');
+      const storedPw = Buffer.from(acct?.pw || '');
+      const inputPw  = Buffer.from(String(password || ''));
+      const pwMatch  = storedPw.length > 0 && storedPw.length === inputPw.length && timingSafeEqual(storedPw, inputPw);
+      if (!acct || !pwMatch) {
         return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid admin credentials.' }) };
       }
 
@@ -374,19 +386,34 @@ exports.handler = async (event) => {
 
       const { data: updated, error: updateErr } = await supabase
         .from('users').update(updates).eq('id', userId).select().single();
-      if (updateErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: updateErr.message }) };
+      if (updateErr) {
+        console.error('Profile update error:', updateErr.message);
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Failed to update profile. Please try again.' }) };
+      }
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user: updated }) };
     }
 
     // ── CHANGE PASSWORD ──────────────────────────────────────────────────────
     if (action === 'change_password') {
-      const { userId, newPassword } = payload;
+      const { userId, currentPassword, newPassword } = payload;
       if (!userId) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'userId is required.' }) };
+      if (!currentPassword) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Current password is required.' }) };
       if (!newPassword || String(newPassword).length < 8 || String(newPassword).length > 128)
-        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'New password must be 8–128 characters.' }) };
+
+      // Verify current password before allowing the change
+      const { data: userRow } = await supabase.from('users').select('phone').eq('id', userId).maybeSingle();
+      if (!userRow) return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'User not found.' }) };
+
+      const authEmail = `${userRow.phone}@puntingclub.app`;
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({ email: authEmail, password: currentPassword });
+      if (verifyErr) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Current password is incorrect.' }) };
 
       const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password: newPassword });
-      if (pwErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: pwErr.message }) };
+      if (pwErr) {
+        console.error('Password update error:', pwErr.message);
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password update failed. Please try again.' }) };
+      }
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true }) };
     }
 
@@ -394,6 +421,6 @@ exports.handler = async (event) => {
 
   } catch (err) {
     console.error('Auth function error:', err);
-    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'An unexpected error occurred. Please try again.' }) };
   }
 };

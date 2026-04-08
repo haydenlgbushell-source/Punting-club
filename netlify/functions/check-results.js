@@ -7,9 +7,10 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
+const ALLOWED_ORIGIN = process.env.URL || process.env.ALLOWED_ORIGIN || '*';
 const HEADERS = {
   'Content-Type':                'application/json',
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Methods':'POST, OPTIONS',
   'Access-Control-Allow-Headers':'Content-Type, Authorization',
 };

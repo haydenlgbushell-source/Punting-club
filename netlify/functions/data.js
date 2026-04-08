@@ -9,7 +9,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const HEADERS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
+const ALLOWED_ORIGIN = process.env.URL || process.env.ALLOWED_ORIGIN || '*';
+const HEADERS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ALLOWED_ORIGIN, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
 const json  = (data, status = 200) => ({ statusCode: status, headers: HEADERS, body: JSON.stringify(data) });
 const error = (msg, status = 400)  => json({ error: msg }, status);
 
@@ -311,9 +312,12 @@ exports.handler = async (event) => {
 
       case 'update_team': {
         const { teamId, updates, adminRole } = payload;
-        const { data, error: e } = await supabase.from('teams').update(updates).eq('id', teamId).select().single();
+        const ALLOWED_TEAM_FIELDS = new Set(['team_name','status','finalised','deposit_per_member','buy_in_mode','competition_id','captain_id','notes','buy_in']);
+        const safeUpdates = Object.fromEntries(Object.entries(updates || {}).filter(([k]) => ALLOWED_TEAM_FIELDS.has(k)));
+        if (Object.keys(safeUpdates).length === 0) return error('No valid fields to update');
+        const { data, error: e } = await supabase.from('teams').update(safeUpdates).eq('id', teamId).select().single();
         if (e) return error(e.message);
-        if (adminRole) await addAudit(adminRole, 'Team Updated', data.team_name, JSON.stringify(updates));
+        if (adminRole) await addAudit(adminRole, 'Team Updated', data.team_name, JSON.stringify(safeUpdates));
         return json(data);
       }
 
@@ -735,9 +739,12 @@ exports.handler = async (event) => {
 
       case 'update_user': {
         const { userId, updates, adminRole } = payload;
-        const { data, error: e } = await supabase.from('users').update(updates).eq('id', userId).select().single();
+        const ALLOWED_USER_FIELDS = new Set(['first_name','last_name','email','dob','postcode','role','kyc_status','active','notes','phone']);
+        const safeUpdates = Object.fromEntries(Object.entries(updates || {}).filter(([k]) => ALLOWED_USER_FIELDS.has(k)));
+        if (Object.keys(safeUpdates).length === 0) return error('No valid fields to update');
+        const { data, error: e } = await supabase.from('users').update(safeUpdates).eq('id', userId).select().single();
         if (e) return error(e.message);
-        if (adminRole) await addAudit(adminRole, 'User Updated', `${data.first_name} ${data.last_name}`, JSON.stringify(updates));
+        if (adminRole) await addAudit(adminRole, 'User Updated', `${data.first_name} ${data.last_name}`, JSON.stringify(safeUpdates));
         return json(data);
       }
 

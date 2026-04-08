@@ -1,8 +1,21 @@
 // netlify/functions/claude.js — Node.js proxy for Anthropic API
+const ALLOWED_ORIGIN = process.env.URL || process.env.ALLOWED_ORIGIN || '*';
+
+// Whitelist of models the frontend is permitted to use
+const ALLOWED_MODELS = new Set([
+  'claude-haiku-4-5-20251001',
+  'claude-haiku-4-5',
+  'claude-sonnet-4-6',
+  'claude-sonnet-4-5',
+]);
+
+// Maximum tokens the frontend may request per call
+const MAX_TOKENS_LIMIT = 2048;
+
 exports.handler = async (event) => {
   const HEADERS = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
@@ -15,6 +28,16 @@ exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || '{}');
+
+    // Enforce allowed models to prevent abuse with expensive models
+    if (body.model && !ALLOWED_MODELS.has(body.model)) {
+      return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Model not permitted.' }) };
+    }
+
+    // Cap max_tokens to prevent runaway costs
+    if (body.max_tokens && body.max_tokens > MAX_TOKENS_LIMIT) {
+      body.max_tokens = MAX_TOKENS_LIMIT;
+    }
 
     // Build headers — always include the web-search beta so the web_search tool
     // is available when the frontend requests it (harmless if not used).
@@ -35,6 +58,6 @@ exports.handler = async (event) => {
     return { statusCode: response.status, headers: HEADERS, body: JSON.stringify(data) };
   } catch (err) {
     console.error('Claude proxy error:', err);
-    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'An unexpected error occurred.' }) };
   }
 };
