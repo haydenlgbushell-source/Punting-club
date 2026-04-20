@@ -16,6 +16,10 @@
   schedule = "0 */3 * * *"
   timeout = 900
 
+[functions."market-report"]
+  schedule = "0 22 * * 0-4"
+  timeout = 900
+
 [[redirects]]
   from = "/api/auth"
   to = "/.netlify/functions/auth"
