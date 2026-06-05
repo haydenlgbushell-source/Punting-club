@@ -1,5 +1,6 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
+const { isUUID, isString, isEmail, isDate } = require('./validate');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -275,6 +276,8 @@ exports.handler = async (event) => {
     // ── LOGIN ────────────────────────────────────────────────────────────────
     if (action === 'login') {
       const { phone, password } = payload;
+      if (!phone || !String(phone).trim()) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number is required.' }) };
+      if (!password || !String(password).trim()) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password is required.' }) };
       const cleanPhone = normalisePhone(phone);
       const authEmail  = `${cleanPhone}@puntingclub.app`;
 
@@ -301,6 +304,7 @@ exports.handler = async (event) => {
     // ── RESET PASSWORD ───────────────────────────────────────────────────────
     if (action === 'reset_password') {
       const { phone } = payload;
+      if (!phone || !String(phone).trim()) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number is required.' }) };
       const cleanPhone = normalisePhone(phone);
       const authEmail  = `${cleanPhone}@puntingclub.app`;
       const { error } = await supabase.auth.admin.generateLink({ type: 'recovery', email: authEmail });
@@ -312,7 +316,7 @@ exports.handler = async (event) => {
     // Called on page refresh to re-fetch fresh user + team data from DB
     if (action === 'verify_session') {
       const { userId } = payload;
-      if (!userId || String(userId).startsWith('local_')) {
+      if (!userId || String(userId).startsWith('local_') || isUUID(userId) !== null) {
         return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'Invalid session' }) };
       }
       const { data: user, error: userErr } = await supabase
@@ -358,11 +362,15 @@ exports.handler = async (event) => {
     // ── UPDATE PROFILE ───────────────────────────────────────────────────────
     if (action === 'update_profile') {
       const { userId, firstName, lastName, email, dob, postcode } = payload;
-      if (!userId) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'userId is required.' }) };
+      if (!userId || isUUID(userId) !== null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid userId.' }) };
       if (!firstName || String(firstName).trim().length < 1 || String(firstName).length > 64)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'First name must be 1–64 characters.' }) };
       if (!lastName || String(lastName).trim().length < 1 || String(lastName).length > 64)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Last name must be 1–64 characters.' }) };
+      const emailErr = isEmail(email);
+      if (emailErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: emailErr }) };
+      if (postcode && (String(postcode).trim().length < 4 || String(postcode).trim().length > 10))
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Postcode must be 4–10 characters.' }) };
 
       const updates = {
         first_name: String(firstName).trim(),
@@ -381,7 +389,7 @@ exports.handler = async (event) => {
     // ── CHANGE PASSWORD ──────────────────────────────────────────────────────
     if (action === 'change_password') {
       const { userId, newPassword } = payload;
-      if (!userId) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'userId is required.' }) };
+      if (!userId || isUUID(userId) !== null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid userId.' }) };
       if (!newPassword || String(newPassword).length < 8 || String(newPassword).length > 128)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
 
