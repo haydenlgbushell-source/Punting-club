@@ -22,7 +22,7 @@ function RootFallback({ error, onReset }) {
         <div className="flex gap-3 justify-center">
           <button
             onClick={onReset}
-            className="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-colors"
+            className="px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-500/40 text-sky-400 text-sm font-medium hover:bg-blue-500/30 transition-colors"
           >
             Try again
           </button>
@@ -50,7 +50,7 @@ function SectionFallback({ error, onReset, label }) {
       )}
       <button
         onClick={onReset}
-        className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
+        className="text-xs text-sky-400 hover:text-sky-300 underline underline-offset-2"
       >
         Try again
       </button>
