@@ -1,12 +1,12 @@
 import React from 'react';
-import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, ChevronDown } from 'lucide-react';
+import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, ChevronDown, ChevronLeft } from 'lucide-react';
 
 const FaqView = ({ navHistory, goBack, navigateTo }) => (
   <section className="pt-28 pb-16 px-4 sm:px-6">
     <div className="max-w-3xl mx-auto">
       {navHistory.length > 0 && (
-        <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
-          <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+        <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
+          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
         </button>
       )}
 
@@ -16,7 +16,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
           <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">Help Centre</span>
         </div>
         <h1 className="text-4xl font-black mb-2">Frequently Asked Questions</h1>
-        <p className="text-gray-400">Everything you need to know about using Punting Club.</p>
+        <p className="text-slate-400">Everything you need to know about using Punting Club.</p>
       </div>
 
       {[
@@ -86,17 +86,17 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
             <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
               {icon}
             </div>
-            <h2 className="text-lg font-black">{category}</h2>
+            <h2 className="text-lg font-black text-slate-100">{category}</h2>
           </div>
           <div className="space-y-2">
             {items.map(({ q, a }) => (
-              <details key={q} className="group bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden">
-                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-white/[0.03] transition-colors">
-                  <span className="text-sm font-semibold text-gray-100">{q}</span>
-                  <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0 group-open:rotate-180 transition-transform duration-200" />
+              <details key={q} className="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-slate-800/50 transition-colors">
+                  <span className="text-sm font-semibold text-slate-100">{q}</span>
+                  <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0 group-open:rotate-180 transition-transform duration-200" />
                 </summary>
                 <div className="px-5 pb-4 pt-0">
-                  <p className="text-sm text-gray-400 leading-relaxed">{a}</p>
+                  <p className="text-sm text-slate-400 leading-relaxed">{a}</p>
                 </div>
               </details>
             ))}
@@ -105,8 +105,8 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
       ))}
 
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center mt-8">
-        <h3 className="font-bold text-lg mb-1">Still have questions?</h3>
-        <p className="text-gray-400 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
+        <h3 className="font-bold text-lg mb-1 text-slate-100">Still have questions?</h3>
+        <p className="text-slate-400 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
         <button
           onClick={() => navigateTo('competition')}
           className="bg-gradient-to-r from-amber-500 to-amber-600 text-black px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"

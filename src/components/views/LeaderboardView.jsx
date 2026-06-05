@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trophy, Users } from 'lucide-react';
+import { Trophy, Users, ChevronLeft, CheckCircle, Crown } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
@@ -34,7 +34,7 @@ const LeaderboardView = () => {
       <div className="max-w-5xl mx-auto px-2 sm:px-6">
         {navHistory.length > 0 && (
           <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-4 px-2 transition-colors group">
-            <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
           </button>
         )}
 
@@ -42,7 +42,7 @@ const LeaderboardView = () => {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
           <div>
             <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-            <p className="text-gray-500 text-sm">
+            <p className="text-slate-400 text-sm">
               {(() => {
                 const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
                 const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
@@ -50,11 +50,15 @@ const LeaderboardView = () => {
                 return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
               })()}
             </p>
-            {lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
-            {resultLog.slice(0, 2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
+            {lastChecked && <p className="text-slate-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
+            {resultLog.slice(0, 2).map((l, i) => (
+              <p key={i} className="text-green-400 text-xs mt-0.5 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-green-400 inline mr-1" />{l.time} — {l.message}
+              </p>
+            ))}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
+            <button onClick={() => setShowBetAnalyzer(true)} className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-lg font-bold text-xs transition-colors">
               Submit Bet
             </button>
           </div>
@@ -63,10 +67,10 @@ const LeaderboardView = () => {
         {/* Competition switcher */}
         {activeCompetitions.length > 1 && (
           <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-            <span className="text-xs text-gray-500 font-semibold">Competition:</span>
+            <span className="text-xs text-slate-400 font-semibold">Competition:</span>
             {activeCompetitions.map(c => (
               <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-slate-400 border-slate-700 hover:border-slate-600 hover:text-slate-200'}`}>
                 {c.name}
               </button>
             ))}
@@ -76,10 +80,10 @@ const LeaderboardView = () => {
         {/* Team toggle */}
         {isLoggedIn && teamsInViewedComp.length > 1 && (
           <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-            <span className="text-xs text-gray-500 font-semibold">Team:</span>
+            <span className="text-xs text-slate-400 font-semibold">Team:</span>
             {teamsInViewedComp.map(t => (
               <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-slate-400 border-slate-700 hover:border-slate-600 hover:text-slate-200'}`}>
                 {t.team_name}
               </button>
             ))}
@@ -89,25 +93,25 @@ const LeaderboardView = () => {
         {/* View toggle */}
         <div className="flex gap-1 mb-4 px-2">
           {[['current', 'This Week'], ['season', 'Season View']].map(([v, l]) => (
-            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${leaderboardView === v ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-gray-500 hover:text-gray-300'}`}>{l}</button>
+            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${leaderboardView === v ? 'bg-slate-800 text-white border-slate-700' : 'text-slate-500 hover:text-slate-300 border-transparent'}`}>{l}</button>
           ))}
         </div>
 
         {/* Column headers */}
         {leaderboardView === 'current' && (
-          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
             <div className="col-span-1">#</div>
             <div className="col-span-3">Team</div>
             <div className="col-span-2 text-center">Total</div>
-            <div className="col-span-6 pl-3 border-l border-white/5">This Week's Bet</div>
+            <div className="col-span-6 pl-3 border-l border-slate-800">This Week's Bet</div>
           </div>
         )}
         {leaderboardView === 'season' && (
-          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
             <div className="col-span-1">#</div>
             <div className="col-span-3">Team</div>
             <div className="col-span-2 text-center">Total</div>
-            <div className="col-span-6 pl-3 border-l border-white/5">Week History</div>
+            <div className="col-span-6 pl-3 border-l border-slate-800">Week History</div>
           </div>
         )}
 
@@ -116,8 +120,8 @@ const LeaderboardView = () => {
           {enrichedLeaderboardTeams.length === 0 && (
             <div className="text-center py-16">
               <Trophy className="w-16 h-16 text-amber-500/30 mb-4 mx-auto" />
-              <p className="text-gray-400 font-semibold text-lg">No teams yet</p>
-              <p className="text-gray-600 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
+              <p className="text-slate-400 font-semibold text-lg">No teams yet</p>
+              <p className="text-slate-500 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
             </div>
           )}
           {enrichedLeaderboardTeams.map((team, idx) => {
@@ -143,11 +147,11 @@ const LeaderboardView = () => {
               : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-950/10'
               : computedStatus === 'partial'     ? 'border-yellow-500/20 bg-yellow-950/10'
               : computedStatus === 'in_progress' ? 'border-orange-500/20 bg-orange-950/10'
-              : 'border-white/5 bg-white/2';
+              : 'border-slate-800 bg-slate-900';
 
             return (
               <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-amber-400/30' : ''}`}>
-                <div className="grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-white/3 transition-colors" onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}>
+                <div className="grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-slate-800/40 transition-colors" onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}>
                   {/* Rank */}
                   <div className="col-span-1">
                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
@@ -158,7 +162,7 @@ const LeaderboardView = () => {
                       {team.team}
                       {isMe && <span className="text-amber-400 text-xs">(You)</span>}
                     </div>
-                    <div className="text-gray-600 text-xs">{team.members} members</div>
+                    <div className="text-slate-600 text-xs">{team.members} members</div>
                   </div>
                   {/* Total */}
                   <div className="hidden sm:block col-span-2 text-center">
@@ -166,15 +170,15 @@ const LeaderboardView = () => {
                   </div>
 
                   {/* This week / season */}
-                  <div className="col-span-7 sm:col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-white/5">
+                  <div className="col-span-7 sm:col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-slate-800">
                     {leaderboardView === 'current' ? (
                       weekBet ? (
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge status={computedStatus} />
-                          <span className="text-white text-xs font-semibold">{weekBet.type}</span>
-                          <span className="text-gray-500 text-xs">·</span>
+                          <span className="text-slate-100 text-xs font-semibold">{weekBet.type}</span>
+                          <span className="text-slate-400 text-xs">·</span>
                           <span className="text-green-400 text-xs font-semibold">{weekBet.stake}</span>
-                          <span className="hidden sm:inline text-gray-500 text-xs">→</span>
+                          <span className="hidden sm:inline text-slate-400 text-xs">/</span>
                           <span className="hidden sm:inline text-green-400 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
                           {weekBet.legs?.length > 0 && (
                             <div className="flex gap-1 ml-auto">
@@ -182,13 +186,13 @@ const LeaderboardView = () => {
                             </div>
                           )}
                         </div>
-                      ) : <span className="text-gray-700 text-xs italic">No bet submitted</span>
+                      ) : <span className="text-slate-500 text-xs italic">No bet submitted</span>
                     ) : (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {team.weekHistory?.length > 0 ? team.weekHistory.map((result, wi) => {
-                          const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-white/5 border-white/10 text-gray-600';
+                          const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-600';
                           return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
-                        }) : <span className="text-gray-700 text-xs italic">No history yet</span>}
+                        }) : <span className="text-slate-500 text-xs italic">No history yet</span>}
                         <span className="text-amber-400 font-bold text-sm ml-auto">{team.total}</span>
                       </div>
                     )}
@@ -197,25 +201,25 @@ const LeaderboardView = () => {
 
                 {/* Expanded bet slip */}
                 {isOpen && (
-                  <div className="border-t border-white/5 bg-black/30 px-3 py-3">
+                  <div className="border-t border-slate-800 bg-slate-950 px-3 py-3">
                     {/* Member roster */}
                     {team.memberList?.length > 0 && (
-                      <div className="mb-3 pb-3 border-b border-white/5">
-                        <p className="text-gray-500 text-xs uppercase tracking-wider mb-2 flex items-center gap-1"><Users className="w-3 h-3" /> Members</p>
+                      <div className="mb-3 pb-3 border-b border-slate-800">
+                        <p className="text-slate-500 text-xs uppercase tracking-wider mb-2 flex items-center gap-1"><Users className="w-3 h-3" /> Members</p>
                         <div className="flex flex-wrap gap-2">
                           {team.memberList.map((m, mi) => (
-                            <div key={mi} className="flex items-center gap-1.5 bg-white/5 rounded-full px-2.5 py-1">
+                            <div key={mi} className="flex items-center gap-1.5 bg-slate-800 rounded-full px-2.5 py-1">
                               <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
                                 {(m.name || m).charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-xs text-gray-300 font-medium">{m.name || m}</span>
-                              {m.role === 'captain' && <span className="text-amber-400 text-xs">👑</span>}
+                              <span className="text-xs text-slate-300 font-medium">{m.name || m}</span>
+                              {m.role === 'captain' && <Crown className="w-3 h-3 text-amber-400" />}
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
-                    {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
+                    {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-slate-600 text-sm italic text-center py-4">No bet submitted this week</p>}
                   </div>
                 )}
               </div>

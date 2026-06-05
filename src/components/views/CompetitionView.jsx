@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
 
 const STEPS = [
   { n: '1', t: 'Create or Join a Team', d: 'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets: ['Buy-in set by your competition — paid by captain or split among members', 'Invite up to 10+ members via your unique team code', 'Members must be approved by the captain before joining'] },
@@ -28,25 +28,25 @@ const CompetitionView = ({ navHistory, goBack, setSignupMode, setShowSignupModal
   <section className="pt-28 pb-16 px-4 sm:px-6">
     <div className="max-w-5xl mx-auto">
       {navHistory.length > 0 && (
-        <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
-          <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
+        <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
+          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
         </button>
       )}
 
-      <h1 className="text-4xl font-black mb-2">How to Play</h1>
-      <p className="text-gray-400 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
+      <h1 className="text-4xl font-black mb-2 text-slate-100">How to Play</h1>
+      <p className="text-slate-400 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
 
       {/* Steps */}
       <div className="space-y-4 mb-12">
         {STEPS.map(s => (
-          <div key={s.n} className="bg-white/3 border border-white/8 rounded-xl p-5 flex gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-black text-lg flex-shrink-0">{s.n}</div>
+          <div key={s.n} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex gap-4">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-black text-base flex-shrink-0">{s.n}</div>
             <div>
-              <h3 className="font-bold text-base mb-1">{s.t}</h3>
-              <p className="text-gray-400 text-sm mb-2">{s.d}</p>
+              <h3 className="font-bold text-base mb-1 text-slate-100">{s.t}</h3>
+              <p className="text-slate-400 text-sm mb-2">{s.d}</p>
               <ul className="space-y-1">
                 {s.bullets.map((b, i) => (
-                  <li key={i} className="text-gray-500 text-xs flex gap-1.5 items-start">
+                  <li key={i} className="text-slate-500 text-xs flex gap-1.5 items-start">
                     <ChevronRight className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />{b}
                   </li>
                 ))}
@@ -57,46 +57,46 @@ const CompetitionView = ({ navHistory, goBack, setSignupMode, setShowSignupModal
       </div>
 
       {/* Competition Rules */}
-      <h2 className="text-2xl font-black mb-2">Competition Rules</h2>
-      <p className="text-gray-400 mb-8">The detailed rules that govern how each season runs.</p>
+      <h2 className="text-2xl font-black mb-2 text-slate-100">Competition Rules</h2>
+      <p className="text-slate-400 mb-8">The detailed rules that govern how each season runs.</p>
       <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white/3 border border-white/8 rounded-xl p-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h3 className="text-lg font-bold mb-4 text-amber-400">Betting Rules</h3>
-          <ul className="space-y-3 text-sm text-gray-300">
+          <ul className="space-y-3 text-sm text-slate-300">
             {BETTING_RULES.map(([b, r], i) => (
               <li key={i} className="flex gap-2 items-start">
                 <ChevronRight className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <span><strong className="text-white">{b}</strong> {r}</span>
+                <span><strong className="text-slate-100">{b}</strong> {r}</span>
               </li>
             ))}
           </ul>
         </div>
-        <div className="bg-white/3 border border-white/8 rounded-xl p-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h3 className="text-lg font-bold mb-4 text-amber-400">Season Lengths</h3>
           <div className="space-y-3">
             {SEASONS.map(([n, w, b]) => (
-              <div key={n} className={`bg-black/30 rounded-lg p-4 border-l-4 ${b}`}>
-                <div className="font-bold text-sm">{n}</div>
-                <div className="text-gray-500 text-xs mt-1">{w} of competition</div>
+              <div key={n} className={`bg-slate-800/60 rounded-lg p-4 border-l-4 ${b}`}>
+                <div className="font-bold text-sm text-slate-100">{n}</div>
+                <div className="text-slate-500 text-xs mt-1">{w} of competition</div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 mb-8">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-8">
         <h3 className="text-lg font-bold mb-3 text-amber-400">The Punting Week</h3>
-        <p className="text-gray-300 text-sm">
-          Every competition week finishes <strong className="text-white">11:59PM Tuesday</strong> and starts{' '}
-          <strong className="text-white">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg
+        <p className="text-slate-300 text-sm">
+          Every competition week finishes <strong className="text-slate-100">11:59PM Tuesday</strong> and starts{' '}
+          <strong className="text-slate-100">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg
           of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a{' '}
-          <strong className="text-white">boosted bet limit</strong> — exact amounts are set by your competition host.
+          <strong className="text-slate-100">boosted bet limit</strong> — exact amounts are set by your competition host.
         </p>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
-        <h3 className="font-bold text-lg mb-2">Ready to play?</h3>
-        <p className="text-gray-400 text-sm mb-4">Get your mates together and start this week!</p>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 text-center">
+        <h3 className="font-bold text-lg mb-2 text-slate-100">Ready to play?</h3>
+        <p className="text-slate-400 text-sm mb-4">Get your mates together and start this week!</p>
         <button
           onClick={() => { setSignupMode('create'); setShowSignupModal(true); }}
           className="bg-gradient-to-r from-amber-500 to-amber-600 text-black px-8 py-3 rounded-xl font-bold transition-all hover:scale-105"
