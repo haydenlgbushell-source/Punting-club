@@ -7,6 +7,9 @@ import PermissionBadge from './components/PermissionBadge.jsx';
 import BetSlipCard from './components/BetSlipCard.jsx';
 import FaqView from './components/views/FaqView.jsx';
 import CompetitionView from './components/views/CompetitionView.jsx';
+import HomeView from './components/views/HomeView.jsx';
+import LeaderboardView from './components/views/LeaderboardView.jsx';
+import { AppContext } from './context/AppContext.jsx';
 import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, WEEK_BUDGET } from './utils.js';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
@@ -1529,7 +1532,27 @@ export default function PuntingClub() {
   const allDepositsConfirmed = teamMembers.every(m => m.depositPaid || m.deposit_paid);
 
   // ── RENDER ────────────────────────────────────────────────────────────────
+  const appContextValue = {
+    // Auth
+    isLoggedIn, currentUser, viewedRole,
+    // Nav
+    navigateTo, goBack, navHistory,
+    // Modals
+    setShowSignupModal, setSignupMode, setShowBetAnalyzer, showToast,
+    // Competitions
+    activeCompetitions, effectiveViewedCode, switchViewedCompetition, switchViewedTeam,
+    teamsInViewedComp, viewedMyTeam,
+    // Leaderboard / team data
+    leaderboardTeams, enrichedLeaderboardTeams, teamMembers,
+    myTeamName, currentWeekNum, nextWedCutoff,
+    // Result checking
+    lastChecked, resultLog,
+    // Util
+    calcCurrentWeek,
+  };
+
   return (
+    <AppContext.Provider value={appContextValue}>
     <div className="min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden">
 
       {/* ── CAPTAIN JOIN REQUEST NOTIFICATION POPUP ─────────────────────── */}
@@ -1841,140 +1864,22 @@ export default function PuntingClub() {
 
       {/* ── HOME ──────────────────────────────────────────────────────────── */}
       {activeNav === 'home' && (
-        <>
-          <section className="relative pt-28 pb-16 px-4 sm:px-6 overflow-hidden">
-            {/* Background radials */}
-            <div className="absolute inset-0 bg-gradient-to-b from-amber-900/12 via-transparent to-transparent pointer-events-none" />
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute top-32 right-0 w-72 h-72 bg-amber-600/4 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute top-32 left-0 w-72 h-72 bg-orange-600/4 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="max-w-5xl mx-auto text-center relative z-10">
-              {/* Live badge */}
-              <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 rounded-full px-4 py-1.5 mb-6">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-                <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">Live Competitions Running</span>
-              </div>
-
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black mb-5 bg-gradient-to-b from-white via-amber-200 to-amber-500 bg-clip-text text-transparent leading-[1.05]">
-                The Ultimate<br />Sports Betting League
-              </h1>
-              <p className="text-base sm:text-lg text-gray-400 mb-8 max-w-xl mx-auto leading-relaxed">
-                Form a team, place weekly multi-bets, and compete for the jackpot. Flexible buy-ins, custom bet limits, and seasons from 8 to 32 weeks — set by your competition host.
-              </p>
-
-              {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
-                {isLoggedIn ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' });
-                        setCreateTeamError(null);
-                        setJoinTeamCode('');
-                        setJoinTeamError(null);
-                        setJoinTeamSuccess(null);
-                        setTeamModalTab(viewedRole === 'captain' ? 'create' : 'join');
-                        setPrivateCompLookup(null);
-                        setPrivateCompLookupError(null);
-                        setShowCreateTeamModal(true);
-                      }}
-                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
-                    >
-                      {viewedRole === 'captain' ? 'Enter Another Competition' : 'Join a Competition'} <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
-                      Create a Team <ArrowRight className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border border-amber-500/50 hover:border-amber-500 hover:bg-amber-500/8 text-amber-400 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer">
-                      Join a Team
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Secondary CTAs */}
-              <div className="flex flex-col sm:flex-row justify-center gap-2.5 mb-12">
-                <button
-                  onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName: isLoggedIn ? `${currentUser?.first_name||''} ${currentUser?.last_name||''}`.trim() : '', contactPhone: isLoggedIn ? (currentUser?.phone||'') : '', contactEmail: isLoggedIn ? (currentUser?.email||'') : '', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
-                  className="border border-white/10 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/5 text-gray-400 hover:text-amber-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Run a competition at your pub/club
-                </button>
-                <a
-                  href="https://wa.me/61419163012"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="border border-white/10 hover:border-green-500/30 bg-white/3 hover:bg-green-500/5 text-gray-400 hover:text-green-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{flexShrink:0}}>
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
-                  Message us on WhatsApp
-                </a>
-              </div>
-
-              {/* Stats row */}
-              <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
-                {[
-                  { v: 'Flexible', l: 'Buy-In',        sub: 'set per competition', icon: <Settings2 className="w-4 h-4" /> },
-                  { v: 'Any Sport', l: 'Weekly Bets',   sub: 'custom limit',        icon: <TrendingUp className="w-4 h-4" /> },
-                  { v: '8–32 Wks', l: 'Season Length', sub: '8, 16 or 32 weeks',   icon: <CalendarRange className="w-4 h-4" /> },
-                ].map(({ v, l, sub, icon }) => (
-                  <div key={l} className="bg-white/[0.03] border border-white/8 hover:border-amber-500/25 rounded-xl p-4 transition-colors group">
-                    <div className="text-amber-400/60 mb-1.5 flex justify-center group-hover:text-amber-400 transition-colors">{icon}</div>
-                    <div className="text-lg font-black text-amber-400 leading-tight" style={{fontFamily:"'Barlow Condensed', sans-serif"}}>{v}</div>
-                    <div className="text-gray-500 text-xs mt-0.5 font-semibold">{l}</div>
-                    <div className="text-gray-700 text-[10px] mt-0.5 leading-tight">{sub}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Feature cards */}
-          <section className="pb-20 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', color: 'amber', nav: 'leaderboard' },
-                  { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', color: 'blue', nav: null },
-                  { icon: <Users className="w-6 h-6" />, title: 'Team Management', desc: 'Captain roles, betting order, member approvals', color: 'green', nav: 'team' },
-                  { icon: <TrendingUp className="w-6 h-6" />, title: 'Season Tracking', desc: 'Weekly summaries across quarter, half and full seasons', color: 'purple', nav: 'weekly' },
-                ].map((f, i) => {
-                  const colorMap = {
-                    amber:  { bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: 'text-amber-400', hover: 'hover:border-amber-500/40 hover:bg-amber-500/5' },
-                    blue:   { bg: 'bg-blue-500/10',  border: 'border-blue-500/20',  icon: 'text-blue-400',  hover: 'hover:border-blue-500/40  hover:bg-blue-500/5'  },
-                    green:  { bg: 'bg-green-500/10', border: 'border-green-500/20', icon: 'text-green-400', hover: 'hover:border-green-500/40 hover:bg-green-500/5' },
-                    purple: { bg: 'bg-purple-500/10',border: 'border-purple-500/20',icon: 'text-purple-400',hover: 'hover:border-purple-500/40 hover:bg-purple-500/5'},
-                  };
-                  const c = colorMap[f.color];
-                  return (
-                    <div
-                      key={i}
-                      onClick={f.nav ? () => navigateTo(f.nav) : undefined}
-                      className={`bg-white/[0.025] border ${c.border} rounded-xl p-5 ${c.hover} transition-all duration-200 group ${f.nav ? 'cursor-pointer' : ''}`}
-                    >
-                      <div className={`w-10 h-10 ${c.bg} border ${c.border} rounded-lg flex items-center justify-center ${c.icon} mb-4 group-hover:scale-105 transition-transform duration-200`}>
-                        {f.icon}
-                      </div>
-                      <h3 className="font-bold text-sm text-white mb-1.5">{f.title}</h3>
-                      <p className="text-gray-500 text-xs leading-relaxed">{f.desc}</p>
-                      {f.nav && (
-                        <div className={`mt-3 flex items-center gap-1 text-xs font-semibold ${c.icon} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
-                          View <ArrowRight className="w-3 h-3" />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        </>
+        <HomeView
+          setCreateTeamForm={setCreateTeamForm}
+          setCreateTeamError={setCreateTeamError}
+          setJoinTeamCode={setJoinTeamCode}
+          setJoinTeamError={setJoinTeamError}
+          setJoinTeamSuccess={setJoinTeamSuccess}
+          setTeamModalTab={setTeamModalTab}
+          setPrivateCompLookup={setPrivateCompLookup}
+          setPrivateCompLookupError={setPrivateCompLookupError}
+          setShowCreateTeamModal={setShowCreateTeamModal}
+          setRequestCompStep={setRequestCompStep}
+          setRequestCompForm={setRequestCompForm}
+          setRequestCompSuccess={setRequestCompSuccess}
+          setRequestCompError={setRequestCompError}
+          setShowRequestCompModal={setShowRequestCompModal}
+        />
       )}
 
       {/* ── COMPETITION / HOW TO PLAY ─────────────────────────────────────── */}
@@ -1983,217 +1888,11 @@ export default function PuntingClub() {
       )}
 
       {/* ── LEADERBOARD ───────────────────────────────────────────────────── */}
-      {activeNav === 'leaderboard' && <ErrorBoundary variant="section" label="Leaderboard">{(() => {
-        // Derive ticker messages from settled leg result notes across all teams
-        const tickerItems = enrichedLeaderboardTeams.flatMap(t =>
-          (t.bets || []).flatMap(b =>
-            (b.legs || [])
-              .filter(l => l.resultNote && ['won','lost','in_progress'].includes(l.status))
-              .map(l => `${l.selection} — ${l.resultNote}`)
-          )
-        );
-        const ticker = tickerItems.length > 0 ? tickerItems
-          : ['Results update automatically · Click "Check Results" to refresh · Expand a team row to see the full bet slip'];
-        return (
-        <section className="pt-28 pb-16 px-0 sm:px-0">
-          <div className="max-w-5xl mx-auto px-2 sm:px-6">
-            {navHistory.length > 0 && (
-              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-4 px-2 transition-colors group">
-                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
-              </button>
-            )}
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
-              <div>
-                <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-                <p className="text-gray-500 text-sm">
-                  {(() => {
-                    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
-                    const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
-                    const total = comp?.weeks || '—';
-                    return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
-                  })()}
-                </p>
-                {lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
-                {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
-                  Submit Bet
-                </button>
-              </div>
-            </div>
-
-            {/* Competition switcher — shown whenever there are multiple active competitions */}
-            {activeCompetitions.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-                <span className="text-xs text-gray-500 font-semibold">Competition:</span>
-                {activeCompetitions.map(c => (
-                  <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Team toggle — shown when user has multiple teams in the same competition */}
-            {isLoggedIn && teamsInViewedComp.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-                <span className="text-xs text-gray-500 font-semibold">Team:</span>
-                {teamsInViewedComp.map(t => (
-                  <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                    {t.team_name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* View toggle */}
-            <div className="flex gap-1 mb-4 px-2">
-              {[['current','This Week'],['season','Season View']].map(([v,l]) => (
-                <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${leaderboardView === v ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-gray-500 hover:text-gray-300'}`}>{l}</button>
-              ))}
-            </div>
-
-            {/* Column headers */}
-            {leaderboardView === 'current' && (
-              <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <div className="col-span-1">#</div>
-                <div className="col-span-3">Team</div>
-                <div className="col-span-2 text-center">Total</div>
-                <div className="col-span-6 pl-3 border-l border-white/5">This Week's Bet</div>
-              </div>
-            )}
-
-            {leaderboardView === 'season' && (
-              <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <div className="col-span-1">#</div>
-                <div className="col-span-3">Team</div>
-                <div className="col-span-2 text-center">Total</div>
-                <div className="col-span-6 pl-3 border-l border-white/5">Week History</div>
-              </div>
-            )}
-
-            {/* Rows */}
-            <div className="space-y-1.5">
-              {enrichedLeaderboardTeams.length === 0 && (
-                <div className="text-center py-16">
-                  <Trophy className="w-16 h-16 text-amber-500/30 mb-4 mx-auto" />
-                  <p className="text-gray-400 font-semibold text-lg">No teams yet</p>
-                  <p className="text-gray-600 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
-                </div>
-              )}
-              {enrichedLeaderboardTeams.map((team, idx) => {
-                const isMe = isLoggedIn && team.team === myTeamName;
-                const currentWeek = currentWeekNum + 1;
-                const weekBet = team.bets.find(b => b.weekNumber === currentWeek) || null;
-                const isOpen = selectedTeamIdx === idx;
-
-                // Derive status from legs (same logic as BetSlipCard) so row colour
-                // updates as soon as individual legs settle, even before DB overall_status syncs
-                const computedStatus = (() => {
-                  const legs = weekBet?.legs || [];
-                  if (!legs.length) return weekBet?.overallStatus || 'pending';
-                  if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-                  if (legs.some(l => l.status === 'pending'))     return 'pending';
-                  if (!legs.every(l => ['won','lost','void'].includes(l.status))) return 'pending';
-                  if (legs.every(l => l.status === 'won'))  return 'won';
-                  if (legs.some(l => l.status === 'lost'))  return 'lost';
-                  return 'partial';
-                })();
-
-                const rowBg = isMe
-                  ? 'border-amber-400/40 bg-amber-500/5'
-                  : computedStatus === 'won'         ? 'border-green-500/20 bg-green-950/10'
-                  : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-950/10'
-                  : computedStatus === 'partial'     ? 'border-yellow-500/20 bg-yellow-950/10'
-                  : computedStatus === 'in_progress' ? 'border-orange-500/20 bg-orange-950/10'
-                  : 'border-white/5 bg-white/2';
-
-                return (
-                  <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-amber-400/30' : ''}`}>
-                    <div className="grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-white/3 transition-colors" onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}>
-                      {/* Rank */}
-                      <div className="col-span-1">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
-                      </div>
-                      {/* Name */}
-                      <div className="col-span-4 sm:col-span-3 min-w-0 pl-1">
-                        <div className="font-bold text-sm truncate flex items-center gap-1">
-                          {team.team}
-                          {isMe && <span className="text-amber-400 text-xs">(You)</span>}
-                        </div>
-                        <div className="text-gray-600 text-xs">{team.members} members</div>
-                      </div>
-                      {/* Total */}
-                      <div className="hidden sm:block col-span-2 text-center">
-                        <div className="font-bold text-amber-400 text-sm">{team.total}</div>
-                      </div>
-
-                      {/* This week / season */}
-                      <div className="col-span-7 sm:col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-white/5">
-                        {leaderboardView === 'current' ? (
-                          weekBet ? (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge status={computedStatus} />
-                              <span className="text-white text-xs font-semibold">{weekBet.type}</span>
-                              <span className="text-gray-500 text-xs">·</span>
-                              <span className="text-green-400 text-xs font-semibold">{weekBet.stake}</span>
-                              <span className="hidden sm:inline text-gray-500 text-xs">→</span>
-                              <span className="hidden sm:inline text-green-400 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
-                              {weekBet.legs?.length > 0 && (
-                                <div className="flex gap-1 ml-auto">
-                                  {weekBet.legs.map((leg, li) => <LegDot key={li} leg={leg} />)}
-                                </div>
-                              )}
-                            </div>
-                          ) : <span className="text-gray-700 text-xs italic">No bet submitted</span>
-                        ) : (
-                          // Season view — week history dots
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {team.weekHistory?.length > 0 ? team.weekHistory.map((result, wi) => {
-                              const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-white/5 border-white/10 text-gray-600';
-                              return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
-                            }) : <span className="text-gray-700 text-xs italic">No history yet</span>}
-                            <span className="text-amber-400 font-bold text-sm ml-auto">{team.total}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Expanded bet slip */}
-                    {isOpen && (
-                      <div className="border-t border-white/5 bg-black/30 px-3 py-3">
-                        {/* Member roster */}
-                        {team.memberList?.length > 0 && (
-                          <div className="mb-3 pb-3 border-b border-white/5">
-                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2 flex items-center gap-1"><Users className="w-3 h-3" /> Members</p>
-                            <div className="flex flex-wrap gap-2">
-                              {team.memberList.map((m, mi) => (
-                                <div key={mi} className="flex items-center gap-1.5 bg-white/5 rounded-full px-2.5 py-1">
-                                  <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
-                                    {(m.name || m).charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className="text-xs text-gray-300 font-medium">{m.name || m}</span>
-                                  {m.role === 'captain' && <span className="text-amber-400 text-xs">👑</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-        );
-      })()}</ErrorBoundary>}
+      {activeNav === 'leaderboard' && (
+        <ErrorBoundary variant="section" label="Leaderboard">
+          <LeaderboardView />
+        </ErrorBoundary>
+      )}
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
       {activeNav === 'weekly' && <ErrorBoundary variant="section" label="Weekly Summary">{(() => {
@@ -4940,6 +4639,7 @@ export default function PuntingClub() {
         <FaqView navHistory={navHistory} goBack={goBack} navigateTo={navigateTo} />
       )}
     </div>
+    </AppContext.Provider>
   );
 
 }
