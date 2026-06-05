@@ -61,7 +61,7 @@ const WeeklySummaryView = () => {
             <span className="text-xs text-slate-500 font-semibold">Competition:</span>
             {activeCompetitions.map(c => (
               <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-blue-500/20 text-sky-400 border-blue-500/40' : 'text-slate-400 border-slate-700 hover:border-slate-600 hover:text-slate-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-blue-500/20 text-sky-400 border-blue-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
                 {c.name}
               </button>
             ))}
@@ -73,7 +73,7 @@ const WeeklySummaryView = () => {
             <span className="text-xs text-slate-500 font-semibold">Team:</span>
             {teamsInViewedComp.map(t => (
               <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-slate-400 border-slate-700 hover:border-slate-600 hover:text-slate-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
                 {t.team_name}
               </button>
             ))}
@@ -98,9 +98,9 @@ const WeeklySummaryView = () => {
             {/* My team callout */}
             {myPrevData && (
               <div className={`rounded-xl p-5 mb-4 border-2 ${
-                myPrevData.bet?.overallStatus === 'won'  ? 'bg-green-950/30 border-green-500/40' :
-                myPrevData.bet?.overallStatus === 'lost' ? 'bg-red-950/30 border-red-500/30' :
-                myPrevData.bet ? 'bg-blue-950/20 border-blue-500/20' : 'bg-white/3 border-white/8'
+                myPrevData.bet?.overallStatus === 'won'  ? 'bg-green-50 border-green-500/40' :
+                myPrevData.bet?.overallStatus === 'lost' ? 'bg-red-50 border-red-500/30' :
+                myPrevData.bet ? 'bg-blue-50 border-blue-500/20' : 'bg-white/3 border-white/8'
               }`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -112,7 +112,7 @@ const WeeklySummaryView = () => {
                             {myPrevData.bet.overallStatus === 'won' ? 'WON!' : myPrevData.bet.overallStatus === 'lost' ? 'Lost' : myPrevData.bet.overallStatus === 'partial' ? 'Partial' : 'Pending'}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-300">
+                        <p className="text-sm text-slate-700">
                           {myPrevData.bet.type} · Stake: <span className="text-white font-semibold">{myPrevData.bet.stake}</span>
                           {myPrevData.bet.overallStatus === 'won' && <> · Return: <span className="text-green-400 font-bold">{myPrevData.bet.estimatedReturn}</span></>}
                           {myPrevData.bet.submittedBy && <> · Placed by <span className="text-sky-400">{myPrevData.bet.submittedBy}</span></>}
@@ -142,10 +142,10 @@ const WeeklySummaryView = () => {
             )}
 
             {/* All teams results */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
               <h3 className="font-bold text-sky-400 mb-4">How Everyone Did — Week {prevWeek}</h3>
               {prevBetsSubmitted.length === 0 ? (
-                <p className="text-slate-600 text-sm italic">No bets were submitted last week.</p>
+                <p className="text-slate-400 text-sm italic">No bets were submitted last week.</p>
               ) : (
                 <div className="space-y-3">
                   {prevWinners.length > 0 && (
@@ -159,7 +159,7 @@ const WeeklySummaryView = () => {
                                 <span className="font-semibold text-sm text-white">{t.team}</span>
                                 {t.team === myTeamName && <span className="text-xs bg-blue-500/20 text-sky-400 px-1.5 py-0.5 rounded">You</span>}
                                 <span className="text-xs text-slate-500">{bet.type} · {(bet.legs || []).length} leg{(bet.legs || []).length !== 1 ? 's' : ''}</span>
-                                {bet.submittedBy && <span className="text-xs text-slate-600">by {bet.submittedBy}</span>}
+                                {bet.submittedBy && <span className="text-xs text-slate-400">by {bet.submittedBy}</span>}
                               </div>
                               {(bet.legs || []).length > 0 && (
                                 <div className="flex gap-1 mt-1.5 flex-wrap">
@@ -171,7 +171,7 @@ const WeeklySummaryView = () => {
                             </div>
                             <div className="text-right flex-shrink-0">
                               <p className="text-green-400 font-bold text-sm">{bet.estimatedReturn}</p>
-                              <p className="text-slate-600 text-xs">from {bet.stake}</p>
+                              <p className="text-slate-400 text-xs">from {bet.stake}</p>
                             </div>
                           </div>
                         ))}
@@ -184,12 +184,12 @@ const WeeklySummaryView = () => {
                       <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1"><XCircle className="w-3 h-3" /> Bust</p>
                       <div className="space-y-2">
                         {prevLosers.map(({ team: t, bet }) => (
-                          <div key={t.id} className="bg-red-950/10 border border-red-500/10 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+                          <div key={t.id} className="bg-red-50 border border-red-500/10 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-sm text-gray-300">{t.team}</span>
                               {t.team === myTeamName && <span className="text-xs bg-blue-500/20 text-sky-400 px-1.5 py-0.5 rounded">You</span>}
-                              <span className="text-xs text-slate-600">{bet.type} · {(bet.legs || []).length} legs</span>
-                              {bet.submittedBy && <span className="text-xs text-slate-600">by {bet.submittedBy}</span>}
+                              <span className="text-xs text-slate-400">{bet.type} · {(bet.legs || []).length} legs</span>
+                              {bet.submittedBy && <span className="text-xs text-slate-400">by {bet.submittedBy}</span>}
                             </div>
                             <p className="text-red-400 text-sm font-semibold flex-shrink-0">{bet.stake} lost</p>
                           </div>
@@ -214,10 +214,10 @@ const WeeklySummaryView = () => {
 
                   {prevWeekData.filter(d => !d.bet).length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">— No Bet Submitted</p>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">— No Bet Submitted</p>
                       <div className="flex flex-wrap gap-2">
                         {prevWeekData.filter(d => !d.bet).map(({ team: t }) => (
-                          <span key={t.id} className="text-xs text-slate-600 bg-slate-900 border border-slate-800 rounded px-2 py-1">{t.team}</span>
+                          <span key={t.id} className="text-xs text-slate-400 bg-white border border-gray-200 rounded px-2 py-1">{t.team}</span>
                         ))}
                       </div>
                     </div>
@@ -233,7 +233,7 @@ const WeeklySummaryView = () => {
                 ['Win Rate', prevWinRate !== null ? `${prevWinRate}%` : '—', prevWinRate !== null && prevWinRate >= 50 ? 'text-green-400' : 'text-red-400'],
                 ['Season Pot', totalWinnings > 0 ? `$${totalWinnings.toLocaleString()}` : '$0', 'text-blue-400'],
               ].map(([l, v, c]) => (
-                <div key={l} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                <div key={l} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
                   <p className="text-slate-500 text-xs mb-1">{l}</p>
                   <p className={`text-2xl font-black ${c}`}>{v}</p>
                 </div>
@@ -241,7 +241,7 @@ const WeeklySummaryView = () => {
             </div>
           </>
         ) : (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8 text-center">
+          <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 text-center">
             <p className="text-slate-500 text-sm">This is Week 1 — no previous week to review yet.</p>
           </div>
         )}
@@ -249,25 +249,25 @@ const WeeklySummaryView = () => {
         {/* ── THIS WEEK OUTLOOK ── */}
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xl font-black text-white">Week {thisWeek} — Up Next</h2>
-          <span className="text-xs text-slate-500 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full">Deadline {cutoffStr}</span>
+          <span className="text-xs text-slate-500 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full">Deadline {cutoffStr}</span>
         </div>
         <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-blue-950/20 border border-blue-500/30 rounded-xl p-5">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
             <h3 className="font-bold text-sky-400 mb-2 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Betting Window Open</h3>
-            {currentBettor && <p className="text-slate-300 text-sm">It's <strong className="text-white">{currentBettor}</strong>'s turn to place the bet.</p>}
+            {currentBettor && <p className="text-slate-700 text-sm">It's <strong className="text-white">{currentBettor}</strong>'s turn to place the bet.</p>}
             <p className="text-slate-500 text-xs mt-2">Deadline: <span className="text-white">{cutoffStr}</span></p>
-            {teamsNoBet.length > 0 && <p className="text-slate-600 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
+            {teamsNoBet.length > 0 && <p className="text-slate-400 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
           </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h3 className="font-bold text-sky-400 mb-2 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> Season Standings</h3>
             {leaderboardTeams.slice(0, 3).map((t, i) => (
               <div key={t.id} className="flex items-center gap-2 py-1">
                 <span className={`text-xs font-black w-5 ${i === 0 ? 'text-sky-400' : 'text-slate-500'}`}>#{i + 1}</span>
-                <span className={`text-sm flex-1 truncate ${t.team === myTeamName ? 'text-sky-300 font-bold' : 'text-slate-300'}`}>{t.team}{t.team === myTeamName ? ' (You)' : ''}</span>
+                <span className={`text-sm flex-1 truncate ${t.team === myTeamName ? 'text-sky-300 font-bold' : 'text-slate-700'}`}>{t.team}{t.team === myTeamName ? ' (You)' : ''}</span>
                 <span className="text-sky-400 text-xs font-bold">{t.total}</span>
               </div>
             ))}
-            {leaderboardTeams.length > 3 && <p className="text-slate-600 text-xs mt-1">+{leaderboardTeams.length - 3} more teams</p>}
+            {leaderboardTeams.length > 3 && <p className="text-slate-400 text-xs mt-1">+{leaderboardTeams.length - 3} more teams</p>}
           </div>
         </div>
       </div>

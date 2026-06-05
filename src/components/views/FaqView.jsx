@@ -16,7 +16,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
           <span className="text-sky-400 text-xs font-bold tracking-widest uppercase">Help Centre</span>
         </div>
         <h1 className="text-4xl font-black mb-2">Frequently Asked Questions</h1>
-        <p className="text-slate-400">Everything you need to know about using Punting Club.</p>
+        <p className="text-slate-500">Everything you need to know about using Punting Club.</p>
       </div>
 
       {[
@@ -86,17 +86,17 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
             <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
               {icon}
             </div>
-            <h2 className="text-lg font-black text-slate-100">{category}</h2>
+            <h2 className="text-lg font-black text-slate-900">{category}</h2>
           </div>
           <div className="space-y-2">
             {items.map(({ q, a }) => (
-              <details key={q} className="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-slate-800/50 transition-colors">
-                  <span className="text-sm font-semibold text-slate-100">{q}</span>
+              <details key={q} className="group bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-100/50 transition-colors">
+                  <span className="text-sm font-semibold text-slate-900">{q}</span>
                   <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0 group-open:rotate-180 transition-transform duration-200" />
                 </summary>
                 <div className="px-5 pb-4 pt-0">
-                  <p className="text-sm text-slate-400 leading-relaxed">{a}</p>
+                  <p className="text-sm text-slate-500 leading-relaxed">{a}</p>
                 </div>
               </details>
             ))}
@@ -105,8 +105,8 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
       ))}
 
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6 text-center mt-8">
-        <h3 className="font-bold text-lg mb-1 text-slate-100">Still have questions?</h3>
-        <p className="text-slate-400 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
+        <h3 className="font-bold text-lg mb-1 text-slate-900">Still have questions?</h3>
+        <p className="text-slate-500 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
         <button
           onClick={() => navigateTo('competition')}
           className="bg-gradient-to-r from-blue-600 to-blue-700 text-black px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
