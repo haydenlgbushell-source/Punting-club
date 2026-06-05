@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
@@ -2261,7 +2262,7 @@ export default function PuntingClub() {
       )}
 
       {/* ── LEADERBOARD ───────────────────────────────────────────────────── */}
-      {activeNav === 'leaderboard' && (() => {
+      {activeNav === 'leaderboard' && <ErrorBoundary variant="section" label="Leaderboard">{(() => {
         // Derive ticker messages from settled leg result notes across all teams
         const tickerItems = enrichedLeaderboardTeams.flatMap(t =>
           (t.bets || []).flatMap(b =>
@@ -2471,10 +2472,10 @@ export default function PuntingClub() {
           </div>
         </section>
         );
-      })()}
+      })()}</ErrorBoundary>}
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
-      {activeNav === 'weekly' && (() => {
+      {activeNav === 'weekly' && <ErrorBoundary variant="section" label="Weekly Summary">{(() => {
         const comp       = activeCompetitions.find(c => c.code === effectiveViewedCode);
         const totalWeeks = comp?.weeks || 8;
         const thisWeek   = currentWeekNum + 1;
@@ -2749,10 +2750,10 @@ export default function PuntingClub() {
             </div>
           </section>
         );
-      })()}
+      })()}</ErrorBoundary>}
 
       {/* ── MY TEAM ───────────────────────────────────────────────────────── */}
-      {activeNav === 'team' && (
+      {activeNav === 'team' && (<ErrorBoundary variant="section" label="My Team">
         <section className="pt-28 pb-16 px-4 sm:px-6">
           <div className="max-w-4xl mx-auto">
             {navHistory.length > 0 && (
@@ -3075,13 +3076,13 @@ export default function PuntingClub() {
             </div>
           </div>
         </section>
-      )}
+      </ErrorBoundary>)}
 
 
       {/* ══════════════════════════════════════════════════════════════════
           ADMIN PANEL
       ══════════════════════════════════════════════════════════════════ */}
-      {showAdminPanel && isAdminLoggedIn && (() => {
+      {showAdminPanel && isAdminLoggedIn && <ErrorBoundary variant="section" label="Admin Panel">{(() => {
         // ── Admin sub-components (inline) ──────────────────────────────
         const AdminCard = ({ title, value, sub, icon, color = 'text-amber-400' }) => (
           <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.10)"}}>
@@ -4148,7 +4149,7 @@ export default function PuntingClub() {
             </div>
           </section>
         );
-      })()}
+      })()}</ErrorBoundary>}
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-white/5 bg-black/30 py-10 px-4 sm:px-6">
