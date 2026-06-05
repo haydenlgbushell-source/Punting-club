@@ -3,6 +3,7 @@
 // Uses service_role key to bypass RLS on admin operations
 
 const { createClient } = require('@supabase/supabase-js');
+const { isUUID, isEnum, isString, isPositiveInt, isPositiveFloat, sanitizeUpdates } = require('./validate');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -103,6 +104,13 @@ exports.handler = async (event) => {
 
       case 'request_competition': {
         const { contactName, contactPhone, contactEmail, pubName, compName, estimatedTeams, preferredStartDate, preferredEndDate, buyIn, isPrivate, notes } = payload;
+        const nameErr = isString(contactName, { max: 120, label: 'Contact name' });
+        if (nameErr) return error(nameErr);
+        const pubErr = isString(pubName, { max: 120, label: 'Venue name' });
+        if (pubErr) return error(pubErr);
+        const compNameErr = isString(compName, { max: 120, label: 'Competition name' });
+        if (compNameErr) return error(compNameErr);
+        if (notes && String(notes).length > 1000) return error('Notes must be 1000 characters or fewer.');
         const requestCode = genCode(8);
         const { data, error: e } = await supabase.from('competition_requests').insert({
           request_code:          requestCode,
@@ -143,6 +151,8 @@ exports.handler = async (event) => {
       case 'update_competition_request': {
         const { id, status: reqStatus, adminRole } = payload;
         if (!adminRole) return error('Admin access required', 403);
+        const reqStatusErr = isEnum(reqStatus, ['requested', 'approved', 'rejected', 'cancelled']);
+        if (reqStatusErr) return error(`Invalid request status. ${reqStatusErr}`);
         const { data, error: e } = await supabase
           .from('competition_requests')
           .update({ status: reqStatus })
@@ -155,6 +165,7 @@ exports.handler = async (event) => {
 
       case 'get_competition_by_code': {
         const { code } = payload;
+        if (!code || String(code).trim().length === 0) return error('Competition code is required.');
         const { data, error: e } = await supabase
           .from('competitions')
           .select('id, name, pub, code, status, buy_in, max_teams, start_date, end_date, is_private, weeks')
@@ -214,6 +225,8 @@ exports.handler = async (event) => {
 
       case 'update_competition_status': {
         const { id, status, adminRole } = payload;
+        const statusErr = isEnum(status, ['active', 'pending', 'completed', 'cancelled']);
+        if (statusErr) return error(`Invalid status. ${statusErr}`);
         const { data, error: e } = await supabase.from('competitions').update({ status }).eq('id', id).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, `Competition ${status}`, data.name, '');
@@ -310,7 +323,10 @@ exports.handler = async (event) => {
       }
 
       case 'update_team': {
-        const { teamId, updates, adminRole } = payload;
+        const { teamId, adminRole } = payload;
+        const TEAM_ALLOWED = ['team_name', 'status', 'buy_in_mode', 'finalised', 'deposit_per_member', 'competition_id'];
+        const { clean: updates } = sanitizeUpdates(payload.updates, TEAM_ALLOWED);
+        if (Object.keys(updates).length === 0) return error('No valid fields to update.');
         const { data, error: e } = await supabase.from('teams').update(updates).eq('id', teamId).select().single();
         if (e) return error(e.message);
         if (adminRole) await addAudit(adminRole, 'Team Updated', data.team_name, JSON.stringify(updates));
@@ -374,7 +390,14 @@ exports.handler = async (event) => {
       }
 
       case 'update_member': {
-        const { teamId, userId, updates } = payload;
+        const { teamId, userId } = payload;
+        const MEMBER_ALLOWED = ['role', 'can_bet', 'deposit_paid', 'betting_order'];
+        const { clean: updates } = sanitizeUpdates(payload.updates, MEMBER_ALLOWED);
+        if (Object.keys(updates).length === 0) return error('No valid fields to update.');
+        if (updates.role !== undefined) {
+          const roleErr = isEnum(updates.role, ['captain', 'member', 'view-only', 'pending']);
+          if (roleErr) return error(`Invalid role. ${roleErr}`);
+        }
         const { data, error: e } = await supabase
           .from('team_members').update(updates)
           .eq('team_id', teamId).eq('user_id', userId).select().single();
@@ -384,6 +407,8 @@ exports.handler = async (event) => {
 
       case 'save_betting_order': {
         const { teamId, orderedUserIds } = payload;
+        if (!Array.isArray(orderedUserIds)) return error('orderedUserIds must be an array.');
+        if (orderedUserIds.length > 50) return error('Betting order cannot exceed 50 members.');
         await supabase.from('betting_order').delete().eq('team_id', teamId);
         const rows = orderedUserIds.map((userId, i) => ({ team_id: teamId, user_id: userId, position: i + 1 }));
         const { error: e } = await supabase.from('betting_order').insert(rows);
@@ -523,6 +548,24 @@ exports.handler = async (event) => {
 
       case 'submit_bet': {
         const { teamId, weekNumber, betType, stake, combinedOdds, estimatedReturn, submissionValid, aiConfidence, legs, submittedBy } = payload;
+
+        const stakeErr = isPositiveInt(stake, { max: 1_000_000, label: 'Stake' });
+        if (stakeErr) return error(stakeErr);
+        const betTypeErr = isEnum(betType, ['multi', 'single']);
+        if (betTypeErr) return error(`Invalid bet type. ${betTypeErr}`);
+        if (!Array.isArray(legs) || legs.length === 0) return error('Bet must include at least one leg.');
+        if (legs.length > 20) return error('Bet cannot have more than 20 legs.');
+        if (combinedOdds !== null && combinedOdds !== undefined) {
+          const oddsErr = isPositiveFloat(combinedOdds, { min: 1.01, max: 10_000, label: 'Combined odds' });
+          if (oddsErr) return error(oddsErr);
+        }
+        for (const [i, leg] of legs.entries()) {
+          const legLabel = `Leg ${i + 1}`;
+          const evtErr = isString(leg.event, { max: 200, label: `${legLabel} event` });
+          if (evtErr) return error(evtErr);
+          const selErr = isString(leg.selection, { max: 200, label: `${legLabel} selection` });
+          if (selErr) return error(selErr);
+        }
 
         const { data: bet, error: betError } = await supabase.from('bets').insert({
           team_id:          teamId,
@@ -727,6 +770,8 @@ exports.handler = async (event) => {
 
       case 'update_kyc': {
         const { userId, kycStatus, adminRole } = payload;
+        const kycErr = isEnum(kycStatus, ['pending', 'approved', 'rejected']);
+        if (kycErr) return error(`Invalid KYC status. ${kycErr}`);
         const { data, error: e } = await supabase.from('users').update({ kyc_status: kycStatus, active: kycStatus !== 'rejected' }).eq('id', userId).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, `KYC ${kycStatus}`, `${data.first_name} ${data.last_name}`, `KYC status set to ${kycStatus}`);
@@ -734,7 +779,10 @@ exports.handler = async (event) => {
       }
 
       case 'update_user': {
-        const { userId, updates, adminRole } = payload;
+        const { userId, adminRole } = payload;
+        const USER_ALLOWED = ['first_name', 'last_name', 'email', 'dob', 'postcode', 'active', 'flagged', 'kyc_status', 'role'];
+        const { clean: updates } = sanitizeUpdates(payload.updates, USER_ALLOWED);
+        if (Object.keys(updates).length === 0) return error('No valid fields to update.');
         const { data, error: e } = await supabase.from('users').update(updates).eq('id', userId).select().single();
         if (e) return error(e.message);
         if (adminRole) await addAudit(adminRole, 'User Updated', `${data.first_name} ${data.last_name}`, JSON.stringify(updates));

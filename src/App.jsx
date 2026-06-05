@@ -1,4 +1,18 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
+import Modal from './components/Modal.jsx';
+import Badge from './components/Badge.jsx';
+import LegDot from './components/LegDot.jsx';
+import PermissionBadge from './components/PermissionBadge.jsx';
+import BetSlipCard from './components/BetSlipCard.jsx';
+import FaqView from './components/views/FaqView.jsx';
+import CompetitionView from './components/views/CompetitionView.jsx';
+import HomeView from './components/views/HomeView.jsx';
+import LeaderboardView from './components/views/LeaderboardView.jsx';
+import WeeklySummaryView from './components/views/WeeklySummaryView.jsx';
+import MyTeamView from './components/views/MyTeamView.jsx';
+import { AppContext } from './context/AppContext.jsx';
+import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, WEEK_BUDGET } from './utils.js';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
@@ -12,258 +26,6 @@ import {
   apiUpdateProfile, apiChangePassword,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
-
-// ─── In-memory stores ────────────────────────────────────────────────────────
-// ── Data is now persisted in Supabase ──────────────────────────────────────
-// userStore and teamStore replaced by Supabase tables via /api/auth and /api/data
-// See src/supabase.js and src/api.js for all DB operations
-// competitionStore replaced by activeCompetitions state (loaded from Supabase)
-// In-memory fallback stores (used when Supabase is unavailable)
-const localUserStore = {};     // phone → user object
-const localTeamStore = {};     // teamCode → team object
-
-// ── Admin roles ──────────────────────────────────────────────────────────────
-// owner        → all privileges
-// campaign     → confirm/correct results, disputes, password help
-// pub_admin    → manage their own competition
-//
-// Admin credentials are validated server-side. Set ADMIN_PW_* and ADMIN_JWT_SECRET
-// in .env.local (server-only, never bundled into JS).
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const genCode = (len = 6) => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const result = [];
-  while (result.length < len) {
-    const byte = crypto.getRandomValues(new Uint8Array(1))[0];
-    // Reject values >= 252 to avoid modulo bias (256 % 36 = 4)
-    if (byte < 252) result.push(chars[byte % 36]);
-  }
-  return result.join('');
-};
-
-const parseAnalysisJSON = (text) => {
-  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
-  catch { return null; }
-};
-
-// Validate and normalise Australian mobile numbers
-// Accepts: 04XX XXX XXX, +614XX XXX XXX, 614XX XXX XXX
-const validatePhone = (raw) => {
-  const digits = raw.replace(/\D/g, ''); // strip all non-digits
-  // Australian mobile: starts with 04 (10 digits) or 614 (11 digits)
-  if (/^04\d{8}$/.test(digits)) return { valid: true, normalised: '0' + digits.slice(1) };
-  if (/^614\d{8}$/.test(digits)) return { valid: true, normalised: '0' + digits.slice(2) };
-  if (/^4\d{8}$/.test(digits))  return { valid: true, normalised: '0' + digits };
-  return { valid: false, normalised: null };
-};
-
-const WEEK_BUDGET = 50;
-
-// ─── Shared UI ───────────────────────────────────────────────────────────────
-const Modal = ({ onClose, title, children, maxWidth = 'max-w-md' }) => (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur z-[100] overflow-y-auto bc-backdrop">
-    <div className="flex min-h-full items-start justify-center p-2 sm:p-4 py-4">
-      <div className={`bg-gray-950 border-2 border-amber-500 rounded-xl w-full ${maxWidth} flex flex-col shadow-2xl shadow-amber-900/20 bc-modal`}>
-        <div className="sticky top-0 bg-gray-950 border-b border-amber-500/30 p-4 flex justify-between items-center z-10 rounded-t-xl">
-          <h2 className="text-lg font-bold text-white">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-amber-400 transition-colors"><X className="w-5 h-5" /></button>
-        </div>
-        <div>{children}</div>
-      </div>
-    </div>
-  </div>
-);
-
-const Badge = ({ status }) => {
-  const map = {
-    won:         'bg-green-500/20 border-green-500/60 text-green-400',
-    lost:        'bg-red-500/20 border-red-500/60 text-red-400',
-    partial:     'bg-yellow-500/20 border-yellow-500/60 text-yellow-400',
-    pending:     'bg-amber-500/10 border-amber-500/30 text-amber-400',
-    void:        'bg-gray-500/20 border-gray-500/60 text-gray-400',
-    in_progress: 'bg-orange-500/20 border-orange-500/60 text-orange-400',
-  };
-  const config = {
-    won:         { icon: <CheckCircle className="w-3 h-3" />, label: 'Won' },
-    lost:        { icon: <XCircle className="w-3 h-3" />, label: 'Lost' },
-    partial:     { icon: <Zap className="w-3 h-3" />, label: 'Partial' },
-    pending:     { icon: <Clock className="w-3 h-3" />, label: 'Pending' },
-    void:        { icon: <MinusCircle className="w-3 h-3" />, label: 'Void' },
-    in_progress: { icon: <span className="w-2 h-2 rounded-full bg-current animate-pulse inline-block" />, label: 'Live' },
-  };
-  const r = config[status] || config.pending;
-  return (
-    <span className={`border text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${map[status] || map.pending}`}>
-      {r.icon}{r.label}
-    </span>
-  );
-};
-
-const LegDot = ({ leg }) => {
-  const colors = {
-    won:         'bg-green-500/30 border-green-500 text-green-400',
-    lost:        'bg-red-500/30 border-red-500 text-red-400',
-    void:        'bg-gray-500/30 border-gray-500 text-gray-400',
-    pending:     'bg-amber-500/10 border-amber-500/40 text-amber-400',
-    in_progress: 'bg-orange-500/30 border-orange-500 text-orange-400',
-  };
-  const icon = { won: '✓', lost: '✗', void: '—', pending: String(leg.legNumber), in_progress: '◉' };
-  return (
-    <div title={`Leg ${leg.legNumber}: ${leg.selection} @ ${leg.odds} — ${leg.status}`}
-      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${colors[leg.status] || colors.pending}`}>
-      {icon[leg.status] || leg.legNumber}
-    </div>
-  );
-};
-
-const PermissionBadge = ({ role }) => {
-  const map = {
-    captain:   { label: 'Captain', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
-    member:    { label: 'Member', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
-    'view-only': { label: 'View Only', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/50' },
-  };
-  const r = map[role] || map.member;
-  return <span className={`border text-xs px-2 py-0.5 rounded-full font-semibold ${r.cls}`}>{r.label}</span>;
-};
-
-// ─── BET SLIP DISPLAY ─────────────────────────────────────────────────────────
-// Barlow Condensed — sports-display font (loaded in index.html)
-const BC = "'Barlow Condensed', 'Inter', sans-serif";
-
-const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
-  const [openLegs, setOpenLegs] = useState({});
-  if (!bet) return null;
-
-  const toggleLeg = (i) => setOpenLegs(prev => ({ ...prev, [i]: !prev[i] }));
-
-  const legs       = bet.legs || [];
-  const wonCount   = legs.filter(l => l.status === 'won').length;
-  const lostCount  = legs.filter(l => l.status === 'lost').length;
-  const liveCount  = legs.filter(l => l.status === 'in_progress').length;
-  const pendCount  = legs.filter(l => l.status === 'pending').length;
-  const totalLegs  = legs.length;
-
-  // Derive overall status from legs — matches reference implementation logic
-  const status = totalLegs === 0 ? (bet.overallStatus || 'pending')
-    : liveCount > 0                           ? 'in_progress'
-    : pendCount > 0                           ? 'pending'
-    : lostCount > 0 && wonCount > 0           ? 'partial'
-    : lostCount > 0                           ? 'lost'
-    :                                           'won';
-
-  const allWon = status === 'won';
-  const estimatedReturn = bet.estimatedReturn || bet.return || 'N/A';
-  const payoutValue = status === 'lost' ? '$0.00' : estimatedReturn;
-  const payoutLabel = allWon ? 'WINNINGS' : 'POTENTIAL';
-  const payoutColor = allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#94a3b8';
-
-  const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
-  const titleColor = allWon ? '#22c55e'    : status === 'lost' ? '#ef4444' : status === 'partial' ? '#eab308'   : status === 'in_progress' ? '#f97316'  : '#f59e0b';
-  const cardBorder = allWon ? '#22c55e33'  : status === 'lost' ? '#ef444433' : status === 'partial' ? '#eab30833' : status === 'in_progress' ? '#f9731633' : '#f59e0b22';
-  const cardBg     = allWon ? '#052e1680'  : status === 'lost' ? '#2d020280' : status === 'partial' ? '#42330080' : status === 'in_progress' ? '#43180080' : '#00000066';
-
-  return (
-    <div style={{ border: `1px solid ${cardBorder}`, background: cardBg, borderRadius: 16, overflow: 'hidden' }}>
-      {/* ── Header ── */}
-      <div style={{ padding: compact ? '16px 18px 12px' : '22px 22px 14px', borderBottom: '1px solid #ffffff0d' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#f59e0b' }}>
-              {(bet.type || 'MULTI').toUpperCase()} BET
-            </span>
-            {bet.submittedBy && (
-              <span style={{ fontSize: 11, color: '#9ca3af', background: '#ffffff0d', border: '1px solid #ffffff12', borderRadius: 6, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                {bet.submittedBy}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {bet.submittedAt && <span style={{ fontSize: 11, color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{bet.submittedAt}</span>}
-          </div>
-        </div>
-        <div style={{ fontFamily: BC, fontWeight: 800, fontSize: compact ? 30 : 44, lineHeight: 1, color: titleColor, marginBottom: 4 }}>
-          {titleText}
-        </div>
-        <p style={{ color: '#9ca3af', fontSize: 13, margin: 0 }}>{wonCount} of {totalLegs} leg{totalLegs !== 1 ? 's' : ''} won</p>
-      </div>
-
-      {/* ── Stats row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #ffffff0d' }}>
-        {[
-          ['STAKE',       bet.stake,                              '#e2e8f0'],
-          ['ODDS',        bet.combinedOdds || bet.odds || 'N/A', '#f59e0b'],
-          [payoutLabel,   payoutValue,                            payoutColor],
-        ].map(([label, value, color], i) => (
-          <div key={label} style={{ padding: '12px 14px', textAlign: 'center', background: '#0d111780', borderRight: i < 2 ? '1px solid #ffffff0d' : 'none' }}>
-            <div style={{ fontFamily: BC, letterSpacing: '0.12em', fontSize: 10, color: '#6b7280', marginBottom: 3 }}>{label}</div>
-            <div style={{ fontFamily: BC, fontWeight: 700, fontSize: compact ? 17 : 21, color }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Legs ── */}
-      {totalLegs > 0 && (
-        <div style={{ padding: '12px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontFamily: BC, letterSpacing: '0.14em', fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-            {totalLegs} LEG{totalLegs !== 1 ? 'S' : ''}
-          </div>
-          {legs.map((leg, i) => {
-            const won  = leg.status === 'won';
-            const lost = leg.status === 'lost';
-            const live = leg.status === 'in_progress';
-            const legColor = won ? '#22c55e' : lost ? '#ef4444' : live ? '#f97316' : '#f59e0b';
-            const isOpen = openLegs[i];
-            return (
-              <div key={i} className="bc-fadeup" style={{ background: '#111827', border: '1px solid #1f2937', borderLeft: `4px solid ${legColor}`, borderRadius: 10, animationDelay: `${i * 0.07}s` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 14px' }}>
-                  {/* Left — number + selection */}
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#1f2937', border: '1px solid #374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: BC, fontWeight: 700, fontSize: 12, color: '#f59e0b', flexShrink: 0, marginTop: 2 }}>
-                      {i + 1}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 16, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leg.selection}</div>
-                      <div style={{ fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leg.event}{leg.market ? ` · ${leg.market}` : ''}</div>
-                      {(leg.eventDate || leg.startTime) && (
-                        <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
-                          {leg.eventDate ? (() => {
-                            const [yr, mo, dy] = leg.eventDate.split('-').map(Number);
-                            return new Date(yr, mo - 1, dy).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-                          })() : ''}
-                          {leg.startTime ? ` · ${String(leg.startTime).substring(0, 5)} AEST` : ''}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {/* Right — odds + badge + toggle */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, marginLeft: 10 }}>
-                    <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#f59e0b' }}>@ {leg.odds}</div>
-                    <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', padding: '2px 9px', borderRadius: 5, background: `${legColor}18`, color: legColor, border: `1px solid ${legColor}44` }}>
-                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : 'WAIT'}
-                    </div>
-                    {leg.resultNote && (
-                      <button onClick={() => toggleLeg(i)} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: 11, cursor: 'pointer', padding: 0 }}>
-                        {isOpen ? '▲ hide' : '▼ details'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {isOpen && leg.resultNote && (
-                  <div style={{ borderTop: '1px solid #1f2937', padding: '10px 14px 12px', display: 'flex', gap: 7, fontSize: 13, color: '#9ca3af', lineHeight: 1.5, alignItems: 'flex-start' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: won ? '#22c55e' : lost ? '#ef4444' : '#eab308', flexShrink: 0, marginTop: 4, display: 'inline-block' }} />
-                    <span>{leg.resultNote}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function PuntingClub() {
@@ -310,6 +72,9 @@ export default function PuntingClub() {
   const [leaderboardTeams, setLeaderboardTeams] = useState([]);
   const [selectedTeamIdx, setSelectedTeamIdx] = useState(null);
   const [leaderboardView, setLeaderboardView] = useState('current'); // 'current' | 'season'
+  // Per-competition fetch timestamps — used to avoid redundant network calls
+  const leaderboardFetchedAt = useRef({}); // compCode → Date.now()
+  const LEADERBOARD_TTL_MS = 3 * 60 * 1000; // 3 minutes
 
   // My Team
   const [pendingMembers, setPendingMembers] = useState([]);
@@ -812,25 +577,6 @@ export default function PuntingClub() {
     catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
   };
 
-  // ── WEEK CALCULATION (Wednesday 12:00 AEST boundary) ─────────────────────
-  // A week ends every Wednesday at 12:00 AEST; a new one begins at 12:01.
-  const calcCurrentWeek = (startDate) => {
-    if (!startDate) return 1;
-    const AEST = 10 * 60 * 60 * 1000; // UTC+10 in ms
-    const nowAEST  = Date.now() + AEST;
-    const startAEST = new Date(startDate).getTime() + AEST;
-
-    // Find the first Wednesday 12:00 AEST that is strictly after startAEST
-    let boundary = new Date(startAEST);
-    boundary.setUTCHours(12, 0, 0, 0); // noon in AEST-shifted date
-    const daysToWed = (3 - boundary.getUTCDay() + 7) % 7; // 3 = Wednesday
-    boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-    if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-
-    if (nowAEST < boundary.getTime()) return 1;
-    return Math.floor((nowAEST - boundary.getTime()) / (7 * 86400000)) + 2;
-  };
-
   // Next Wednesday 12:00 AEST cutoff from now (for display)
   const nextWedCutoff = (() => {
     const AEST = 10 * 60 * 60 * 1000;
@@ -859,23 +605,31 @@ export default function PuntingClub() {
     })),
   })), []);
 
-  const refreshLeaderboard = useCallback(async (compCode, comps) => {
+  const refreshLeaderboard = useCallback(async (compCode, comps, { force = false } = {}) => {
     const code = compCode || currentUser?.competitionCode;
     const competitions = comps || activeCompetitions;
     if (!code) return;
     const comp = competitions.find(c => c.code === code);
     if (!comp?.id) return;
+
+    // Skip the network call if cached data is fresh and a force-refresh wasn't requested
+    if (!force) {
+      const lastFetch = leaderboardFetchedAt.current[code] || 0;
+      if (Date.now() - lastFetch < LEADERBOARD_TTL_MS) return null;
+    }
+
     const weekNum = calcCurrentWeek(comp.start_date);
     try {
       const data = await apiGetLeaderboard(comp.id, weekNum, comp.start_date);
       if (data?.length) {
         const mapped = mapLeaderboardData(data);
         setLeaderboardTeams(mapped);
+        leaderboardFetchedAt.current[code] = Date.now();
         return mapped;
       }
     } catch(e) { console.error('Leaderboard refresh failed:', e); }
     return null;
-  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
+  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData, LEADERBOARD_TTL_MS]);
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
   // Calls the synchronous /api/check-results function once per pending bet
@@ -899,7 +653,7 @@ export default function PuntingClub() {
       if (res.ok) {
         const data = await res.json();
         const totalLegsUpdated = data.legsUpdated || 0;
-        await refreshLeaderboard();
+        await refreshLeaderboard(undefined, undefined, { force: true });
         setLastChecked(new Date());
         if (totalLegsUpdated > 0) {
           showToast('Results updated — leaderboard refreshed!', 'success');
@@ -1187,7 +941,7 @@ export default function PuntingClub() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      await refreshLeaderboard();
+      await refreshLeaderboard(undefined, undefined, { force: true });
       if (data.legsUpdated > 0) {
         showToast('Result found — leaderboard updated!', 'success');
         setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet — ${data.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
@@ -1437,7 +1191,7 @@ export default function PuntingClub() {
       setAdminComps(prev => prev.map(c => c.id === id ? { ...c, start_date: updated.start_date } : c));
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
-      await refreshLeaderboard();
+      await refreshLeaderboard(undefined, undefined, { force: true });
       addAuditEntry(adminUser?.role, label, id, `New start_date: ${updated.start_date}`);
       showToast(`${label} — leaderboard updated`, 'success');
     } catch(err) {
@@ -1464,9 +1218,49 @@ export default function PuntingClub() {
     return false;
   };
 
+  const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB — Claude's per-image limit
+  const MAX_IMAGES = 2;
+
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
-    Promise.all(files.map(f => new Promise(res => { const r = new FileReader(); r.onload = () => res({ src: r.result, name: f.name, mediaType: f.type || 'image/jpeg' }); r.readAsDataURL(f); }))).then(imgs => setUploadedImages(prev => [...prev, ...imgs]));
+    const errors = [];
+    const valid = [];
+
+    for (const f of files) {
+      if (!ALLOWED_IMAGE_TYPES.has(f.type)) {
+        errors.push(`"${f.name}" is not a supported image type. Use JPEG, PNG, WebP, or GIF.`);
+        continue;
+      }
+      if (f.size > MAX_IMAGE_BYTES) {
+        errors.push(`"${f.name}" is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum is 5 MB per image.`);
+        continue;
+      }
+      valid.push(f);
+    }
+
+    if (errors.length) {
+      showToast(errors[0], 'error');
+    }
+
+    if (!valid.length) return;
+
+    const slots = MAX_IMAGES - uploadedImages.length;
+    if (slots <= 0) { showToast(`Maximum ${MAX_IMAGES} images allowed.`, 'warning'); return; }
+    if (valid.length > slots) {
+      showToast(`Only ${slots} more image${slots > 1 ? 's' : ''} can be added (max ${MAX_IMAGES}).`, 'warning');
+    }
+    const toLoad = valid.slice(0, slots);
+
+    Promise.all(
+      toLoad.map(f => new Promise(res => {
+        const r = new FileReader();
+        r.onload = () => res({ src: r.result, name: f.name, mediaType: f.type });
+        r.readAsDataURL(f);
+      }))
+    ).then(imgs => setUploadedImages(prev => [...prev, ...imgs]));
+
+    e.target.value = '';
   };
 
   const analyzeBetSlips = async () => {
@@ -1586,7 +1380,7 @@ export default function PuntingClub() {
   const switchViewedCompetition = useCallback(async (code) => {
     setViewedCompetitionCode(code);
     setViewedTeamId(null); // reset per-team selection when switching competitions
-    await refreshLeaderboard(code, activeCompetitions);
+    await refreshLeaderboard(code, activeCompetitions, { force: true });
     // Load team members for the user's first team in the new competition
     const comp = activeCompetitions.find(c => c.code === code);
     const myTeamInComp = (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id));
@@ -1615,7 +1409,7 @@ export default function PuntingClub() {
   const switchActiveTeam = useCallback(async (team) => {
     setViewedCompetitionCode(team.compCode);
     setViewedTeamId(team.id);
-    await refreshLeaderboard(team.compCode, activeCompetitions);
+    await refreshLeaderboard(team.compCode, activeCompetitions, { force: true });
     if (team.id !== currentTeamId) {
       try {
         const members = await apiGetTeamMembers(team.id);
@@ -1740,7 +1534,31 @@ export default function PuntingClub() {
   const allDepositsConfirmed = teamMembers.every(m => m.depositPaid || m.deposit_paid);
 
   // ── RENDER ────────────────────────────────────────────────────────────────
+  const appContextValue = {
+    // Auth
+    isLoggedIn, currentUser, viewedRole,
+    // Nav
+    navigateTo, goBack, navHistory,
+    // Modals
+    setShowSignupModal, setSignupMode, setShowBetAnalyzer, setShowLoginModal, showToast,
+    // Competitions
+    activeCompetitions, effectiveViewedCode, switchViewedCompetition, switchViewedTeam,
+    teamsInViewedComp, viewedMyTeam, userCompetitions,
+    // Leaderboard / team data
+    leaderboardTeams, enrichedLeaderboardTeams, teamMembers,
+    myTeamName, myTeamData, allDepositsConfirmed, currentWeekNum, nextWedCutoff,
+    currentBettor, currentWeekBettorIdx,
+    // Result checking
+    lastChecked, resultLog,
+    // Team actions
+    approveMember, rejectMember, toggleDepositPaid, updateMemberRole,
+    unfinaliseTeam, shareBet,
+    // Util
+    calcCurrentWeek,
+  };
+
   return (
+    <AppContext.Provider value={appContextValue}>
     <div className="min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden">
 
       {/* ── CAPTAIN JOIN REQUEST NOTIFICATION POPUP ─────────────────────── */}
@@ -2052,1036 +1870,62 @@ export default function PuntingClub() {
 
       {/* ── HOME ──────────────────────────────────────────────────────────── */}
       {activeNav === 'home' && (
-        <>
-          <section className="relative pt-28 pb-16 px-4 sm:px-6 overflow-hidden">
-            {/* Background radials */}
-            <div className="absolute inset-0 bg-gradient-to-b from-amber-900/12 via-transparent to-transparent pointer-events-none" />
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute top-32 right-0 w-72 h-72 bg-amber-600/4 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute top-32 left-0 w-72 h-72 bg-orange-600/4 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="max-w-5xl mx-auto text-center relative z-10">
-              {/* Live badge */}
-              <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 rounded-full px-4 py-1.5 mb-6">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-                <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">Live Competitions Running</span>
-              </div>
-
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black mb-5 bg-gradient-to-b from-white via-amber-200 to-amber-500 bg-clip-text text-transparent leading-[1.05]">
-                The Ultimate<br />Sports Betting League
-              </h1>
-              <p className="text-base sm:text-lg text-gray-400 mb-8 max-w-xl mx-auto leading-relaxed">
-                Form a team, place weekly multi-bets, and compete for the jackpot. Flexible buy-ins, custom bet limits, and seasons from 8 to 32 weeks — set by your competition host.
-              </p>
-
-              {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
-                {isLoggedIn ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' });
-                        setCreateTeamError(null);
-                        setJoinTeamCode('');
-                        setJoinTeamError(null);
-                        setJoinTeamSuccess(null);
-                        setTeamModalTab(viewedRole === 'captain' ? 'create' : 'join');
-                        setPrivateCompLookup(null);
-                        setPrivateCompLookupError(null);
-                        setShowCreateTeamModal(true);
-                      }}
-                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
-                    >
-                      {viewedRole === 'captain' ? 'Enter Another Competition' : 'Join a Competition'} <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
-                      Create a Team <ArrowRight className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border border-amber-500/50 hover:border-amber-500 hover:bg-amber-500/8 text-amber-400 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer">
-                      Join a Team
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Secondary CTAs */}
-              <div className="flex flex-col sm:flex-row justify-center gap-2.5 mb-12">
-                <button
-                  onClick={() => { setRequestCompStep(1); setRequestCompForm({ contactName: isLoggedIn ? `${currentUser?.first_name||''} ${currentUser?.last_name||''}`.trim() : '', contactPhone: isLoggedIn ? (currentUser?.phone||'') : '', contactEmail: isLoggedIn ? (currentUser?.email||'') : '', pubName:'', compName:'', estimatedTeams:'', preferredStartDate:'', preferredEndDate:'', buyIn:'', isPrivate:false, notes:'' }); setRequestCompSuccess(false); setRequestCompError(null); setShowRequestCompModal(true); }}
-                  className="border border-white/10 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/5 text-gray-400 hover:text-amber-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Run a competition at your pub/club
-                </button>
-                <a
-                  href="https://wa.me/61419163012"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="border border-white/10 hover:border-green-500/30 bg-white/3 hover:bg-green-500/5 text-gray-400 hover:text-green-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{flexShrink:0}}>
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
-                  Message us on WhatsApp
-                </a>
-              </div>
-
-              {/* Stats row */}
-              <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
-                {[
-                  { v: 'Flexible', l: 'Buy-In',        sub: 'set per competition', icon: <Settings2 className="w-4 h-4" /> },
-                  { v: 'Any Sport', l: 'Weekly Bets',   sub: 'custom limit',        icon: <TrendingUp className="w-4 h-4" /> },
-                  { v: '8–32 Wks', l: 'Season Length', sub: '8, 16 or 32 weeks',   icon: <CalendarRange className="w-4 h-4" /> },
-                ].map(({ v, l, sub, icon }) => (
-                  <div key={l} className="bg-white/[0.03] border border-white/8 hover:border-amber-500/25 rounded-xl p-4 transition-colors group">
-                    <div className="text-amber-400/60 mb-1.5 flex justify-center group-hover:text-amber-400 transition-colors">{icon}</div>
-                    <div className="text-lg font-black text-amber-400 leading-tight" style={{fontFamily:"'Barlow Condensed', sans-serif"}}>{v}</div>
-                    <div className="text-gray-500 text-xs mt-0.5 font-semibold">{l}</div>
-                    <div className="text-gray-700 text-[10px] mt-0.5 leading-tight">{sub}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Feature cards */}
-          <section className="pb-20 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', color: 'amber', nav: 'leaderboard' },
-                  { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', color: 'blue', nav: null },
-                  { icon: <Users className="w-6 h-6" />, title: 'Team Management', desc: 'Captain roles, betting order, member approvals', color: 'green', nav: 'team' },
-                  { icon: <TrendingUp className="w-6 h-6" />, title: 'Season Tracking', desc: 'Weekly summaries across quarter, half and full seasons', color: 'purple', nav: 'weekly' },
-                ].map((f, i) => {
-                  const colorMap = {
-                    amber:  { bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: 'text-amber-400', hover: 'hover:border-amber-500/40 hover:bg-amber-500/5' },
-                    blue:   { bg: 'bg-blue-500/10',  border: 'border-blue-500/20',  icon: 'text-blue-400',  hover: 'hover:border-blue-500/40  hover:bg-blue-500/5'  },
-                    green:  { bg: 'bg-green-500/10', border: 'border-green-500/20', icon: 'text-green-400', hover: 'hover:border-green-500/40 hover:bg-green-500/5' },
-                    purple: { bg: 'bg-purple-500/10',border: 'border-purple-500/20',icon: 'text-purple-400',hover: 'hover:border-purple-500/40 hover:bg-purple-500/5'},
-                  };
-                  const c = colorMap[f.color];
-                  return (
-                    <div
-                      key={i}
-                      onClick={f.nav ? () => navigateTo(f.nav) : undefined}
-                      className={`bg-white/[0.025] border ${c.border} rounded-xl p-5 ${c.hover} transition-all duration-200 group ${f.nav ? 'cursor-pointer' : ''}`}
-                    >
-                      <div className={`w-10 h-10 ${c.bg} border ${c.border} rounded-lg flex items-center justify-center ${c.icon} mb-4 group-hover:scale-105 transition-transform duration-200`}>
-                        {f.icon}
-                      </div>
-                      <h3 className="font-bold text-sm text-white mb-1.5">{f.title}</h3>
-                      <p className="text-gray-500 text-xs leading-relaxed">{f.desc}</p>
-                      {f.nav && (
-                        <div className={`mt-3 flex items-center gap-1 text-xs font-semibold ${c.icon} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
-                          View <ArrowRight className="w-3 h-3" />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        </>
+        <HomeView
+          setCreateTeamForm={setCreateTeamForm}
+          setCreateTeamError={setCreateTeamError}
+          setJoinTeamCode={setJoinTeamCode}
+          setJoinTeamError={setJoinTeamError}
+          setJoinTeamSuccess={setJoinTeamSuccess}
+          setTeamModalTab={setTeamModalTab}
+          setPrivateCompLookup={setPrivateCompLookup}
+          setPrivateCompLookupError={setPrivateCompLookupError}
+          setShowCreateTeamModal={setShowCreateTeamModal}
+          setRequestCompStep={setRequestCompStep}
+          setRequestCompForm={setRequestCompForm}
+          setRequestCompSuccess={setRequestCompSuccess}
+          setRequestCompError={setRequestCompError}
+          setShowRequestCompModal={setShowRequestCompModal}
+        />
       )}
 
       {/* ── COMPETITION / HOW TO PLAY ─────────────────────────────────────── */}
       {(activeNav === 'competition' || activeNav === 'howto') && (
-        <section className="pt-28 pb-16 px-4 sm:px-6">
-          <div className="max-w-5xl mx-auto">
-            {navHistory.length > 0 && (
-              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
-                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
-              </button>
-            )}
-            <h1 className="text-4xl font-black mb-2">How to Play</h1>
-            <p className="text-gray-400 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
-
-            {/* Steps */}
-            <div className="space-y-4 mb-12">
-              {[
-                { n:'1', t:'Create or Join a Team', d:'Scan the QR code at your pub or click Sign Up. Choose to create your own team or join one with a team code.', bullets:['Buy-in set by your competition — paid by captain or split among members','Invite up to 10+ members via your unique team code','Members must be approved by the captain before joining'] },
-                { n:'2', t:'Confirm Buy-In', d:'Before the season starts all team members must confirm their deposit contribution.', bullets:['Buy-in amount is set by the competition host','Captain can track who has and hasn\'t paid','Competition doesn\'t officially start until all deposits confirmed'] },
-                { n:'3', t:'Submit Your Weekly Bet', d:'Place your bet on any platform, then submit the screenshot via the website.', bullets:['Weekly bet limit set per competition — split how you like across legs','Must submit before first leg starts','Final week has a boosted bet limit for a big finish','You keep all your winnings!'] },
-                { n:'4', t:'Track Results', d:'AI reads your bet slip and updates leg-by-leg results every 3 hours from the first event start.', bullets:['Green = won, Red = lost, Orange = in progress (live)','Team leaderboard updates in real-time','Click any team to see their full bet slip'] },
-                { n:'5', t:'Win the Jackpot', d:'Highest total winnings at season end takes the prize pool.', bullets:['Payout depends on number of teams','Final week has $200 bet for big finish','Top 2-3 teams paid depending on competition size'] },
-              ].map(s => (
-                <div key={s.n} className="bg-white/3 border border-white/8 rounded-xl p-5 flex gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-black text-lg flex-shrink-0">{s.n}</div>
-                  <div>
-                    <h3 className="font-bold text-base mb-1">{s.t}</h3>
-                    <p className="text-gray-400 text-sm mb-2">{s.d}</p>
-                    <ul className="space-y-1">
-                      {s.bullets.map((b, i) => <li key={i} className="text-gray-500 text-xs flex gap-1.5 items-start"><ChevronRight className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />{b}</li>)}
-                    </ul>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Competition Rules */}
-            <h2 className="text-2xl font-black mb-2">Competition Rules</h2>
-            <p className="text-gray-400 mb-8">The detailed rules that govern how each season runs.</p>
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-white/3 border border-white/8 rounded-xl p-6">
-                <h3 className="text-lg font-bold mb-4 text-amber-400">Betting Rules</h3>
-                <ul className="space-y-3 text-sm text-gray-300">
-                  {[['Flexible buy-in','set per competition — goes to the jackpot'],['Custom weekly limit','split how you like across multiple bets'],['Any sport or racing','you choose the platform and bookmaker'],['Submit before','the first leg of your bet starts'],['Final week','boosted bet limit for the big finish'],['You keep','all winnings from your bets']].map(([b,r],i) => (
-                    <li key={i} className="flex gap-2 items-start"><ChevronRight className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" /><span><strong className="text-white">{b}</strong> {r}</span></li>
-                  ))}
-                </ul>
-              </div>
-              <div className="bg-white/3 border border-white/8 rounded-xl p-6">
-                <h3 className="text-lg font-bold mb-4 text-amber-400">Season Lengths</h3>
-                <div className="space-y-3">
-                  {[['Full Season','32 weeks','border-amber-500'],['Half Season','16 weeks','border-amber-400/60'],['Quarter Season','8 weeks','border-amber-300/40']].map(([n,w,b]) => (
-                    <div key={n} className={`bg-black/30 rounded-lg p-4 border-l-4 ${b}`}>
-                      <div className="font-bold text-sm">{n}</div>
-                      <div className="text-gray-500 text-xs mt-1">{w} of competition</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 mb-8">
-              <h3 className="text-lg font-bold mb-3 text-amber-400">The Punting Week</h3>
-              <p className="text-gray-300 text-sm">Every competition week finishes <strong className="text-white">11:59PM Tuesday</strong> and starts <strong className="text-white">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a <strong className="text-white">boosted bet limit</strong> — exact amounts are set by your competition host.</p>
-            </div>
-
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
-              <h3 className="font-bold text-lg mb-2">Ready to play?</h3>
-              <p className="text-gray-400 text-sm mb-4">Get your mates together and start this week!</p>
-              <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-amber-500 to-amber-600 text-black px-8 py-3 rounded-xl font-bold transition-all hover:scale-105">Create Team Now</button>
-            </div>
-          </div>
-        </section>
+        <CompetitionView navHistory={navHistory} goBack={goBack} setSignupMode={setSignupMode} setShowSignupModal={setShowSignupModal} />
       )}
 
       {/* ── LEADERBOARD ───────────────────────────────────────────────────── */}
-      {activeNav === 'leaderboard' && (() => {
-        // Derive ticker messages from settled leg result notes across all teams
-        const tickerItems = enrichedLeaderboardTeams.flatMap(t =>
-          (t.bets || []).flatMap(b =>
-            (b.legs || [])
-              .filter(l => l.resultNote && ['won','lost','in_progress'].includes(l.status))
-              .map(l => `${l.selection} — ${l.resultNote}`)
-          )
-        );
-        const ticker = tickerItems.length > 0 ? tickerItems
-          : ['Results update automatically · Click "Check Results" to refresh · Expand a team row to see the full bet slip'];
-        return (
-        <section className="pt-28 pb-16 px-0 sm:px-0">
-          <div className="max-w-5xl mx-auto px-2 sm:px-6">
-            {navHistory.length > 0 && (
-              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-4 px-2 transition-colors group">
-                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
-              </button>
-            )}
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
-              <div>
-                <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-                <p className="text-gray-500 text-sm">
-                  {(() => {
-                    const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
-                    const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
-                    const total = comp?.weeks || '—';
-                    return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
-                  })()}
-                </p>
-                {lastChecked && <p className="text-gray-600 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
-                {resultLog.slice(0,2).map((l, i) => <p key={i} className="text-green-400 text-xs mt-0.5">✓ {l.time} — {l.message}</p>)}
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs">
-                  Submit Bet
-                </button>
-              </div>
-            </div>
-
-            {/* Competition switcher — shown whenever there are multiple active competitions */}
-            {activeCompetitions.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-                <span className="text-xs text-gray-500 font-semibold">Competition:</span>
-                {activeCompetitions.map(c => (
-                  <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Team toggle — shown when user has multiple teams in the same competition */}
-            {isLoggedIn && teamsInViewedComp.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-                <span className="text-xs text-gray-500 font-semibold">Team:</span>
-                {teamsInViewedComp.map(t => (
-                  <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                    {t.team_name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* View toggle */}
-            <div className="flex gap-1 mb-4 px-2">
-              {[['current','This Week'],['season','Season View']].map(([v,l]) => (
-                <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${leaderboardView === v ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-gray-500 hover:text-gray-300'}`}>{l}</button>
-              ))}
-            </div>
-
-            {/* Column headers */}
-            {leaderboardView === 'current' && (
-              <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <div className="col-span-1">#</div>
-                <div className="col-span-3">Team</div>
-                <div className="col-span-2 text-center">Total</div>
-                <div className="col-span-6 pl-3 border-l border-white/5">This Week's Bet</div>
-              </div>
-            )}
-
-            {leaderboardView === 'season' && (
-              <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <div className="col-span-1">#</div>
-                <div className="col-span-3">Team</div>
-                <div className="col-span-2 text-center">Total</div>
-                <div className="col-span-6 pl-3 border-l border-white/5">Week History</div>
-              </div>
-            )}
-
-            {/* Rows */}
-            <div className="space-y-1.5">
-              {enrichedLeaderboardTeams.length === 0 && (
-                <div className="text-center py-16">
-                  <Trophy className="w-16 h-16 text-amber-500/30 mb-4 mx-auto" />
-                  <p className="text-gray-400 font-semibold text-lg">No teams yet</p>
-                  <p className="text-gray-600 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
-                </div>
-              )}
-              {enrichedLeaderboardTeams.map((team, idx) => {
-                const isMe = isLoggedIn && team.team === myTeamName;
-                const currentWeek = currentWeekNum + 1;
-                const weekBet = team.bets.find(b => b.weekNumber === currentWeek) || null;
-                const isOpen = selectedTeamIdx === idx;
-
-                // Derive status from legs (same logic as BetSlipCard) so row colour
-                // updates as soon as individual legs settle, even before DB overall_status syncs
-                const computedStatus = (() => {
-                  const legs = weekBet?.legs || [];
-                  if (!legs.length) return weekBet?.overallStatus || 'pending';
-                  if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-                  if (legs.some(l => l.status === 'pending'))     return 'pending';
-                  if (!legs.every(l => ['won','lost','void'].includes(l.status))) return 'pending';
-                  if (legs.every(l => l.status === 'won'))  return 'won';
-                  if (legs.some(l => l.status === 'lost'))  return 'lost';
-                  return 'partial';
-                })();
-
-                const rowBg = isMe
-                  ? 'border-amber-400/40 bg-amber-500/5'
-                  : computedStatus === 'won'         ? 'border-green-500/20 bg-green-950/10'
-                  : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-950/10'
-                  : computedStatus === 'partial'     ? 'border-yellow-500/20 bg-yellow-950/10'
-                  : computedStatus === 'in_progress' ? 'border-orange-500/20 bg-orange-950/10'
-                  : 'border-white/5 bg-white/2';
-
-                return (
-                  <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-amber-400/30' : ''}`}>
-                    <div className="grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-white/3 transition-colors" onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}>
-                      {/* Rank */}
-                      <div className="col-span-1">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
-                      </div>
-                      {/* Name */}
-                      <div className="col-span-4 sm:col-span-3 min-w-0 pl-1">
-                        <div className="font-bold text-sm truncate flex items-center gap-1">
-                          {team.team}
-                          {isMe && <span className="text-amber-400 text-xs">(You)</span>}
-                        </div>
-                        <div className="text-gray-600 text-xs">{team.members} members</div>
-                      </div>
-                      {/* Total */}
-                      <div className="hidden sm:block col-span-2 text-center">
-                        <div className="font-bold text-amber-400 text-sm">{team.total}</div>
-                      </div>
-
-                      {/* This week / season */}
-                      <div className="col-span-7 sm:col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-white/5">
-                        {leaderboardView === 'current' ? (
-                          weekBet ? (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge status={computedStatus} />
-                              <span className="text-white text-xs font-semibold">{weekBet.type}</span>
-                              <span className="text-gray-500 text-xs">·</span>
-                              <span className="text-green-400 text-xs font-semibold">{weekBet.stake}</span>
-                              <span className="hidden sm:inline text-gray-500 text-xs">→</span>
-                              <span className="hidden sm:inline text-green-400 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
-                              {weekBet.legs?.length > 0 && (
-                                <div className="flex gap-1 ml-auto">
-                                  {weekBet.legs.map((leg, li) => <LegDot key={li} leg={leg} />)}
-                                </div>
-                              )}
-                            </div>
-                          ) : <span className="text-gray-700 text-xs italic">No bet submitted</span>
-                        ) : (
-                          // Season view — week history dots
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {team.weekHistory?.length > 0 ? team.weekHistory.map((result, wi) => {
-                              const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-white/5 border-white/10 text-gray-600';
-                              return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
-                            }) : <span className="text-gray-700 text-xs italic">No history yet</span>}
-                            <span className="text-amber-400 font-bold text-sm ml-auto">{team.total}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Expanded bet slip */}
-                    {isOpen && (
-                      <div className="border-t border-white/5 bg-black/30 px-3 py-3">
-                        {/* Member roster */}
-                        {team.memberList?.length > 0 && (
-                          <div className="mb-3 pb-3 border-b border-white/5">
-                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2 flex items-center gap-1"><Users className="w-3 h-3" /> Members</p>
-                            <div className="flex flex-wrap gap-2">
-                              {team.memberList.map((m, mi) => (
-                                <div key={mi} className="flex items-center gap-1.5 bg-white/5 rounded-full px-2.5 py-1">
-                                  <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
-                                    {(m.name || m).charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className="text-xs text-gray-300 font-medium">{m.name || m}</span>
-                                  {m.role === 'captain' && <span className="text-amber-400 text-xs">👑</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-gray-600 text-sm italic text-center py-4">No bet submitted this week</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-        );
-      })()}
+      {activeNav === 'leaderboard' && (
+        <ErrorBoundary variant="section" label="Leaderboard">
+          <LeaderboardView />
+        </ErrorBoundary>
+      )}
 
       {/* ── WEEKLY SUMMARY ────────────────────────────────────────────────── */}
-      {activeNav === 'weekly' && (() => {
-        const comp       = activeCompetitions.find(c => c.code === effectiveViewedCode);
-        const totalWeeks = comp?.weeks || 8;
-        const thisWeek   = currentWeekNum + 1;
-        const prevWeek   = thisWeek - 1;
-
-        // ── Previous week data (the review) ─────────────────────────────
-        const prevWeekData = leaderboardTeams.map(t => {
-          const bet = (t.bets || []).find(b => b.weekNumber === prevWeek) || null;
-          return { team: t, bet, isMyTeam: t.team === myTeamName };
-        });
-        const prevBetsSubmitted  = prevWeekData.filter(d => d.bet);
-        const prevWinners        = prevBetsSubmitted.filter(d => d.bet.overallStatus === 'won');
-        const prevLosers         = prevBetsSubmitted.filter(d => d.bet.overallStatus === 'lost');
-        const prevPending        = prevBetsSubmitted.filter(d => !['won','lost','partial'].includes(d.bet.overallStatus));
-        const prevSettledCount   = prevWinners.length + prevLosers.length;
-        const prevWinRate        = prevSettledCount > 0 ? Math.round((prevWinners.length / prevSettledCount) * 100) : null;
-
-        // Biggest win last week
-        const bestPrevWin = prevWinners
-          .sort((a, b) => parseFloat((b.bet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) - parseFloat((a.bet.estimatedReturn || '0').replace(/[^0-9.]/g,'')))[0];
-
-        // My team last week
-        const myPrevData = prevWeekData.find(d => d.isMyTeam);
-
-        // ── This week data (the look-ahead) ─────────────────────────────
-        const allThisWeekBets = leaderboardTeams.flatMap(t =>
-          (t.bets || []).filter(b => b.weekNumber === thisWeek)
-        );
-        const teamsNoBet = leaderboardTeams.filter(t => !(t.bets || []).some(b => b.weekNumber === thisWeek));
-        const cutoffStr  = nextWedCutoff.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
-
-        // Season totals
-        const totalWinnings = leaderboardTeams.reduce((sum, t) => sum + parseFloat((t.total || '$0').replace(/[^0-9.]/g,'')) || 0, 0);
-        const leader = leaderboardTeams[0];
-
-        return (
-          <section className="pt-28 pb-16 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto">
-
-              {navHistory.length > 0 && (
-                <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
-                  <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
-                </button>
-              )}
-
-              {/* Page header */}
-              <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
-              <p className="text-gray-500 mb-4 text-sm">
-                Week {thisWeek} of {totalWeeks}{comp?.name ? ` · ${comp.name}` : ''}
-              </p>
-
-              {/* Competition switcher — shown whenever there are multiple active competitions */}
-              {activeCompetitions.length > 1 && (
-                <div className="flex items-center gap-2 flex-wrap mb-3">
-                  <span className="text-xs text-gray-500 font-semibold">Competition:</span>
-                  {activeCompetitions.map(c => (
-                    <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Team toggle — shown when user has multiple teams in the same competition */}
-              {isLoggedIn && teamsInViewedComp.length > 1 && (
-                <div className="flex items-center gap-2 flex-wrap mb-8">
-                  <span className="text-xs text-gray-500 font-semibold">Team:</span>
-                  {teamsInViewedComp.map(t => (
-                    <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                      {t.team_name}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* ── PREVIOUS WEEK REVIEW ── */}
-              {prevWeek >= 1 ? (
-                <>
-                  <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-xl font-black text-white">Week {prevWeek} Review</h2>
-                    {prevWinRate !== null && (
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${prevWinRate >= 50 ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'bg-red-500/15 border-red-500/40 text-red-400'}`}>
-                        {prevWinRate}% win rate
-                      </span>
-                    )}
-                    {prevPending.length > 0 && (
-                      <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">{prevPending.length} pending</span>
-                    )}
-                  </div>
-
-                  {/* My team callout */}
-                  {myPrevData && (
-                    <div className={`rounded-xl p-5 mb-4 border-2 ${
-                      myPrevData.bet?.overallStatus === 'won' ? 'bg-green-950/30 border-green-500/40' :
-                      myPrevData.bet?.overallStatus === 'lost' ? 'bg-red-950/30 border-red-500/30' :
-                      myPrevData.bet ? 'bg-amber-950/20 border-amber-500/20' : 'bg-white/3 border-white/8'
-                    }`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Your Team — {myPrevData.team.team}</p>
-                          {myPrevData.bet ? (
-                            <>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-2xl font-black ${myPrevData.bet.overallStatus === 'won' ? 'text-green-400' : myPrevData.bet.overallStatus === 'lost' ? 'text-red-400' : 'text-amber-400'}`}>
-                                  {myPrevData.bet.overallStatus === 'won' ? 'WON!' : myPrevData.bet.overallStatus === 'lost' ? 'Lost' : myPrevData.bet.overallStatus === 'partial' ? 'Partial' : 'Pending'}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-300">
-                                {myPrevData.bet.type} · Stake: <span className="text-white font-semibold">{myPrevData.bet.stake}</span>
-                                {myPrevData.bet.overallStatus === 'won' && <> · Return: <span className="text-green-400 font-bold">{myPrevData.bet.estimatedReturn}</span></>}
-                                {myPrevData.bet.submittedBy && <> · Placed by <span className="text-amber-400">{myPrevData.bet.submittedBy}</span></>}
-                              </p>
-                              {(myPrevData.bet.legs || []).length > 0 && (
-                                <div className="flex gap-1 mt-2 flex-wrap">
-                                  {myPrevData.bet.legs.map((leg, li) => {
-                                    const lc = leg.status === 'won' ? 'bg-green-500/30 border-green-500/50 text-green-300' : leg.status === 'lost' ? 'bg-red-500/30 border-red-500/50 text-red-300' : 'bg-white/5 border-white/10 text-gray-500';
-                                    return <span key={li} className={`text-xs px-2 py-0.5 rounded border ${lc}`}>{leg.selection}</span>;
-                                  })}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-gray-500 text-sm italic">No bet submitted for Week {prevWeek}</p>
-                          )}
-                        </div>
-                        {myPrevData.team.rank && (
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xs text-gray-500">Season rank</p>
-                            <p className="text-2xl font-black text-amber-400">#{myPrevData.team.rank}</p>
-                            <p className="text-xs text-gray-500">{myPrevData.team.total}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* All teams results */}
-                  <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-6">
-                    <h3 className="font-bold text-amber-400 mb-4">How Everyone Did — Week {prevWeek}</h3>
-                    {prevBetsSubmitted.length === 0 ? (
-                      <p className="text-gray-600 text-sm italic">No bets were submitted last week.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {/* Winners first */}
-                        {prevWinners.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Trophy className="w-3 h-3" /> Winners</p>
-                            <div className="space-y-2">
-                              {prevWinners.map(({ team: t, bet }) => (
-                                <div key={t.id} className="bg-green-950/20 border border-green-500/15 rounded-lg px-3 py-2.5 flex items-start justify-between gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-semibold text-sm text-white">{t.team}</span>
-                                      {t.team === myTeamName && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">You</span>}
-                                      <span className="text-xs text-gray-500">{bet.type} · {(bet.legs||[]).length} leg{(bet.legs||[]).length !== 1 ? 's' : ''}</span>
-                                      {bet.submittedBy && <span className="text-xs text-gray-600">by {bet.submittedBy}</span>}
-                                    </div>
-                                    {(bet.legs||[]).length > 0 && (
-                                      <div className="flex gap-1 mt-1.5 flex-wrap">
-                                        {bet.legs.map((leg, li) => (
-                                          <span key={li} className="text-xs bg-green-500/10 border border-green-500/20 text-green-300 px-1.5 py-0.5 rounded">{leg.selection}</span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <p className="text-green-400 font-bold text-sm">{bet.estimatedReturn}</p>
-                                    <p className="text-gray-600 text-xs">from {bet.stake}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Losers */}
-                        {prevLosers.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1"><XCircle className="w-3 h-3" /> Bust</p>
-                            <div className="space-y-2">
-                              {prevLosers.map(({ team: t, bet }) => (
-                                <div key={t.id} className="bg-red-950/10 border border-red-500/10 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-semibold text-sm text-gray-300">{t.team}</span>
-                                    {t.team === myTeamName && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">You</span>}
-                                    <span className="text-xs text-gray-600">{bet.type} · {(bet.legs||[]).length} legs</span>
-                                    {bet.submittedBy && <span className="text-xs text-gray-600">by {bet.submittedBy}</span>}
-                                  </div>
-                                  <p className="text-red-400 text-sm font-semibold flex-shrink-0">{bet.stake} lost</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Pending */}
-                        {prevPending.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> Still Pending</p>
-                            <div className="space-y-1">
-                              {prevPending.map(({ team: t, bet }) => (
-                                <div key={t.id} className="bg-amber-950/10 border border-amber-500/10 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
-                                  <span className="text-sm text-gray-400">{t.team}</span>
-                                  <span className="text-xs text-amber-400">{bet.type}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* No bet */}
-                        {prevWeekData.filter(d => !d.bet).length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">— No Bet Submitted</p>
-                            <div className="flex flex-wrap gap-2">
-                              {prevWeekData.filter(d => !d.bet).map(({ team: t }) => (
-                                <span key={t.id} className="text-xs text-gray-600 bg-white/3 border border-white/5 rounded px-2 py-1">{t.team}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Key stat strip for previous week */}
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    {[
-                      ['Week ' + prevWeek + ' Bets', prevBetsSubmitted.length || '—', 'text-amber-400'],
-                      ['Win Rate', prevWinRate !== null ? `${prevWinRate}%` : '—', prevWinRate !== null && prevWinRate >= 50 ? 'text-green-400' : 'text-red-400'],
-                      ['Season Pot', totalWinnings > 0 ? `$${totalWinnings.toLocaleString()}` : '$0', 'text-blue-400'],
-                    ].map(([l, v, c]) => (
-                      <div key={l} className="bg-white/3 border border-white/8 rounded-xl p-4 text-center">
-                        <p className="text-gray-500 text-xs mb-1">{l}</p>
-                        <p className={`text-2xl font-black ${c}`}>{v}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="bg-white/3 border border-white/8 rounded-xl p-6 mb-8 text-center">
-                  <p className="text-gray-500 text-sm">This is Week 1 — no previous week to review yet.</p>
-                </div>
-              )}
-
-              {/* ── THIS WEEK OUTLOOK ── */}
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xl font-black text-white">Week {thisWeek} — Up Next</h2>
-                <span className="text-xs text-gray-500 bg-white/5 border border-white/8 px-2 py-0.5 rounded-full">Deadline {cutoffStr}</span>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4 mb-6">
-                <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-5">
-                  <h3 className="font-bold text-amber-400 mb-2">⏰ Betting Window Open</h3>
-                  {currentBettor && <p className="text-gray-300 text-sm">It's <strong className="text-white">{currentBettor}</strong>'s turn to place the bet.</p>}
-                  <p className="text-gray-500 text-xs mt-2">Deadline: <span className="text-white">{cutoffStr}</span></p>
-                  {teamsNoBet.length > 0 && <p className="text-gray-600 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
-                </div>
-                <div className="bg-white/3 border border-white/8 rounded-xl p-5">
-                  <h3 className="font-bold text-amber-400 mb-2 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> Season Standings</h3>
-                  {leaderboardTeams.slice(0, 3).map((t, i) => (
-                    <div key={t.id} className="flex items-center gap-2 py-1">
-                      <span className={`text-xs font-black w-5 ${i === 0 ? 'text-amber-400' : 'text-gray-500'}`}>#{i + 1}</span>
-                      <span className={`text-sm flex-1 truncate ${t.team === myTeamName ? 'text-amber-300 font-bold' : 'text-gray-300'}`}>{t.team}{t.team === myTeamName ? ' (You)' : ''}</span>
-                      <span className="text-amber-400 text-xs font-bold">{t.total}</span>
-                    </div>
-                  ))}
-                  {leaderboardTeams.length > 3 && <p className="text-gray-600 text-xs mt-1">+{leaderboardTeams.length - 3} more teams</p>}
-                </div>
-              </div>
-            </div>
-          </section>
-        );
-      })()}
+      {activeNav === 'weekly' && (
+        <ErrorBoundary variant="section" label="Weekly Summary">
+          <WeeklySummaryView />
+        </ErrorBoundary>
+      )}
 
       {/* ── MY TEAM ───────────────────────────────────────────────────────── */}
       {activeNav === 'team' && (
-        <section className="pt-28 pb-16 px-4 sm:px-6">
-          <div className="max-w-4xl mx-auto">
-            {navHistory.length > 0 && (
-              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
-                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
-              </button>
-            )}
-            {!isLoggedIn && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 text-center">
-                <p className="text-amber-300 text-sm">Showing demo data. <button onClick={() => setShowLoginModal(true)} className="underline font-semibold">Log in</button> to see your team.</p>
-              </div>
-            )}
-
-            {/* Competition switcher for My Team page */}
-            {isLoggedIn && userCompetitions.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-3">
-                <span className="text-xs text-gray-500 font-semibold">Competition:</span>
-                {userCompetitions.map(c => (
-                  <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Team toggle — shown when user has multiple teams in the same competition */}
-            {isLoggedIn && teamsInViewedComp.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap mb-5">
-                <span className="text-xs text-gray-500 font-semibold">Team:</span>
-                {teamsInViewedComp.map(t => (
-                  <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}>
-                    {t.team_name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Team header */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
-              <div>
-                <h1 className="text-3xl font-black mb-1">{myTeamName}</h1>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <PermissionBadge role={viewedRole} />
-                  <span className="text-gray-500 text-sm">·</span>
-                  <span className="text-gray-400 text-sm">#{myTeamData?.rank || 1} on leaderboard</span>
-                  {effectiveViewedCode && (
-                    <span className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">{activeCompetitions.find(c => c.code === effectiveViewedCode)?.name || effectiveViewedCode}</span>
-                  )}
-                  {!allDepositsConfirmed && <span className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-2 py-0.5 rounded-full">⚠ Deposits pending</span>}
-                  {allDepositsConfirmed && <span className="bg-green-500/20 border border-green-500/40 text-green-400 text-xs px-2 py-0.5 rounded-full">✓ All deposits confirmed</span>}
-                </div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                {!teamFinalised && (
-                  <button onClick={() => setShowInviteModal(true)} className="bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
-                )}
-                {viewedRole === 'captain' && (
-                  <button onClick={() => setShowOrderModal(true)} className="bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-xs font-semibold">Betting Order</button>
-                )}
-                {viewedRole === 'captain' && !teamFinalised && (
-                  <button onClick={() => setShowFinaliseModal(true)} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" />Finalise Team
-                  </button>
-                )}
-                {viewedRole === 'captain' && teamFinalised && (
-                  <button onClick={unfinaliseTeam} className="bg-gray-500/20 border border-gray-500/30 text-gray-400 px-3 py-2 rounded-lg text-xs font-semibold">Re-open Team</button>
-                )}
-                <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Submit Bet</button>
-              </div>
-            </div>
-
-            {/* Captain tip — only shown if team has no members yet */}
-            {viewedRole === 'captain' && teamMembers.length <= 1 && !teamFinalised && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start gap-3">
-                <span className="text-xl flex-shrink-0">👑</span>
-                <div>
-                  <p className="font-bold text-amber-400 text-sm mb-1">Invite your team</p>
-                  <p className="text-gray-400 text-xs leading-relaxed">Share your Team Code <strong className="text-amber-300">{currentUser?.teamCode}</strong> with friends. Members you invite need your approval before joining.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {[['Members', teamMembers.length, 'text-white'], ['Total Won', myTeamData?.total || '$0', 'text-green-400'], ['Position', `#${myTeamData?.rank || 1}`, 'text-amber-400']].map(([l,v,c]) => (
-                <div key={l} className="bg-white/3 border border-white/8 rounded-xl p-4 text-center">
-                  <p className="text-gray-500 text-xs mb-1">{l}</p>
-                  <p className={`text-xl font-black ${c}`}>{v}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* ── DEPOSIT BANNER (pre-finalise only) ─────────────────────── */}
-            {viewedRole === 'captain' && !teamFinalised && (
-              <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 mb-5 flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl flex-shrink-0">💰</span>
-                  <div>
-                    <p className="font-bold text-amber-400 text-sm mb-1">Buy-In Not Yet Calculated</p>
-                    <p className="text-gray-400 text-xs leading-relaxed">Once you've confirmed all members have joined, click <strong className="text-amber-300">Finalise Team</strong> to lock in the roster and automatically calculate each member's deposit amount.</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowFinaliseModal(true)} className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap">Finalise Team</button>
-              </div>
-            )}
-
-            {/* Betting order tracker */}
-            <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-amber-400">🎯 Betting Order</h3>
-                {viewedRole === 'captain' && <button onClick={() => setShowOrderModal(true)} className="text-gray-500 hover:text-amber-400 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>}
-              </div>
-              <div className="space-y-2">
-                {bettingOrder.map((name, i) => {
-                  const isCurrent = i === currentWeekBettorIdx % bettingOrder.length;
-                  const isPast = i < currentWeekBettorIdx % bettingOrder.length;
-                  return (
-                    <div key={i} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${isCurrent ? 'bg-amber-500/15 border border-amber-500/30' : 'bg-black/20 border border-transparent'}`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? 'bg-amber-500 text-black' : isPast ? 'bg-green-500/20 border border-green-500/40 text-green-400' : 'bg-white/5 text-gray-500'}`}>
-                        {isPast ? '✓' : i + 1}
-                      </div>
-                      <div className="flex-1">
-                        <p className={`text-sm font-semibold ${isCurrent ? 'text-amber-300' : isPast ? 'text-gray-400 line-through' : 'text-gray-300'}`}>{name}</p>
-                        <p className="text-gray-600 text-xs">Week {i + 1}</p>
-                      </div>
-                      {isCurrent && <span className="text-amber-400 text-xs font-bold bg-amber-500/10 px-2 py-0.5 rounded-full">Current</span>}
-                      {isPast && <span className="text-green-400 text-xs">Done</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* This week's bets */}
-            <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-green-400">📊 This Week's Bets</h3>
-              </div>
-              {(() => {
-                const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
-                return thisWeekBets.length > 0 ? (
-                  <div className="space-y-3">
-                    {thisWeekBets.map((bet, i) => (
-                      <div key={i}>
-                        <BetSlipCard bet={bet} />
-                        <div className="flex justify-end mt-1.5">
-                          <button
-                            onClick={() => shareBet(bet)}
-                            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-400 border border-white/8 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/8 px-3 py-1.5 rounded-lg transition-all"
-                          >
-                            <Share2 className="w-3 h-3" /> Share Bet
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-3 text-sm">No bets submitted yet this week</p>
-                    {currentBettor && <p className="text-amber-400 text-xs mb-4">It's <strong>{currentBettor}</strong>'s turn to bet</p>}
-                    <button onClick={() => setShowBetAnalyzer(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-5 rounded-lg text-sm">Submit Bet</button>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Previous Weeks Bet History */}
-            {(() => {
-              const pastBets = (myTeamData?.bets || [])
-                .filter(b => b.weekNumber < currentWeekNum + 1 && b.weekNumber > 0)
-                .sort((a, b) => b.weekNumber - a.weekNumber);
-              if (!pastBets.length) return null;
-              return (
-                <div className="bg-white/3 border border-white/8 rounded-xl p-5 mb-5">
-                  <h3 className="font-bold text-purple-400 mb-4">📜 Previous Weeks</h3>
-                  <div className="space-y-3">
-                    {pastBets.map((bet, i) => {
-                      const legs = bet.legs || [];
-                      const status = (() => {
-                        if (!legs.length) return bet.overallStatus || 'pending';
-                        if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-                        if (legs.some(l => l.status === 'pending'))     return 'pending';
-                        if (!legs.every(l => ['won','lost','void'].includes(l.status))) return 'pending';
-                        if (legs.every(l => l.status === 'won')) return 'won';
-                        if (legs.some(l => l.status === 'lost')) return 'lost';
-                        return 'partial';
-                      })();
-                      const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'partial' ? 'text-amber-400 bg-amber-500/15 border-amber-500/40' : 'text-gray-400 bg-white/5 border-white/10';
-                      const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
-                      return (
-                        <div key={bet.id || i} className="bg-black/30 border border-white/8 rounded-xl overflow-hidden">
-                          {/* Row summary */}
-                          <div className="flex items-center gap-3 px-4 py-3">
-                            <div className="w-9 h-9 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
-                              <span className="text-purple-400 font-black text-xs">W{bet.weekNumber}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-white text-sm font-semibold">{bet.type || 'Multi'}</span>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${resultCls}`}>{resultLabel}</span>
-                                {bet.submittedBy && (
-                                  <span className="text-xs text-gray-500 bg-white/5 border border-white/8 rounded px-2 py-0.5 inline-flex items-center gap-1"><User className="w-3 h-3" /> {bet.submittedBy}</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 mt-0.5">
-                                <span className="text-gray-500 text-xs">Stake: <span className="text-gray-300">{bet.stake}</span></span>
-                                {status === 'won' && <span className="text-green-400 text-xs font-semibold">Return: {bet.estimatedReturn}</span>}
-                                <span className="text-gray-600 text-xs">{bet.submittedAt}</span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => shareBet(bet)}
-                              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-400 border border-white/8 hover:border-amber-500/30 bg-white/3 hover:bg-amber-500/8 px-3 py-1.5 rounded-lg transition-all flex-shrink-0"
-                              title="Share this bet"
-                            >
-                              <Share2 className="w-3 h-3" /> Share
-                            </button>
-                          </div>
-                          {/* Full bet card */}
-                          <div className="border-t border-white/5">
-                            <BetSlipCard bet={bet} compact onCheckBet={null} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Pending approvals */}
-            {pendingMembers.length > 0 && (
-              <div className="bg-orange-950/20 border border-orange-500/30 rounded-xl p-5 mb-5">
-                <h3 className="font-bold text-orange-400 mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Pending Approvals ({pendingMembers.length})</h3>
-                <div className="space-y-2">
-                  {pendingMembers.map(m => (
-                    <div key={m.phone} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2.5">
-                      <div>
-                        <p className="font-semibold text-sm">{m.name}</p>
-                        <p className="text-gray-500 text-xs">{m.phone} · Joined {m.joinedAt}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => approveMember(m.user_id)} className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Approve</button>
-                        <button onClick={() => rejectMember(m.user_id)} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><AlertCircle className="w-3 h-3" />Reject</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Team members */}
-            <div className={`border rounded-xl p-5 ${teamFinalised ? 'bg-green-950/10 border-green-500/20' : 'bg-white/3 border-white/8'}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  {teamFinalised && <CheckCircle className="w-4 h-4 text-green-400" />}
-                  <h3 className={`font-bold flex items-center gap-1.5 ${teamFinalised ? 'text-green-400' : 'text-amber-400'}`}><Users className="w-4 h-4" /> Team Members</h3>
-                  {teamFinalised && depositPerMember && (
-                    <span className="text-xs bg-green-500/15 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full font-semibold">${depositPerMember.toLocaleString()} / member</span>
-                  )}
-                </div>
-                {teamFinalised && viewedRole === 'captain' && (
-                  <button onClick={unfinaliseTeam} className="text-gray-600 hover:text-gray-400 text-xs border border-gray-700 px-2 py-1 rounded-lg">Re-open</button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {teamMembers.map(m => (
-                  <div key={m.user_id || m.phone} className={`rounded-xl px-3 py-3 flex items-start gap-3 ${teamFinalised ? (m.depositPaid ? 'bg-green-950/30 border border-green-500/20' : 'bg-red-950/20 border border-red-500/15') : 'bg-black/30'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${teamFinalised ? (m.depositPaid ? 'bg-green-500 text-black' : 'bg-red-500/20 border border-red-500/40 text-red-400') : 'bg-amber-500/20 border border-amber-500/30 text-amber-400'}`}>
-                      {teamFinalised ? (m.depositPaid ? '✓' : '!') : (m.name || '?').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-semibold text-sm truncate">{m.name}</p>
-                        {m.role === 'captain' && <span className="text-amber-400 text-sm leading-none">👑</span>}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <PermissionBadge role={m.role} />
-                        {teamFinalised && depositPerMember ? (
-                          m.depositPaid
-                            ? <span className="text-green-400 text-xs font-bold flex items-center gap-0.5"><CheckCircle className="w-3 h-3"/>${depositPerMember.toLocaleString()} paid</span>
-                            : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3"/>Unpaid — ${depositPerMember.toLocaleString()} owing</span>
-                        ) : (
-                          m.depositPaid
-                            ? <span className="text-green-400 text-xs flex items-center gap-0.5"><CheckCircle className="w-3 h-3"/>Deposit paid</span>
-                            : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3"/>Deposit pending</span>
-                        )}
-                        {m.canBet && m.role !== 'view-only' && <span className="text-blue-400 text-xs">Can bet</span>}
-                      </div>
-                    </div>
-                    {viewedRole === 'captain' && m.role !== 'captain' && (
-                      <div className="flex gap-1 flex-shrink-0">
-                        <select value={m.role} onChange={e => updateMemberRole(m.phone, e.target.value)} className="bg-black/50 border border-white/10 text-gray-300 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-amber-500/50">
-                          <option value="member">Member</option>
-                          <option value="view-only">View Only</option>
-                        </select>
-                        <button onClick={() => toggleDepositPaid(m.phone)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
-                          {m.depositPaid ? 'Mark Unpaid' : 'Mark Paid'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {/* Payment summary — only shown when finalised */}
-              {teamFinalised && depositPerMember && teamMembers.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-green-500/15 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">{teamMembers.filter(m => m.depositPaid).length} of {teamMembers.length} paid</p>
-                    <p className="text-xs text-gray-600 mt-0.5">Collected: <span className="text-green-400 font-bold">${(teamMembers.filter(m => m.depositPaid).length * depositPerMember).toLocaleString()}</span></p>
-                  </div>
-                  {teamMembers.every(m => m.depositPaid)
-                    ? <span className="bg-green-500 text-black text-xs font-black px-3 py-1 rounded-full">🎉 All Paid!</span>
-                    : <span className="text-xs text-red-400">{teamMembers.filter(m => !m.depositPaid).length} still owing</span>
-                  }
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
+        <ErrorBoundary variant="section" label="My Team">
+          <MyTeamView
+            teamFinalised={teamFinalised}
+            depositPerMember={depositPerMember}
+            bettingOrder={bettingOrder}
+            pendingMembers={pendingMembers}
+            setShowInviteModal={setShowInviteModal}
+            setShowOrderModal={setShowOrderModal}
+            setShowFinaliseModal={setShowFinaliseModal}
+          />
+        </ErrorBoundary>
       )}
-
 
       {/* ══════════════════════════════════════════════════════════════════
           ADMIN PANEL
       ══════════════════════════════════════════════════════════════════ */}
-      {showAdminPanel && isAdminLoggedIn && (() => {
+      {showAdminPanel && isAdminLoggedIn && <ErrorBoundary variant="section" label="Admin Panel">{(() => {
         // ── Admin sub-components (inline) ──────────────────────────────
         const AdminCard = ({ title, value, sub, icon, color = 'text-amber-400' }) => (
           <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.10)"}}>
@@ -4148,7 +2992,7 @@ export default function PuntingClub() {
             </div>
           </section>
         );
-      })()}
+      })()}</ErrorBoundary>}
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-white/5 bg-black/30 py-10 px-4 sm:px-6">
@@ -5215,200 +4059,10 @@ export default function PuntingClub() {
 
       {/* ── FAQ ───────────────────────────────────────────────────────────────── */}
       {activeNav === 'faq' && (
-        <section className="pt-28 pb-16 px-4 sm:px-6">
-          <div className="max-w-3xl mx-auto">
-            {navHistory.length > 0 && (
-              <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-amber-400 text-sm font-semibold mb-6 transition-colors group">
-                <span className="text-lg leading-none group-hover:-translate-x-0.5 transition-transform">←</span> Back
-              </button>
-            )}
-
-            {/* Header */}
-            <div className="mb-10">
-              <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 rounded-full px-4 py-1.5 mb-4">
-                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">Help Centre</span>
-              </div>
-              <h1 className="text-4xl font-black mb-2">Frequently Asked Questions</h1>
-              <p className="text-gray-400">Everything you need to know about using Punting Club.</p>
-            </div>
-
-            {/* FAQ Categories */}
-            {[
-              {
-                category: 'Getting Started',
-                icon: <Sparkles className="w-4 h-4 text-amber-400" />,
-                items: [
-                  {
-                    q: 'How do I sign up?',
-                    a: 'Tap Sign Up in the top navigation bar. Enter your first name, mobile number, and password. Once registered you can create a new team or join an existing one using a team code.',
-                  },
-                  {
-                    q: 'How do I join a competition?',
-                    a: 'You join a competition by creating or joining a team with a valid competition code. Your competition host (pub, group organiser, etc.) will provide you with that code.',
-                  },
-                  {
-                    q: 'What is a team code?',
-                    a: 'A unique 6-character code that identifies your team. Share it with friends so they can join your team. You can find your team code on the My Team page once your team is created.',
-                  },
-                  {
-                    q: 'How many members can a team have?',
-                    a: 'Teams can have up to 10+ members. The captain must approve each member before they are officially part of the team.',
-                  },
-                ],
-              },
-              {
-                category: 'Placing Bets',
-                icon: <FileText className="w-4 h-4 text-amber-400" />,
-                items: [
-                  {
-                    q: 'How do I submit a bet?',
-                    a: 'Go to the Leaderboard page and tap "Submit Bet". Upload a screenshot of your bet slip from your bookmaker. Our AI will read the slip and extract all the details automatically.',
-                  },
-                  {
-                    q: 'What is the weekly bet limit?',
-                    a: 'The weekly bet limit is set by your competition host. Your team can split that limit across multiple individual bets — you are not limited to one multi per week.',
-                  },
-                  {
-                    q: 'When is the deadline to submit a bet?',
-                    a: 'You must submit your bet before the first leg (event) starts. The competition week runs Wednesday 12:00 AM to Tuesday 11:59 PM AEST. Late submissions will not be accepted.',
-                  },
-                  {
-                    q: 'Can I bet on any sport?',
-                    a: 'Yes — any sport or racing, on any bookmaker platform you choose. Just upload the bet slip screenshot after placing the bet.',
-                  },
-                  {
-                    q: 'Do I keep my winnings?',
-                    a: 'Yes! Any money you win from your bets is yours to keep. The jackpot prize pool is separate — it is funded by the buy-in amounts and awarded to the top teams at season end.',
-                  },
-                ],
-              },
-              {
-                category: 'Results & Scoring',
-                icon: <Trophy className="w-4 h-4 text-amber-400" />,
-                items: [
-                  {
-                    q: 'How are results updated?',
-                    a: 'Our AI checks bet results automatically every 3 hours once the first leg of a bet has started. You can also trigger a manual check by clicking "Check Results" on the Leaderboard page.',
-                  },
-                  {
-                    q: 'What do the leg colours mean?',
-                    a: 'Green = Won, Red = Lost, Orange = In Progress (live), Yellow = Partial (some legs settled). The overall bet result is shown in the header of each bet slip card.',
-                  },
-                  {
-                    q: 'How is the leaderboard scored?',
-                    a: 'Teams are ranked by total winnings across all settled bets for the current week (weekly view) or across the entire season (season view). Highest total winnings wins.',
-                  },
-                  {
-                    q: 'What happens if a bet result looks wrong?',
-                    a: 'Contact your competition admin or reach out via the pub. Admins have tools to manually correct individual bet leg results if there is a discrepancy.',
-                  },
-                ],
-              },
-              {
-                category: 'Teams & Captains',
-                icon: <Users className="w-4 h-4 text-amber-400" />,
-                items: [
-                  {
-                    q: 'What does a captain do?',
-                    a: 'The captain is the team manager. They approve or reject member join requests, set the betting order for members, and are responsible for confirming the buy-in deposit.',
-                  },
-                  {
-                    q: 'How do I approve a member who wants to join?',
-                    a: 'Go to the My Team page. Pending requests will appear at the top with an Approve / Reject option. You will also see a notification badge on the My Team nav link.',
-                  },
-                  {
-                    q: 'Can I be in multiple teams?',
-                    a: 'Yes. You can create or join additional teams by tapping "+ New Team" in the navigation bar. Each team can be in a different competition.',
-                  },
-                  {
-                    q: 'What is the betting order?',
-                    a: 'Captains can set a rotating order that determines which team member submits the bet each week. This is optional but helps keep things organised when the team shares the betting responsibility.',
-                  },
-                ],
-              },
-              {
-                category: 'Buy-Ins & Prizes',
-                icon: <DollarSign className="w-4 h-4 text-amber-400" />,
-                items: [
-                  {
-                    q: 'How does the buy-in work?',
-                    a: 'The buy-in amount and structure are set by your competition host. It can be paid entirely by the captain or split equally among all team members. All buy-ins go into the jackpot prize pool.',
-                  },
-                  {
-                    q: 'When and how is the prize paid out?',
-                    a: 'Prize payout happens at the end of the season. The number of places paid (1st, 2nd, 3rd) depends on the total number of competing teams — your competition host will confirm the split before the season starts.',
-                  },
-                  {
-                    q: 'What is the final week boost?',
-                    a: 'The final week of every competition has a boosted bet limit, giving every team a chance to close the gap or extend their lead. The exact boosted amount is set by the competition host.',
-                  },
-                ],
-              },
-              {
-                category: 'Account & Technical',
-                icon: <Settings2 className="w-4 h-4 text-amber-400" />,
-                items: [
-                  {
-                    q: 'How do I update my name or password?',
-                    a: 'Click or tap your profile chip in the top-right corner of the navbar (your first initial in a circle). From there you can edit your display name and change your password.',
-                  },
-                  {
-                    q: 'I forgot my password — what do I do?',
-                    a: 'Contact your competition admin or the pub running the competition. An admin can reset your password from the admin panel.',
-                  },
-                  {
-                    q: 'The AI misread my bet slip — what do I do?',
-                    a: 'After uploading your screenshot, you can review and edit all extracted fields before confirming the submission. Make sure the odds, selection names, and stake are correct before hitting Submit.',
-                  },
-                  {
-                    q: 'Which browsers are supported?',
-                    a: 'Punting Club works on any modern browser — Chrome, Safari, Firefox, and Edge on both desktop and mobile. For the best experience on iOS, use Safari.',
-                  },
-                ],
-              },
-            ].map(({ category, icon, items }) => (
-              <div key={category} className="mb-8">
-                {/* Category heading */}
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    {icon}
-                  </div>
-                  <h2 className="text-lg font-black">{category}</h2>
-                </div>
-
-                {/* Questions */}
-                <div className="space-y-2">
-                  {items.map(({ q, a }) => (
-                    <details key={q} className="group bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden">
-                      <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-white/[0.03] transition-colors">
-                        <span className="text-sm font-semibold text-gray-100">{q}</span>
-                        <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0 group-open:rotate-180 transition-transform duration-200" />
-                      </summary>
-                      <div className="px-5 pb-4 pt-0">
-                        <p className="text-sm text-gray-400 leading-relaxed">{a}</p>
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {/* Still need help CTA */}
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center mt-8">
-              <h3 className="font-bold text-lg mb-1">Still have questions?</h3>
-              <p className="text-gray-400 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
-              <button
-                onClick={() => navigateTo('competition')}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 text-black px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
-              >
-                View Full Rules
-              </button>
-            </div>
-          </div>
-        </section>
+        <FaqView navHistory={navHistory} goBack={goBack} navigateTo={navigateTo} />
       )}
     </div>
+    </AppContext.Provider>
   );
 
 }
