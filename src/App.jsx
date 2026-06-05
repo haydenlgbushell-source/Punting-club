@@ -1465,9 +1465,49 @@ export default function PuntingClub() {
     return false;
   };
 
+  const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB — Claude's per-image limit
+  const MAX_IMAGES = 2;
+
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
-    Promise.all(files.map(f => new Promise(res => { const r = new FileReader(); r.onload = () => res({ src: r.result, name: f.name, mediaType: f.type || 'image/jpeg' }); r.readAsDataURL(f); }))).then(imgs => setUploadedImages(prev => [...prev, ...imgs]));
+    const errors = [];
+    const valid = [];
+
+    for (const f of files) {
+      if (!ALLOWED_IMAGE_TYPES.has(f.type)) {
+        errors.push(`"${f.name}" is not a supported image type. Use JPEG, PNG, WebP, or GIF.`);
+        continue;
+      }
+      if (f.size > MAX_IMAGE_BYTES) {
+        errors.push(`"${f.name}" is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum is 5 MB per image.`);
+        continue;
+      }
+      valid.push(f);
+    }
+
+    if (errors.length) {
+      showToast(errors[0], 'error');
+    }
+
+    if (!valid.length) return;
+
+    const slots = MAX_IMAGES - uploadedImages.length;
+    if (slots <= 0) { showToast(`Maximum ${MAX_IMAGES} images allowed.`, 'warning'); return; }
+    if (valid.length > slots) {
+      showToast(`Only ${slots} more image${slots > 1 ? 's' : ''} can be added (max ${MAX_IMAGES}).`, 'warning');
+    }
+    const toLoad = valid.slice(0, slots);
+
+    Promise.all(
+      toLoad.map(f => new Promise(res => {
+        const r = new FileReader();
+        r.onload = () => res({ src: r.result, name: f.name, mediaType: f.type });
+        r.readAsDataURL(f);
+      }))
+    ).then(imgs => setUploadedImages(prev => [...prev, ...imgs]));
+
+    e.target.value = '';
   };
 
   const analyzeBetSlips = async () => {
