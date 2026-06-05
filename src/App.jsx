@@ -311,6 +311,9 @@ export default function PuntingClub() {
   const [leaderboardTeams, setLeaderboardTeams] = useState([]);
   const [selectedTeamIdx, setSelectedTeamIdx] = useState(null);
   const [leaderboardView, setLeaderboardView] = useState('current'); // 'current' | 'season'
+  // Per-competition fetch timestamps — used to avoid redundant network calls
+  const leaderboardFetchedAt = useRef({}); // compCode → Date.now()
+  const LEADERBOARD_TTL_MS = 3 * 60 * 1000; // 3 minutes
 
   // My Team
   const [pendingMembers, setPendingMembers] = useState([]);
@@ -860,23 +863,31 @@ export default function PuntingClub() {
     })),
   })), []);
 
-  const refreshLeaderboard = useCallback(async (compCode, comps) => {
+  const refreshLeaderboard = useCallback(async (compCode, comps, { force = false } = {}) => {
     const code = compCode || currentUser?.competitionCode;
     const competitions = comps || activeCompetitions;
     if (!code) return;
     const comp = competitions.find(c => c.code === code);
     if (!comp?.id) return;
+
+    // Skip the network call if cached data is fresh and a force-refresh wasn't requested
+    if (!force) {
+      const lastFetch = leaderboardFetchedAt.current[code] || 0;
+      if (Date.now() - lastFetch < LEADERBOARD_TTL_MS) return null;
+    }
+
     const weekNum = calcCurrentWeek(comp.start_date);
     try {
       const data = await apiGetLeaderboard(comp.id, weekNum, comp.start_date);
       if (data?.length) {
         const mapped = mapLeaderboardData(data);
         setLeaderboardTeams(mapped);
+        leaderboardFetchedAt.current[code] = Date.now();
         return mapped;
       }
     } catch(e) { console.error('Leaderboard refresh failed:', e); }
     return null;
-  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData]);
+  }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData, LEADERBOARD_TTL_MS]);
 
   // ── RESULT CHECKER ────────────────────────────────────────────────────────
   // Calls the synchronous /api/check-results function once per pending bet
@@ -900,7 +911,7 @@ export default function PuntingClub() {
       if (res.ok) {
         const data = await res.json();
         const totalLegsUpdated = data.legsUpdated || 0;
-        await refreshLeaderboard();
+        await refreshLeaderboard(undefined, undefined, { force: true });
         setLastChecked(new Date());
         if (totalLegsUpdated > 0) {
           showToast('Results updated — leaderboard refreshed!', 'success');
@@ -1188,7 +1199,7 @@ export default function PuntingClub() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      await refreshLeaderboard();
+      await refreshLeaderboard(undefined, undefined, { force: true });
       if (data.legsUpdated > 0) {
         showToast('Result found — leaderboard updated!', 'success');
         setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet — ${data.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
@@ -1438,7 +1449,7 @@ export default function PuntingClub() {
       setAdminComps(prev => prev.map(c => c.id === id ? { ...c, start_date: updated.start_date } : c));
       const active = await apiGetActiveCompetitions();
       setActiveCompetitions(active);
-      await refreshLeaderboard();
+      await refreshLeaderboard(undefined, undefined, { force: true });
       addAuditEntry(adminUser?.role, label, id, `New start_date: ${updated.start_date}`);
       showToast(`${label} — leaderboard updated`, 'success');
     } catch(err) {
@@ -1627,7 +1638,7 @@ export default function PuntingClub() {
   const switchViewedCompetition = useCallback(async (code) => {
     setViewedCompetitionCode(code);
     setViewedTeamId(null); // reset per-team selection when switching competitions
-    await refreshLeaderboard(code, activeCompetitions);
+    await refreshLeaderboard(code, activeCompetitions, { force: true });
     // Load team members for the user's first team in the new competition
     const comp = activeCompetitions.find(c => c.code === code);
     const myTeamInComp = (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id));
@@ -1656,7 +1667,7 @@ export default function PuntingClub() {
   const switchActiveTeam = useCallback(async (team) => {
     setViewedCompetitionCode(team.compCode);
     setViewedTeamId(team.id);
-    await refreshLeaderboard(team.compCode, activeCompetitions);
+    await refreshLeaderboard(team.compCode, activeCompetitions, { force: true });
     if (team.id !== currentTeamId) {
       try {
         const members = await apiGetTeamMembers(team.id);
