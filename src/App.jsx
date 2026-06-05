@@ -1593,7 +1593,7 @@ export default function PuntingClub() {
             <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
               {joinRequestNotifs.map(member => (
                 <div key={member.user_id} className="flex items-center gap-3 p-3 bg-white/4 rounded-xl border border-white/8">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500/30 to-indigo-500/30 border border-blue-500/30 flex items-center justify-center font-black text-sky-400 text-sm flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500/30 to-indigo-500/30 border border-blue-200 flex items-center justify-center font-black text-sky-400 text-sm flex-shrink-0">
                     {(member.name || '?')[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1701,7 +1701,7 @@ export default function PuntingClub() {
                   <div className="relative mr-1">
                     <div
                       onClick={() => allUserTeams.length > 1 ? setShowTeamSwitcher(p => !p) : handleOpenProfile()}
-                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:border-blue-500/30 hover:bg-white/[0.07] transition-all duration-200"
+                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:border-blue-200 hover:bg-white/[0.07] transition-all duration-200"
                       title={allUserTeams.length > 1 ? 'Switch team' : 'Edit profile'}
                     >
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
@@ -1722,7 +1722,7 @@ export default function PuntingClub() {
                     {showTeamSwitcher && allUserTeams.length > 1 && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowTeamSwitcher(false)} />
-                        <div className="absolute top-full right-0 mt-1.5 bg-gray-900 border border-white/10 rounded-xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
+                        <div className="absolute top-full right-0 mt-1.5 bg-white border border-white/10 rounded-xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
                           <div className="px-3 pt-2.5 pb-1.5">
                             <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-wider">Switch Team</p>
                           </div>
@@ -1752,7 +1752,7 @@ export default function PuntingClub() {
                   {viewedRole === 'captain' && (
                   <button
                     onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
-                    className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-sky-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
+                    className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-200 hover:border-blue-500/50 text-sky-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
                   >
                     + New Competition
                   </button>
@@ -1852,7 +1852,7 @@ export default function PuntingClub() {
                       </div>
                     )}
                     {viewedRole === 'captain' && (
-                    <button onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-blue-500/10 border border-blue-500/30 text-sky-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Enter Another Competition</button>
+                    <button onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-blue-500/10 border border-blue-200 text-sky-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Enter Another Competition</button>
                     )}
                     <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"><LogOut className="w-4 h-4" />Logout</button>
                   </>
@@ -2087,7 +2087,7 @@ export default function PuntingClub() {
                 {/* Global search */}
                 <div className="relative mb-5">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-gray-900 border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/40" />
+                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-white border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/40" />
                   {adminSearch && <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white"><X className="w-4 h-4"/></button>}
                 </div>
 
@@ -2099,7 +2099,7 @@ export default function PuntingClub() {
                         <h2 className="text-2xl font-black mb-1">Dashboard</h2>
                         <p className="text-gray-500 text-sm">Overview · {(() => { const ac = adminComps.find(c => c.status === 'active') || adminComps[0]; if (!ac?.start_date) return ''; const wk = calcCurrentWeek(ac.start_date); const tot = ac.weeks || '?'; return `Week ${wk} of ${tot} · `; })()}{new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-900 border border-white/8 px-3 py-2 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 bg-white border border-white/8 px-3 py-2 rounded-lg">
                         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"/>
                         Live
                       </div>
@@ -2114,7 +2114,7 @@ export default function PuntingClub() {
 
                     {/* Pending notifications panel on dashboard */}
                     {adminNotifs.filter(n => !n.read).length > 0 && (
-                      <div className="bg-blue-950/20 border border-blue-500/30 rounded-xl p-5">
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="font-bold text-blue-400 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
                           <button onClick={markAllNotifsRead} className="text-xs text-blue-400 hover:text-blue-300">Mark all read</button>
@@ -2177,7 +2177,7 @@ export default function PuntingClub() {
 
                     {/* KYC pending */}
                     {adminUsers.some(u => u.kyc === 'pending') && (
-                      <div className="bg-blue-950/20 border border-blue-500/30 rounded-xl p-5">
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                         <h3 className="font-bold text-sky-400 mb-3 flex items-center gap-2"><Clock className="w-4 h-4"/>KYC Pending Review</h3>
                         <div className="space-y-2">
                           {adminUsers.filter(u => u.kyc === 'pending').map(u => (
@@ -2249,7 +2249,7 @@ export default function PuntingClub() {
                         const isExpanded = expandedTeamId === t.id;
                         const pendingCount = (t.memberList || []).filter(m => m.role === 'pending').length;
                         return (
-                        <div key={t.id} className={`bg-gray-900 border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
+                        <div key={t.id} className={`bg-white border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
                           {/* ── Team header row ── */}
                           <div className="p-4">
                             <div className="flex items-start justify-between gap-3">
@@ -2313,12 +2313,12 @@ export default function PuntingClub() {
                                   {t.memberList.map((m, mi) => {
                                     const isPending = m.role === 'pending';
                                     const roleBg = m.role === 'captain'
-                                      ? 'bg-blue-500/15 text-sky-400 border-blue-500/30'
+                                      ? 'bg-blue-500/15 text-sky-400 border-blue-200'
                                       : isPending
                                       ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30'
                                       : m.role === 'view-only'
                                       ? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
-                                      : 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+                                      : 'bg-blue-500/15 text-blue-400 border-blue-200';
                                     const kycBg = m.kyc === 'approved'
                                       ? 'text-green-400'
                                       : m.kyc === 'rejected'
@@ -2419,7 +2419,7 @@ export default function PuntingClub() {
                         </div>
                       )}
                       {filteredUsers.map(u => (
-                        <div key={u.phone} className={`bg-gray-900 border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-white/8'}`}>
+                        <div key={u.phone} className={`bg-white border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-white/8'}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -2458,7 +2458,7 @@ export default function PuntingClub() {
                     </div>
 
                     {/* GDPR note */}
-                    <div className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-4 flex gap-3">
+                    <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4 flex gap-3">
                       <Shield className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-blue-400 text-xs font-bold mb-1">Data Privacy & GDPR Compliance</p>
@@ -2477,7 +2477,7 @@ export default function PuntingClub() {
                     </div>
 
                     {/* AI confidence legend */}
-                    <div className="bg-gray-900 border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
+                    <div className="bg-white border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
                       <div><span className="text-gray-500">AI Confidence: </span><span className="text-green-400 font-bold">90-100%</span><span className="text-gray-600"> = High</span></div>
                       <div><span className="text-sky-400 font-bold">70-89%</span><span className="text-gray-600"> = Review recommended</span></div>
                       <div><span className="text-red-400 font-bold">&lt;70%</span><span className="text-gray-600"> = Manual review required</span></div>
@@ -2485,7 +2485,7 @@ export default function PuntingClub() {
 
                     <div className="space-y-3">
                       {filteredBets.map(b => (
-                        <div key={b.id} className={`bg-gray-900 border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-blue-500/30' : 'border-white/8'}`}>
+                        <div key={b.id} className={`bg-white border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-blue-200' : 'border-white/8'}`}>
                           <div className="px-4 py-3 flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -2544,7 +2544,7 @@ export default function PuntingClub() {
                                   {b.legs.map(leg => {
                                     const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-sky-400';
                                     return (
-                                      <div key={leg.id} className="bg-gray-900 border border-white/8 rounded-lg p-3">
+                                      <div key={leg.id} className="bg-white border border-white/8 rounded-lg p-3">
                                         <div className="flex items-start justify-between gap-2 mb-2">
                                           <div>
                                             <span className="text-gray-500 text-xs">Leg {leg.leg_number} · </span>
@@ -2589,7 +2589,7 @@ export default function PuntingClub() {
 
                     {/* Rejected bets log — sourced from adminBets state */}
                     {adminBets.filter(b => b.status === 'rejected').length > 0 && (
-                      <div className="bg-gray-900 border border-white/8 rounded-xl p-4">
+                      <div className="bg-white border border-white/8 rounded-xl p-4">
                         <h3 className="font-bold text-gray-400 mb-3 text-sm">Rejected Bets Archive</h3>
                         {adminBets.filter(b => b.status === 'rejected').map((b, i) => (
                           <div key={i} className="text-xs text-gray-600 py-1.5 border-b border-white/5 last:border-0">
@@ -2617,7 +2617,7 @@ export default function PuntingClub() {
 
                       {/* Create form */}
                       {showCreateComp && (
-                        <div className="bg-gray-900 border border-blue-500/30 rounded-xl p-5 space-y-3">
+                        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-3">
                           <h3 className="font-bold text-sky-400">Create New Competition</h3>
                           <div className="grid sm:grid-cols-2 gap-3">
                             {[['Competition Name','name','text','RSL Summer Cup'],['Pub / Club Name','pub','text','RSL Club Sydney'],['Buy-In Amount','buyIn','text','$1,000'],['Max Teams','maxTeams','number','20'],['Start Date','startDate','date',''],['End Date','endDate','date','']].map(([l,k,t,p]) => (
@@ -2692,7 +2692,7 @@ export default function PuntingClub() {
                             <span className="bg-blue-600 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{adminCompRequests.filter(r => r.status === 'requested').length}</span>
                           </div>
                           {adminCompRequests.map(req => (
-                            <div key={req.id} className={`bg-gray-900 border rounded-xl p-4 ${req.status === 'requested' ? 'border-blue-500/30' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
+                            <div key={req.id} className={`bg-white border rounded-xl p-4 ${req.status === 'requested' ? 'border-blue-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -2758,7 +2758,7 @@ export default function PuntingClub() {
                           const showTeams = expandedCompId === compKey;
                           const setShowTeams = (v) => setExpandedCompId(v ? compKey : null);
                           return (
-                          <div key={c.code || c.id} className={`bg-gray-900 border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-blue-500/20' : 'border-white/8'}`}>
+                          <div key={c.code || c.id} className={`bg-white border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-blue-500/20' : 'border-white/8'}`}>
                             <div className="p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
@@ -2809,7 +2809,7 @@ export default function PuntingClub() {
                                       >↩ Rollback</button>
                                     )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-blue-500/10 border border-blue-500/30 text-sky-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-blue-500/10 border border-blue-200 text-sky-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                     {adminUser?.role === 'owner' && (
                                       <button
                                         onClick={() => {
@@ -2902,7 +2902,7 @@ export default function PuntingClub() {
                         { title:'Rate Limiting', status:'Active', icon:'⚡', detail:'API: 100 req/min per user. Failed login lockout after 5 attempts (15 min cooldown).', color:'green' },
                         { title:'Data Retention', status:'Policy Set', icon:'📦', detail:'User data retained 7 years post-competition. KYC docs purged after 2 years. Logs kept 1 year.', color:'blue' },
                       ].map(item => (
-                        <div key={item.title} className={`bg-gray-900 border rounded-xl p-4 ${item.color === 'green' ? 'border-green-500/20' : item.color === 'amber' ? 'border-blue-500/20' : 'border-blue-500/20'}`}>
+                        <div key={item.title} className={`bg-white border rounded-xl p-4 ${item.color === 'green' ? 'border-green-500/20' : item.color === 'amber' ? 'border-blue-500/20' : 'border-blue-500/20'}`}>
                           <div className="flex items-start gap-3">
                             <span className="text-2xl">{item.icon}</span>
                             <div>
@@ -2960,7 +2960,7 @@ export default function PuntingClub() {
                       </div>
                       <button onClick={() => { const csv = ['Timestamp,Role,Action,Target,Detail',...adminAuditLog.map(e=>`"${e.ts}",${e.adminRole},"${e.action}","${e.target}","${e.detail}"`)].join('\n'); alert('Audit CSV:\n\n' + csv.substring(0,300)+'...'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                     </div>
-                    <div className="bg-gray-900 border border-white/8 rounded-xl overflow-hidden">
+                    <div className="bg-white border border-white/8 rounded-xl overflow-hidden">
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
                         <div className="col-span-3">Time</div>
                         <div className="col-span-2">Role</div>
@@ -3420,7 +3420,7 @@ export default function PuntingClub() {
                   )}
                 </div>
                 {!formData.competitionCode && activeCompetitions.filter(c => !c.is_private).length === 0 && !privateCompLookup && (
-                  <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">
+                  <div className="bg-white border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">
                     No public competitions available — enter a private code above or contact your pub/admin
                   </div>
                 )}
@@ -3471,7 +3471,7 @@ export default function PuntingClub() {
               <p className="text-sky-300 text-xs break-all mb-2">{shareableLink}</p>
               <button onClick={() => { navigator.clipboard?.writeText(shareableLink); showToast('Invite link copied!', 'success'); }} className="bg-blue-500/20 hover:bg-blue-500/30 text-sky-400 px-3 py-1.5 rounded-lg text-xs font-semibold w-full">Copy Invite Link</button>
             </div>
-            <div className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-4">
+            <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4">
               <p className="text-blue-400 text-xs font-semibold mb-2">How to invite:</p>
               <ol className="space-y-1 text-gray-400 text-xs">
                 {['Share the team code or invite link','They click Sign Up → Join Team','Enter the team code','Submit request — you\'ll get notified to approve','Once approved they\'re on the team!'].map((s, i) => (
@@ -3501,7 +3501,7 @@ export default function PuntingClub() {
                 </div>
               ))}
             </div>
-            <div className="bg-blue-950/20 border border-blue-500/20 rounded-lg p-3 text-xs text-gray-400">
+            <div className="bg-blue-50 border border-blue-500/20 rounded-lg p-3 text-xs text-gray-400">
               <strong className="text-blue-400">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
             </div>
             <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-black font-bold py-2.5 rounded-xl text-sm">Save Order</button>
@@ -3515,7 +3515,7 @@ export default function PuntingClub() {
           <div className="p-5 space-y-4">
 
             {/* What finalising does */}
-            <div className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-4 flex gap-3">
+            <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4 flex gap-3">
               <span className="text-xl flex-shrink-0">ℹ️</span>
               <div>
                 <p className="font-bold text-blue-400 text-sm mb-1">What does finalising do?</p>
@@ -3529,7 +3529,7 @@ export default function PuntingClub() {
             </div>
 
             {/* Current roster summary */}
-            <div className="bg-gray-900 border border-white/8 rounded-xl p-4">
+            <div className="bg-white border border-white/8 rounded-xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Current Roster</p>
               <div className="space-y-1.5">
                 {teamMembers.map(m => (
@@ -3591,7 +3591,7 @@ export default function PuntingClub() {
 
             {/* Warning if unconfirmed members */}
             {teamMembers.some(m => !m.depositPaid) && (
-              <div className="bg-blue-950/20 border border-blue-500/30 rounded-lg p-3 flex gap-2">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-2">
                 <AlertCircle className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
                 <p className="text-sky-300 text-xs">{teamMembers.filter(m => !m.depositPaid).length} member(s) not yet confirmed. You can still finalise — the deposit will be split equally across <strong>all</strong> members regardless.</p>
               </div>
@@ -3613,7 +3613,7 @@ export default function PuntingClub() {
           <div className="p-4 space-y-4">
             {!analyzedBet ? (
               <>
-                <div className="border-2 border-dashed border-blue-500/30 rounded-xl p-8 text-center hover:bg-blue-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
+                <div className="border-2 border-dashed border-blue-200 rounded-xl p-8 text-center hover:bg-blue-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
                   <p className="text-gray-600 text-xs mt-1">PNG, JPG up to 10MB · $50 weekly max enforced</p>
@@ -3703,7 +3703,7 @@ export default function PuntingClub() {
       {/* ── CREATE / JOIN TEAM MODAL ──────────────────────────────────────── */}
       {showCreateTeamModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="bg-white border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <h2 className="text-lg font-bold text-white">{teamModalTab === 'create' ? 'Enter Another Competition' : 'Join a Team'}</h2>
@@ -3772,7 +3772,7 @@ export default function PuntingClub() {
                       })()}
                     </>
                   ) : (
-                    <div className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No public competitions available</div>
+                    <div className="bg-white border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No public competitions available</div>
                   )}
                   <div className="mt-3">
                     <label className="block text-xs text-gray-500 mb-1">Have a private competition code?</label>
@@ -3893,7 +3893,7 @@ export default function PuntingClub() {
               ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :
                 t.type === 'error'   ? 'bg-red-950/95 border border-red-500/50 text-red-200' :
                 t.type === 'warning' ? 'bg-blue-950/95 border border-blue-500/50 text-sky-200' :
-                'bg-gray-900/95 border border-white/15 text-gray-200'}`}>
+                'bg-white/95 border border-white/15 text-gray-200'}`}>
               <span className="flex-shrink-0 mt-0.5">
                 {t.type === 'success' ? '✓' : t.type === 'error' ? '✗' : t.type === 'warning' ? '⚠' : 'ℹ'}
               </span>
@@ -4035,7 +4035,7 @@ export default function PuntingClub() {
       {showBetResults && analyzedBet && (
         <div className="fixed inset-0 bg-gray-950 z-[100] overflow-y-auto">
           <div className="min-h-screen flex flex-col">
-            <div className="bg-gray-900 border-b border-white/5 px-4 py-4 flex justify-between items-center sticky top-0 z-10">
+            <div className="bg-white border-b border-white/5 px-4 py-4 flex justify-between items-center sticky top-0 z-10">
               <h1 className="text-xl font-black">Bet Submitted ✓</h1>
               <button onClick={() => { setShowBetResults(false); resetBetAnalyzer(); }} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
             </div>

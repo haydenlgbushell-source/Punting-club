@@ -33,17 +33,17 @@ const CompetitionView = ({ navHistory, goBack, setSignupMode, setShowSignupModal
         </button>
       )}
 
-      <h1 className="text-4xl font-black mb-2 text-slate-100">How to Play</h1>
-      <p className="text-slate-400 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
+      <h1 className="text-4xl font-black mb-2 text-slate-900">How to Play</h1>
+      <p className="text-slate-500 mb-10">Everything you need to know about joining and winning the Punting Club.</p>
 
       {/* Steps */}
       <div className="space-y-4 mb-12">
         {STEPS.map(s => (
-          <div key={s.n} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex gap-4">
+          <div key={s.n} className="bg-white border border-gray-200 rounded-xl p-5 flex gap-4">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-black text-black text-base flex-shrink-0">{s.n}</div>
             <div>
-              <h3 className="font-bold text-base mb-1 text-slate-100">{s.t}</h3>
-              <p className="text-slate-400 text-sm mb-2">{s.d}</p>
+              <h3 className="font-bold text-base mb-1 text-slate-900">{s.t}</h3>
+              <p className="text-slate-500 text-sm mb-2">{s.d}</p>
               <ul className="space-y-1">
                 {s.bullets.map((b, i) => (
                   <li key={i} className="text-slate-500 text-xs flex gap-1.5 items-start">
@@ -57,26 +57,26 @@ const CompetitionView = ({ navHistory, goBack, setSignupMode, setShowSignupModal
       </div>
 
       {/* Competition Rules */}
-      <h2 className="text-2xl font-black mb-2 text-slate-100">Competition Rules</h2>
-      <p className="text-slate-400 mb-8">The detailed rules that govern how each season runs.</p>
+      <h2 className="text-2xl font-black mb-2 text-slate-900">Competition Rules</h2>
+      <p className="text-slate-500 mb-8">The detailed rules that govern how each season runs.</p>
       <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
           <h3 className="text-lg font-bold mb-4 text-sky-400">Betting Rules</h3>
-          <ul className="space-y-3 text-sm text-slate-300">
+          <ul className="space-y-3 text-sm text-slate-700">
             {BETTING_RULES.map(([b, r], i) => (
               <li key={i} className="flex gap-2 items-start">
                 <ChevronRight className="w-3.5 h-3.5 text-sky-500 flex-shrink-0 mt-0.5" />
-                <span><strong className="text-slate-100">{b}</strong> {r}</span>
+                <span><strong className="text-slate-900">{b}</strong> {r}</span>
               </li>
             ))}
           </ul>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
           <h3 className="text-lg font-bold mb-4 text-sky-400">Season Lengths</h3>
           <div className="space-y-3">
             {SEASONS.map(([n, w, b]) => (
-              <div key={n} className={`bg-slate-800/60 rounded-lg p-4 border-l-4 ${b}`}>
-                <div className="font-bold text-sm text-slate-100">{n}</div>
+              <div key={n} className={`bg-gray-100/60 rounded-lg p-4 border-l-4 ${b}`}>
+                <div className="font-bold text-sm text-slate-900">{n}</div>
                 <div className="text-slate-500 text-xs mt-1">{w} of competition</div>
               </div>
             ))}
@@ -84,19 +84,19 @@ const CompetitionView = ({ navHistory, goBack, setSignupMode, setShowSignupModal
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-8">
+      <div className="bg-white border border-gray-300 rounded-xl p-6 mb-8">
         <h3 className="text-lg font-bold mb-3 text-sky-400">The Punting Week</h3>
-        <p className="text-slate-300 text-sm">
-          Every competition week finishes <strong className="text-slate-100">11:59PM Tuesday</strong> and starts{' '}
-          <strong className="text-slate-100">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg
+        <p className="text-slate-700 text-sm">
+          Every competition week finishes <strong className="text-slate-900">11:59PM Tuesday</strong> and starts{' '}
+          <strong className="text-slate-900">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg
           of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a{' '}
-          <strong className="text-slate-100">boosted bet limit</strong> — exact amounts are set by your competition host.
+          <strong className="text-slate-900">boosted bet limit</strong> — exact amounts are set by your competition host.
         </p>
       </div>
 
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 text-center">
-        <h3 className="font-bold text-lg mb-2 text-slate-100">Ready to play?</h3>
-        <p className="text-slate-400 text-sm mb-4">Get your mates together and start this week!</p>
+      <div className="bg-white border border-gray-300 rounded-xl p-6 text-center">
+        <h3 className="font-bold text-lg mb-2 text-slate-900">Ready to play?</h3>
+        <p className="text-slate-500 text-sm mb-4">Get your mates together and start this week!</p>
         <button
           onClick={() => { setSignupMode('create'); setShowSignupModal(true); }}
           className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all hover:scale-105"

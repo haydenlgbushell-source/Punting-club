@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body { margin: 0; background: #030712; font-family: 'Inter', sans-serif; }
+body { margin: 0; background: #f8fafc; font-family: 'Inter', sans-serif; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #111; }
-::-webkit-scrollbar-thumb { background: #f59e0b55; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #e2e8f0; }
+::-webkit-scrollbar-thumb { background: #3b82f655; border-radius: 3px; }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
 @keyframes ticker {
