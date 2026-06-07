@@ -59,7 +59,7 @@ const HomeView = ({
                 <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 text-white px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-teal-500/25 cursor-pointer">
                   Create a Team <ArrowRight className="w-4 h-4" />
                 </button>
-                <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border border-gray-300 bg-white hover:bg-gray-100 text-slate-700 hover:text-white px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer">
+                <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border border-gray-300 bg-white hover:bg-gray-50 hover:border-teal-300 text-slate-700 hover:text-teal-700 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer">
                   Join a Team
                 </button>
               </>
@@ -123,23 +123,23 @@ const HomeView = ({
         <div className="max-w-5xl mx-auto">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', topBorder: 'border-t-blue-500', iconColor: 'text-teal-600', nav: 'leaderboard' },
-              { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', topBorder: 'border-t-blue-500', iconColor: 'text-teal-600', nav: null },
-              { icon: <Users className="w-6 h-6" />, title: 'Team Management', desc: 'Captain roles, betting order, member approvals', topBorder: 'border-t-green-500', iconColor: 'text-green-400', nav: 'team' },
-              { icon: <TrendingUp className="w-6 h-6" />, title: 'Season Tracking', desc: 'Weekly summaries across quarter, half and full seasons', topBorder: 'border-t-purple-500', iconColor: 'text-purple-400', nav: 'weekly' },
+              { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', nav: 'leaderboard' },
+              { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', nav: null },
+              { icon: <Users className="w-6 h-6" />, title: 'Team Management', desc: 'Captain roles, betting order, member approvals', nav: 'team' },
+              { icon: <TrendingUp className="w-6 h-6" />, title: 'Season Tracking', desc: 'Weekly summaries across quarter, half and full seasons', nav: 'weekly' },
             ].map((f, i) => (
               <div
                 key={i}
                 onClick={f.nav ? () => navigateTo(f.nav) : undefined}
-                className={`bg-white border border-gray-200 border-t-2 ${f.topBorder} rounded-xl p-5 hover:border-gray-300 hover:bg-gray-100/60 transition-all duration-200 group ${f.nav ? 'cursor-pointer' : ''}`}
+                className={`bg-white border border-gray-200 border-t-2 border-t-teal-500 rounded-xl p-5 hover:border-gray-300 hover:bg-gray-100/60 transition-all duration-200 group ${f.nav ? 'cursor-pointer' : ''}`}
               >
-                <div className={`w-10 h-10 bg-gray-100 border border-gray-300 rounded-lg flex items-center justify-center ${f.iconColor} mb-4 group-hover:scale-105 transition-transform duration-200`}>
+                <div className="w-10 h-10 bg-gray-100 border border-gray-300 rounded-lg flex items-center justify-center text-teal-600 mb-4 group-hover:scale-105 transition-transform duration-200">
                   {f.icon}
                 </div>
                 <h3 className="font-bold text-sm text-slate-900 mb-1.5">{f.title}</h3>
                 <p className="text-slate-500 text-xs leading-relaxed">{f.desc}</p>
                 {f.nav && (
-                  <div className={`mt-3 flex items-center gap-1 text-xs font-semibold ${f.iconColor} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                  <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     View <ArrowRight className="w-3 h-3" />
                   </div>
                 )}

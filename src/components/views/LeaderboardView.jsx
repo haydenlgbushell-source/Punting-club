@@ -93,7 +93,7 @@ const LeaderboardView = () => {
         {/* View toggle */}
         <div className="flex gap-1 mb-4 px-2">
           {[['current', 'This Week'], ['season', 'Season View']].map(([v, l]) => (
-            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${leaderboardView === v ? 'bg-gray-100 text-white border-gray-300' : 'text-slate-500 hover:text-slate-700 border-transparent'}`}>{l}</button>
+            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${leaderboardView === v ? 'bg-teal-50 text-teal-700 border-teal-200' : 'text-slate-500 hover:text-slate-700 border-transparent'}`}>{l}</button>
           ))}
         </div>
 
@@ -145,8 +145,8 @@ const LeaderboardView = () => {
               ? 'border-teal-500/40 bg-teal-500/5'
               : computedStatus === 'won'         ? 'border-green-500/20 bg-green-50'
               : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-50'
-              : computedStatus === 'partial'     ? 'border-teal-500/20 bg-teal-950/10'
-              : computedStatus === 'in_progress' ? 'border-teal-500/20 bg-teal-950/10'
+              : computedStatus === 'partial'     ? 'border-teal-200 bg-teal-50'
+              : computedStatus === 'in_progress' ? 'border-teal-200 bg-teal-50'
               : 'border-gray-200 bg-white';
 
             return (

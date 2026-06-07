@@ -2,12 +2,12 @@ import React from 'react';
 import { CheckCircle, XCircle, Zap, Clock, MinusCircle } from 'lucide-react';
 
 const COLORS = {
-  won:         'bg-green-500/20 border-green-500/60 text-green-400',
-  lost:        'bg-red-500/20 border-red-500/60 text-red-400',
-  partial:     'bg-yellow-500/20 border-yellow-500/60 text-yellow-400',
-  pending:     'bg-teal-500/10 border-teal-500/30 text-teal-600',
-  void:        'bg-gray-500/20 border-gray-500/60 text-gray-400',
-  in_progress: 'bg-teal-500/20 border-teal-500/60 text-teal-600',
+  won:         'bg-green-100 border-green-300 text-green-700',
+  lost:        'bg-red-100 border-red-300 text-red-700',
+  partial:     'bg-yellow-100 border-yellow-300 text-yellow-700',
+  pending:     'bg-teal-50 border-teal-200 text-teal-600',
+  void:        'bg-gray-100 border-gray-300 text-gray-600',
+  in_progress: 'bg-teal-50 border-teal-200 text-teal-600',
 };
 
 const CONFIG = {

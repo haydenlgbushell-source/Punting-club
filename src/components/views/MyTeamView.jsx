@@ -108,7 +108,7 @@ const MyTeamView = ({
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          {[['Members', teamMembers.length, 'text-white'], ['Total Won', myTeamData?.total || '$0', 'text-green-400'], ['Position', `#${myTeamData?.rank || 1}`, 'text-teal-600']].map(([l, v, c]) => (
+          {[['Members', teamMembers.length, 'text-slate-900'], ['Total Won', myTeamData?.total || '$0', 'text-green-500'], ['Position', `#${myTeamData?.rank || 1}`, 'text-teal-600']].map(([l, v, c]) => (
             <div key={l} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <p className="text-slate-500 text-xs mb-1">{l}</p>
               <p className={`text-xl font-black ${c}`}>{v}</p>
@@ -142,7 +142,7 @@ const MyTeamView = ({
               const isPast = i < currentWeekBettorIdx % bettingOrder.length;
               return (
                 <div key={i} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${isCurrent ? 'bg-teal-500/15 border border-teal-200' : 'bg-gray-100/30 border border-transparent'}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? 'bg-teal-600 text-white' : isPast ? 'bg-green-500/20 border border-green-500/40 text-green-400' : 'bg-gray-100 text-slate-500'}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? 'bg-teal-600 text-white' : isPast ? 'bg-green-100 border border-green-300 text-green-700' : 'bg-gray-100 text-slate-500'}`}>
                     {isPast ? '✓' : i + 1}
                   </div>
                   <div className="flex-1">
@@ -198,7 +198,7 @@ const MyTeamView = ({
           if (!pastBets.length) return null;
           return (
             <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
-              <h3 className="font-bold text-purple-400 mb-4 flex items-center gap-1.5"><History className="w-4 h-4" /> Previous Weeks</h3>
+              <h3 className="font-bold text-teal-600 mb-4 flex items-center gap-1.5"><History className="w-4 h-4" /> Previous Weeks</h3>
               <div className="space-y-3">
                 {pastBets.map((bet, i) => {
                   const legs = bet.legs || [];
@@ -216,12 +216,12 @@ const MyTeamView = ({
                   return (
                     <div key={bet.id || i} className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
                       <div className="flex items-center gap-3 px-4 py-3">
-                        <div className="w-9 h-9 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
-                          <span className="text-purple-400 font-black text-xs">W{bet.weekNumber}</span>
+                        <div className="w-9 h-9 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center flex-shrink-0">
+                          <span className="text-teal-600 font-black text-xs">W{bet.weekNumber}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-white text-sm font-semibold">{bet.type || 'Multi'}</span>
+                            <span className="text-slate-900 text-sm font-semibold">{bet.type || 'Multi'}</span>
                             <span className={`text-xs font-bold px-2 py-0.5 rounded border ${resultCls}`}>{resultLabel}</span>
                             {bet.submittedBy && (
                               <span className="text-xs text-slate-500 bg-gray-100 border border-gray-300 rounded px-2 py-0.5 inline-flex items-center gap-1"><User className="w-3 h-3" /> {bet.submittedBy}</span>
@@ -254,7 +254,7 @@ const MyTeamView = ({
 
         {/* Pending approvals */}
         {pendingMembers.length > 0 && (
-          <div className="bg-teal-950/20 border border-teal-500/30 rounded-xl p-5 mb-5">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-5 mb-5">
             <h3 className="font-bold text-teal-600 mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Pending Approvals ({pendingMembers.length})</h3>
             <div className="space-y-2">
               {pendingMembers.map(m => (
@@ -264,8 +264,8 @@ const MyTeamView = ({
                     <p className="text-slate-500 text-xs">{m.phone} · Joined {m.joinedAt}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => approveMember(m.user_id)} className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Approve</button>
-                    <button onClick={() => rejectMember(m.user_id)} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><AlertCircle className="w-3 h-3" />Reject</button>
+                    <button onClick={() => approveMember(m.user_id)} className="bg-green-50 hover:bg-green-100 border border-green-300 text-green-700 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Approve</button>
+                    <button onClick={() => rejectMember(m.user_id)} className="bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"><AlertCircle className="w-3 h-3" />Reject</button>
                   </div>
                 </div>
               ))}
@@ -289,7 +289,7 @@ const MyTeamView = ({
           </div>
           <div className="space-y-2">
             {teamMembers.map(m => (
-              <div key={m.user_id || m.phone} className={`rounded-xl px-3 py-3 flex items-start gap-3 ${teamFinalised ? (m.depositPaid ? 'bg-green-50 border border-green-500/20' : 'bg-red-950/20 border border-red-500/15') : 'bg-gray-50'}`}>
+              <div key={m.user_id || m.phone} className={`rounded-xl px-3 py-3 flex items-start gap-3 ${teamFinalised ? (m.depositPaid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200') : 'bg-gray-50'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${teamFinalised ? (m.depositPaid ? 'bg-green-500 text-black' : 'bg-red-500/20 border border-red-500/40 text-red-400') : 'bg-teal-500/20 border border-teal-200 text-teal-600'}`}>
                   {teamFinalised ? (m.depositPaid ? '✓' : '!') : (m.name || '?').charAt(0).toUpperCase()}
                 </div>

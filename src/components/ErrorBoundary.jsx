@@ -41,12 +41,12 @@ function RootFallback({ error, onReset }) {
 // Inline fallback — used around individual sections; blends into the page
 function SectionFallback({ error, onReset, label }) {
   return (
-    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-center">
-      <p className="text-red-400 text-sm font-medium mb-1">
+    <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+      <p className="text-red-700 text-sm font-medium mb-1">
         {label ? `${label} failed to load` : 'This section failed to load'}
       </p>
       {error?.message && (
-        <p className="text-red-400/60 text-xs mb-3 font-mono">{error.message}</p>
+        <p className="text-red-700/60 text-xs mb-3 font-mono">{error.message}</p>
       )}
       <button
         onClick={onReset}
