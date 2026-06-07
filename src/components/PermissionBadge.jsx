@@ -1,8 +1,8 @@
 import React from 'react';
 
 const MAP = {
-  captain:    { label: 'Captain',   cls: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/50' },
-  member:     { label: 'Member',    cls: 'bg-orange-500/20 text-orange-500 border-orange-500/50' },
+  captain:    { label: 'Captain',   cls: 'bg-blue-500/20 text-sky-400 border-blue-500/50' },
+  member:     { label: 'Member',    cls: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
   'view-only':{ label: 'View Only', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/50' },
 };
 
