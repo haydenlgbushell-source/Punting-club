@@ -16,10 +16,10 @@ const HomeView = ({
     <>
       <section className="relative pt-28 pb-16 px-4 sm:px-6 overflow-hidden">
         {/* Background radials */}
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/12 via-transparent to-transparent pointer-events-none" />
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-32 right-0 w-72 h-72 bg-blue-600/4 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-32 left-0 w-72 h-72 bg-indigo-600/4 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/12 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-32 right-0 w-72 h-72 bg-orange-500/4 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-32 left-0 w-72 h-72 bg-orange-600/4 rounded-full blur-3xl pointer-events-none" />
 
         <div className="max-w-5xl mx-auto text-center relative z-10">
           {/* Live badge */}
@@ -28,7 +28,7 @@ const HomeView = ({
             <span className="text-emerald-400 text-xs font-bold tracking-widest uppercase">Live Competitions Running</span>
           </div>
 
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black mb-5 bg-gradient-to-b from-white via-blue-200 to-blue-500 bg-clip-text text-transparent leading-[1.08]">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black mb-5 bg-gradient-to-b from-white via-emerald-200 to-red-500 bg-clip-text text-transparent leading-[1.08]">
             The Ultimate<br />Sports Betting League
           </h1>
           <p className="text-base sm:text-lg text-slate-500 mb-8 max-w-xl mx-auto leading-relaxed">
@@ -50,13 +50,13 @@ const HomeView = ({
                   setPrivateCompLookupError(null);
                   setShowCreateTeamModal(true);
                 }}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 cursor-pointer"
+                className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 cursor-pointer"
               >
                 {viewedRole === 'captain' ? 'Enter Another Competition' : 'Join a Competition'} <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <>
-                <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-black px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 cursor-pointer">
+                <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 cursor-pointer">
                   Create a Team <ArrowRight className="w-4 h-4" />
                 </button>
                 <button onClick={() => { setSignupMode('join'); setShowSignupModal(true); }} className="border border-gray-300 bg-white hover:bg-gray-100 text-slate-700 hover:text-white px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-200 cursor-pointer">
@@ -83,7 +83,7 @@ const HomeView = ({
                 setRequestCompError(null);
                 setShowRequestCompModal(true);
               }}
-              className="border border-gray-300 hover:border-blue-200 bg-white hover:bg-blue-500/5 text-slate-500 hover:text-sky-400 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+              className="border border-gray-300 hover:border-emerald-200 bg-white hover:bg-emerald-500/5 text-slate-500 hover:text-emerald-500 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Run a competition at your pub/club
             </button>
@@ -107,9 +107,9 @@ const HomeView = ({
               { v: 'Any Sport', l: 'Weekly Bets',   sub: 'custom limit',        icon: <TrendingUp className="w-4 h-4" /> },
               { v: '8–32 Wks', l: 'Season Length', sub: '8, 16 or 32 weeks',   icon: <CalendarRange className="w-4 h-4" /> },
             ].map(({ v, l, sub, icon }) => (
-              <div key={l} className="bg-white border border-gray-200 hover:border-blue-500/25 rounded-xl p-4 transition-colors group">
-                <div className="text-sky-400/60 mb-1.5 flex justify-center group-hover:text-sky-400 transition-colors">{icon}</div>
-                <div className="text-xl font-black text-sky-400 leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{v}</div>
+              <div key={l} className="bg-white border border-gray-200 hover:border-emerald-500/25 rounded-xl p-4 transition-colors group">
+                <div className="text-emerald-500/60 mb-1.5 flex justify-center group-hover:text-emerald-500 transition-colors">{icon}</div>
+                <div className="text-xl font-black text-emerald-500 leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{v}</div>
                 <div className="text-slate-500 text-xs mt-0.5 font-semibold">{l}</div>
                 <div className="text-slate-400 text-[10px] mt-0.5 leading-tight">{sub}</div>
               </div>
@@ -123,8 +123,8 @@ const HomeView = ({
         <div className="max-w-5xl mx-auto">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', topBorder: 'border-t-blue-500', iconColor: 'text-sky-400', nav: 'leaderboard' },
-              { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', topBorder: 'border-t-blue-500', iconColor: 'text-blue-400', nav: null },
+              { icon: <Trophy className="w-6 h-6" />, title: 'Live Leaderboard', desc: 'Real-time rankings update as results come in', topBorder: 'border-t-blue-500', iconColor: 'text-emerald-500', nav: 'leaderboard' },
+              { icon: <Zap className="w-6 h-6" />, title: 'AI Bet Analysis', desc: 'Upload a screenshot — AI reads and tracks every leg', topBorder: 'border-t-blue-500', iconColor: 'text-emerald-500', nav: null },
               { icon: <Users className="w-6 h-6" />, title: 'Team Management', desc: 'Captain roles, betting order, member approvals', topBorder: 'border-t-green-500', iconColor: 'text-green-400', nav: 'team' },
               { icon: <TrendingUp className="w-6 h-6" />, title: 'Season Tracking', desc: 'Weekly summaries across quarter, half and full seasons', topBorder: 'border-t-purple-500', iconColor: 'text-purple-400', nav: 'weekly' },
             ].map((f, i) => (
