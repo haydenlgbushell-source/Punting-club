@@ -1722,7 +1722,7 @@ export default function PuntingClub() {
                     {showTeamSwitcher && allUserTeams.length > 1 && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowTeamSwitcher(false)} />
-                        <div className="absolute top-full right-0 mt-1.5 bg-white border border-white/10 rounded-xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
+                        <div className="absolute top-full right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
                           <div className="px-3 pt-2.5 pb-1.5">
                             <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-wider">Switch Team</p>
                           </div>
@@ -1732,7 +1732,7 @@ export default function PuntingClub() {
                               <button
                                 key={t.id}
                                 onClick={() => { switchActiveTeam(t); setShowTeamSwitcher(false); }}
-                                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition-all ${isActive ? 'bg-teal-500/10 text-teal-600' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition-all ${isActive ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-gray-100 hover:text-slate-900'}`}
                               >
                                 <div className="flex-1 min-w-0">
                                   <div className="font-semibold truncate">{t.team_name}</div>
@@ -1742,8 +1742,8 @@ export default function PuntingClub() {
                               </button>
                             );
                           })}
-                          <div className="border-t border-white/[0.06] px-3 py-2">
-                            <button onClick={() => { handleOpenProfile(); setShowTeamSwitcher(false); }} className="text-gray-500 hover:text-gray-300 text-[10px] transition-colors">Edit profile</button>
+                          <div className="border-t border-gray-200 px-3 py-2">
+                            <button onClick={() => { handleOpenProfile(); setShowTeamSwitcher(false); }} className="text-gray-500 hover:text-teal-700 text-[10px] transition-colors">Edit profile</button>
                           </div>
                         </div>
                       </>
@@ -2087,7 +2087,7 @@ export default function PuntingClub() {
                 {/* Global search */}
                 <div className="relative mb-5">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-white border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/40" />
+                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/40" />
                   {adminSearch && <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white"><X className="w-4 h-4"/></button>}
                 </div>
 
@@ -2099,7 +2099,7 @@ export default function PuntingClub() {
                         <h2 className="text-2xl font-black mb-1">Dashboard</h2>
                         <p className="text-gray-500 text-sm">Overview · {(() => { const ac = adminComps.find(c => c.status === 'active') || adminComps[0]; if (!ac?.start_date) return ''; const wk = calcCurrentWeek(ac.start_date); const tot = ac.weeks || '?'; return `Week ${wk} of ${tot} · `; })()}{new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 bg-white border border-white/8 px-3 py-2 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/5 border border-white/8 px-3 py-2 rounded-lg">
                         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"/>
                         Live
                       </div>
@@ -2477,7 +2477,7 @@ export default function PuntingClub() {
                     </div>
 
                     {/* AI confidence legend */}
-                    <div className="bg-white border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
+                    <div className="bg-white/5 border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
                       <div><span className="text-gray-500">AI Confidence: </span><span className="text-green-400 font-bold">90-100%</span><span className="text-gray-600"> = High</span></div>
                       <div><span className="text-teal-600 font-bold">70-89%</span><span className="text-gray-600"> = Review recommended</span></div>
                       <div><span className="text-red-400 font-bold">&lt;70%</span><span className="text-gray-600"> = Manual review required</span></div>
@@ -2544,7 +2544,7 @@ export default function PuntingClub() {
                                   {b.legs.map(leg => {
                                     const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-teal-600';
                                     return (
-                                      <div key={leg.id} className="bg-white border border-white/8 rounded-lg p-3">
+                                      <div key={leg.id} className="bg-white/5 border border-white/8 rounded-lg p-3">
                                         <div className="flex items-start justify-between gap-2 mb-2">
                                           <div>
                                             <span className="text-gray-500 text-xs">Leg {leg.leg_number} · </span>
@@ -2589,7 +2589,7 @@ export default function PuntingClub() {
 
                     {/* Rejected bets log — sourced from adminBets state */}
                     {adminBets.filter(b => b.status === 'rejected').length > 0 && (
-                      <div className="bg-white border border-white/8 rounded-xl p-4">
+                      <div className="bg-white/5 border border-white/8 rounded-xl p-4">
                         <h3 className="font-bold text-gray-400 mb-3 text-sm">Rejected Bets Archive</h3>
                         {adminBets.filter(b => b.status === 'rejected').map((b, i) => (
                           <div key={i} className="text-xs text-gray-600 py-1.5 border-b border-white/5 last:border-0">
@@ -2960,7 +2960,7 @@ export default function PuntingClub() {
                       </div>
                       <button onClick={() => { const csv = ['Timestamp,Role,Action,Target,Detail',...adminAuditLog.map(e=>`"${e.ts}",${e.adminRole},"${e.action}","${e.target}","${e.detail}"`)].join('\n'); alert('Audit CSV:\n\n' + csv.substring(0,300)+'...'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                     </div>
-                    <div className="bg-white border border-white/8 rounded-xl overflow-hidden">
+                    <div className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
                         <div className="col-span-3">Time</div>
                         <div className="col-span-2">Role</div>
@@ -3420,7 +3420,7 @@ export default function PuntingClub() {
                   )}
                 </div>
                 {!formData.competitionCode && activeCompetitions.filter(c => !c.is_private).length === 0 && !privateCompLookup && (
-                  <div className="bg-white border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">
+                  <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-gray-400 text-sm">
                     No public competitions available — enter a private code above or contact your pub/admin
                   </div>
                 )}
@@ -3529,7 +3529,7 @@ export default function PuntingClub() {
             </div>
 
             {/* Current roster summary */}
-            <div className="bg-white border border-white/8 rounded-xl p-4">
+            <div className="bg-white/5 border border-white/8 rounded-xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Current Roster</p>
               <div className="space-y-1.5">
                 {teamMembers.map(m => (
@@ -3703,7 +3703,7 @@ export default function PuntingClub() {
       {/* ── CREATE / JOIN TEAM MODAL ──────────────────────────────────────── */}
       {showCreateTeamModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-          <div className="bg-white border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="bg-gray-950 text-gray-100 border border-teal-500/40 rounded-2xl w-full max-w-md shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <h2 className="text-lg font-bold text-white">{teamModalTab === 'create' ? 'Enter Another Competition' : 'Join a Team'}</h2>
@@ -3772,7 +3772,7 @@ export default function PuntingClub() {
                       })()}
                     </>
                   ) : (
-                    <div className="bg-white border border-white/10 rounded-lg px-3 py-2.5 text-gray-600 text-sm">No public competitions available</div>
+                    <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-gray-400 text-sm">No public competitions available</div>
                   )}
                   <div className="mt-3">
                     <label className="block text-xs text-gray-500 mb-1">Have a private competition code?</label>
@@ -3893,7 +3893,7 @@ export default function PuntingClub() {
               ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :
                 t.type === 'error'   ? 'bg-red-950/95 border border-red-500/50 text-red-200' :
                 t.type === 'warning' ? 'bg-teal-950/95 border border-teal-500/50 text-teal-400' :
-                'bg-white/95 border border-white/15 text-gray-200'}`}>
+                'bg-slate-900/95 border border-white/15 text-gray-200'}`}>
               <span className="flex-shrink-0 mt-0.5">
                 {t.type === 'success' ? '✓' : t.type === 'error' ? '✗' : t.type === 'warning' ? '⚠' : 'ℹ'}
               </span>
