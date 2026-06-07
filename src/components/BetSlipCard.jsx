@@ -30,7 +30,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const payoutColor    = allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#94a3b8';
 
   const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
-  const titleColor = allWon ? '#16a34a' : status === 'lost' ? '#dc2626' : status === 'partial' ? '#ca8a04' : status === 'in_progress' ? '#ea580c' : '#2563eb';
+  const titleColor = allWon ? '#16a34a' : status === 'lost' ? '#dc2626' : status === 'partial' ? '#ca8a04' : status === 'in_progress' ? '#ea580c' : '#16a34a';
   const cardBorder = allWon ? '#22c55e66' : status === 'lost' ? '#ef444466' : status === 'partial' ? '#eab30866' : status === 'in_progress' ? '#f9731666' : '#cbd5e1';
   const cardBg     = allWon ? '#f0fdf4' : status === 'lost' ? '#fef2f2' : status === 'partial' ? '#fffbeb' : status === 'in_progress' ? '#fff7ed' : '#ffffff';
 
@@ -40,7 +40,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
       <div style={{ padding: compact ? '16px 18px 12px' : '22px 22px 14px', borderBottom: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#2563eb' }}>
+            <span style={{ fontFamily: BC, fontWeight: 800, fontSize: 12, letterSpacing: '0.15em', color: '#ea580c' }}>
               {(bet.type || 'MULTI').toUpperCase()} BET
             </span>
             {bet.submittedBy && (
@@ -69,7 +69,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #e2e8f0' }}>
         {[
           ['STAKE',     bet.stake,                              '#1e293b'],
-          ['ODDS',      bet.combinedOdds || bet.odds || 'N/A', '#2563eb'],
+          ['ODDS',      bet.combinedOdds || bet.odds || 'N/A', '#ea580c'],
           [payoutLabel, payoutValue,                            payoutColor],
         ].map(([label, value, color], i) => (
           <div key={label} style={{ padding: '12px 14px', textAlign: 'center', background: '#f8fafc', borderRight: i < 2 ? '1px solid #e2e8f0' : 'none' }}>
@@ -95,7 +95,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
               <div key={i} className="bc-fadeup" style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderLeft: `4px solid ${legColor}`, borderRadius: 10, animationDelay: `${i * 0.07}s` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 14px' }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#eff6ff', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: BC, fontWeight: 700, fontSize: 12, color: '#2563eb', flexShrink: 0, marginTop: 2 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: BC, fontWeight: 700, fontSize: 12, color: '#ea580c', flexShrink: 0, marginTop: 2 }}>
                       {i + 1}
                     </div>
                     <div style={{ minWidth: 0 }}>
@@ -113,7 +113,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, marginLeft: 10 }}>
-                    <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#2563eb' }}>@ {leg.odds}</div>
+                    <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#ea580c' }}>@ {leg.odds}</div>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', padding: '2px 9px', borderRadius: 5, background: `${legColor}18`, color: legColor, border: `1px solid ${legColor}44` }}>
                       {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : 'WAIT'}
                     </div>

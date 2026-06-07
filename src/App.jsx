@@ -589,7 +589,7 @@ export default function PuntingClub() {
   })();
 
   // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
-  const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-indigo-400 to-indigo-600','from-blue-400 to-blue-600','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
+  const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-orange-400 to-red-500','from-orange-400 to-red-500','from-purple-400 to-purple-600','from-green-400 to-green-600','from-cyan-400 to-cyan-600','from-pink-400 to-pink-600'];
 
   const mapLeaderboardData = useCallback((data) => data.map((t, i) => ({
     rank: t.rank, team: t.team_name, week: t.currentWeekBet?.overall_status === 'won' ? 'W' : t.currentWeekBet?.overall_status === 'lost' ? 'L' : 'P',
@@ -1564,11 +1564,11 @@ export default function PuntingClub() {
       {/* ── CAPTAIN JOIN REQUEST NOTIFICATION POPUP ─────────────────────── */}
       {showJoinRequestNotif && joinRequestNotifs.length > 0 && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-gray-950 border-2 border-blue-500/60 rounded-2xl w-full max-w-sm shadow-2xl">
+          <div className="bg-gray-950 border-2 border-emerald-500/60 rounded-2xl w-full max-w-sm shadow-2xl">
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-white/8">
-              <div className="w-10 h-10 bg-blue-500/15 border border-blue-500/40 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Users className="w-5 h-5 text-sky-400" />
+              <div className="w-10 h-10 bg-emerald-500/15 border border-emerald-500/40 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Users className="w-5 h-5 text-emerald-500" />
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="font-black text-white text-base leading-tight">
@@ -1593,7 +1593,7 @@ export default function PuntingClub() {
             <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
               {joinRequestNotifs.map(member => (
                 <div key={member.user_id} className="flex items-center gap-3 p-3 bg-white/4 rounded-xl border border-white/8">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500/30 to-indigo-500/30 border border-blue-200 flex items-center justify-center font-black text-sky-400 text-sm flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500/30 to-red-500/30 border border-emerald-200 flex items-center justify-center font-black text-emerald-500 text-sm flex-shrink-0">
                     {(member.name || '?')[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1633,7 +1633,7 @@ export default function PuntingClub() {
 
       {/* Landscape hint */}
       {showLandscapeHint && (
-        <div className="fixed bottom-4 left-1/2 z-50 bg-blue-600 text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 bc-landscape-hint">
+        <div className="fixed bottom-4 left-1/2 z-50 bg-orange-500 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 bc-landscape-hint">
           <Smartphone className="w-3.5 h-3.5 flex-shrink-0" /> Rotate to landscape for best view
           <button onClick={() => setShowLandscapeHint(false)} className="cursor-pointer"><X className="w-3 h-3" /></button>
         </div>
@@ -1646,8 +1646,8 @@ export default function PuntingClub() {
 
             {/* Logo */}
             <div className="flex items-center gap-2.5 cursor-pointer group flex-shrink-0" onClick={() => { setActiveNav('home'); setNavHistory([]); }}>
-              <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center group-hover:bg-blue-600/25 transition-all duration-200">
-                <Sparkles className="w-4 h-4 text-sky-400" />
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center group-hover:bg-orange-500/25 transition-all duration-200">
+                <Sparkles className="w-4 h-4 text-emerald-500" />
               </div>
               <span className="text-lg font-black tracking-wide bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 bg-clip-text text-transparent">PUNTING CLUB</span>
             </div>
@@ -1667,16 +1667,16 @@ export default function PuntingClub() {
                   onClick={() => navigateTo(key)}
                   className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
                     activeNav === key
-                      ? 'text-sky-400 bg-blue-500/10 border border-blue-500/20'
+                      ? 'text-emerald-500 bg-emerald-500/10 border border-emerald-500/20'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
                   }`}
                 >
                   {icon}{label}
                   {activeNav === key && (
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-sky-400 rounded-full" />
+                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-emerald-400 rounded-full" />
                   )}
                   {key === 'team' && pendingMembers.length > 0 && viewedRole === 'captain' && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
                   )}
                 </button>
               ))}
@@ -1701,16 +1701,16 @@ export default function PuntingClub() {
                   <div className="relative mr-1">
                     <div
                       onClick={() => allUserTeams.length > 1 ? setShowTeamSwitcher(p => !p) : handleOpenProfile()}
-                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:border-blue-200 hover:bg-white/[0.07] transition-all duration-200"
+                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:border-emerald-200 hover:bg-white/[0.07] transition-all duration-200"
                       title={allUserTeams.length > 1 ? 'Switch team' : 'Edit profile'}
                     >
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-black text-[11px] font-black flex-shrink-0">
                         {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div className="leading-tight min-w-0">
-                        <p className="text-sky-400 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
+                        <p className="text-emerald-500 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
                           {myTeamName || currentUser?.teamName}
-                          {viewedRole === 'captain' && <Crown className="w-2.5 h-2.5 text-sky-400 flex-shrink-0" />}
+                          {viewedRole === 'captain' && <Crown className="w-2.5 h-2.5 text-emerald-500 flex-shrink-0" />}
                         </p>
                         <p className="text-gray-500 text-[11px] leading-tight flex items-center gap-1 truncate">
                           {currentUser?.firstName} · <PermissionBadge role={viewedRole} />
@@ -1732,13 +1732,13 @@ export default function PuntingClub() {
                               <button
                                 key={t.id}
                                 onClick={() => { switchActiveTeam(t); setShowTeamSwitcher(false); }}
-                                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition-all ${isActive ? 'bg-blue-500/10 text-sky-400' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition-all ${isActive ? 'bg-emerald-500/10 text-emerald-500' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
                               >
                                 <div className="flex-1 min-w-0">
                                   <div className="font-semibold truncate">{t.team_name}</div>
                                   <div className="text-gray-600 text-[10px] truncate">{t.compName}</div>
                                 </div>
-                                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0" />}
+                                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
                               </button>
                             );
                           })}
@@ -1752,7 +1752,7 @@ export default function PuntingClub() {
                   {viewedRole === 'captain' && (
                   <button
                     onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
-                    className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-200 hover:border-blue-500/50 text-sky-400 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
+                    className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-200 hover:border-emerald-500/50 text-emerald-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
                   >
                     + New Competition
                   </button>
@@ -1767,7 +1767,7 @@ export default function PuntingClub() {
               ) : (
                 <>
                   <button onClick={() => setShowLoginModal(true)} className="text-gray-400 hover:text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:bg-white/5 border border-transparent">Login</button>
-                  <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 shadow-lg shadow-blue-500/20">Sign Up</button>
+                  <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 shadow-lg shadow-orange-500/20">Sign Up</button>
                 </>
               )}
             </div>
@@ -1775,7 +1775,7 @@ export default function PuntingClub() {
             {/* Mobile Hamburger */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-gray-400 hover:text-sky-400 p-2 rounded-lg hover:bg-white/5 transition-all duration-200"
+              className="md:hidden text-gray-400 hover:text-emerald-500 p-2 rounded-lg hover:bg-white/5 transition-all duration-200"
               aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -1799,13 +1799,13 @@ export default function PuntingClub() {
                     key={key}
                     onClick={() => { navigateTo(key); setMobileMenuOpen(false); }}
                     className={`relative flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
-                      activeNav === key ? 'text-sky-400 bg-blue-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      activeNav === key ? 'text-emerald-500 bg-emerald-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <span className={`transition-colors ${activeNav === key ? 'text-sky-400' : 'text-gray-600'}`}>{icon}</span>
+                    <span className={`transition-colors ${activeNav === key ? 'text-emerald-500' : 'text-gray-600'}`}>{icon}</span>
                     {label}
                     {key === 'team' && pendingMembers.length > 0 && viewedRole === 'captain' && (
-                      <span className="ml-auto w-5 h-5 bg-indigo-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
+                      <span className="ml-auto w-5 h-5 bg-emerald-500 rounded-full text-white text-xs flex items-center justify-center font-bold">{pendingMembers.length}</span>
                     )}
                   </button>
                 ))}
@@ -1816,16 +1816,16 @@ export default function PuntingClub() {
                 {isLoggedIn ? (
                   <>
                     <div onClick={() => { handleOpenProfile(); setMobileMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 mx-0 rounded-lg cursor-pointer hover:bg-white/[0.04] transition-all duration-200">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-black text-sm font-black flex-shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-black text-sm font-black flex-shrink-0">
                         {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sky-400 text-sm font-bold leading-tight flex items-center gap-1 truncate">
+                        <p className="text-emerald-500 text-sm font-bold leading-tight flex items-center gap-1 truncate">
                           {myTeamName || currentUser?.teamName}
                           {viewedRole === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
                         </p>
                         <p className="text-gray-500 text-xs leading-tight flex items-center gap-1">
-                          {currentUser?.firstName} · <PermissionBadge role={viewedRole} /> · <span className="text-sky-500/60">Edit profile</span>
+                          {currentUser?.firstName} · <PermissionBadge role={viewedRole} /> · <span className="text-emerald-600/60">Edit profile</span>
                         </p>
                       </div>
                     </div>
@@ -1840,7 +1840,7 @@ export default function PuntingClub() {
                               <button
                                 key={t.id}
                                 onClick={() => { switchActiveTeam(t); setMobileMenuOpen(false); }}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isActive ? 'bg-blue-500/20 text-sky-400 border-blue-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isActive ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40' : 'text-gray-400 border-white/10 hover:border-white/20 hover:text-gray-200'}`}
                               >
                                 {t.team_name}
                                 {isActive && <span className="ml-1 opacity-60">·</span>}
@@ -1852,14 +1852,14 @@ export default function PuntingClub() {
                       </div>
                     )}
                     {viewedRole === 'captain' && (
-                    <button onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-blue-500/10 border border-blue-200 text-sky-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Enter Another Competition</button>
+                    <button onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); setMobileMenuOpen(false); }} className="w-full bg-emerald-500/10 border border-emerald-200 text-emerald-500 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">+ Enter Another Competition</button>
                     )}
                     <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"><LogOut className="w-4 h-4" />Logout</button>
                   </>
                 ) : (
                   <>
                     <button onClick={() => { setShowLoginModal(true); setMobileMenuOpen(false); }} className="w-full border border-white/10 text-gray-300 hover:text-white hover:border-white/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all">Login</button>
-                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); setMobileMenuOpen(false); }} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-black px-4 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20">Sign Up</button>
+                    <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); setMobileMenuOpen(false); }} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-orange-500/20">Sign Up</button>
                   </>
                 )}
               </div>
@@ -1927,7 +1927,7 @@ export default function PuntingClub() {
       ══════════════════════════════════════════════════════════════════ */}
       {showAdminPanel && isAdminLoggedIn && <ErrorBoundary variant="section" label="Admin Panel">{(() => {
         // ── Admin sub-components (inline) ──────────────────────────────
-        const AdminCard = ({ title, value, sub, icon, color = 'text-sky-400' }) => (
+        const AdminCard = ({ title, value, sub, icon, color = 'text-emerald-500' }) => (
           <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.10)"}}>
             <div className={`${color} flex-shrink-0 mt-0.5`}>{icon}</div>
             <div className="min-w-0 flex-1">
@@ -1939,7 +1939,7 @@ export default function PuntingClub() {
         );
 
         const StatusPill = ({ s }) => {
-          const m = { verified:'bg-green-500/20 text-green-400 border-green-500/40', pending:'bg-blue-500/20 text-sky-400 border-blue-500/40', suspended:'bg-red-500/20 text-red-400 border-red-500/40', rejected:'bg-red-500/20 text-red-400 border-red-500/40', active:'bg-green-500/20 text-green-400 border-green-500/40', won:'bg-green-500/20 text-green-400 border-green-500/40', lost:'bg-red-500/20 text-red-400 border-red-500/40' };
+          const m = { verified:'bg-green-500/20 text-green-400 border-green-500/40', pending:'bg-emerald-500/20 text-emerald-500 border-emerald-500/40', suspended:'bg-red-500/20 text-red-400 border-red-500/40', rejected:'bg-red-500/20 text-red-400 border-red-500/40', active:'bg-green-500/20 text-green-400 border-green-500/40', won:'bg-green-500/20 text-green-400 border-green-500/40', lost:'bg-red-500/20 text-red-400 border-red-500/40' };
           return <span className={`border text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${m[s] || 'bg-gray-500/20 text-gray-400 border-gray-500/40'}`}>{s}</span>;
         };
 
@@ -2032,7 +2032,7 @@ export default function PuntingClub() {
                   )}
                 </div>
                 <div className="hidden sm:block text-gray-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
-                {adminLoading && <span className="text-xs text-sky-400 animate-pulse">Loading...</span>}
+                {adminLoading && <span className="text-xs text-emerald-500 animate-pulse">Loading...</span>}
                 {adminLoadError && <span className="text-xs text-red-400 max-w-xs truncate" title={adminLoadError}>⚠ {adminLoadError}</span>}
                 <button onClick={() => refreshAdminData(adminToken)} className="text-gray-500 hover:text-gray-300 p-1.5 rounded-lg hover:bg-white/5" title="Refresh data">
                   <RefreshCw className={`w-3.5 h-3.5 ${adminLoading ? 'animate-spin' : ''}`} />
@@ -2062,7 +2062,7 @@ export default function PuntingClub() {
                     <p className="text-gray-600 text-xs uppercase tracking-wider px-2 mb-2">Alerts</p>
                     <div className="space-y-1">
                       {adminNotifs.filter(n => !n.read).slice(0, 3).map(n => (
-                        <div key={n.id} onClick={() => markNotifRead(n.id)} className={`px-2 py-2 rounded-lg cursor-pointer text-xs border ${n.type === 'warning' ? 'border-blue-500/20 bg-blue-500/5 text-sky-400' : n.type === 'error' ? 'border-red-500/20 bg-red-500/5 text-red-400' : n.type === 'success' ? 'border-green-500/20 bg-green-500/5 text-green-400' : 'border-blue-500/20 bg-blue-500/5 text-blue-400'}`}>
+                        <div key={n.id} onClick={() => markNotifRead(n.id)} className={`px-2 py-2 rounded-lg cursor-pointer text-xs border ${n.type === 'warning' ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500' : n.type === 'error' ? 'border-red-500/20 bg-red-500/5 text-red-400' : n.type === 'success' ? 'border-green-500/20 bg-green-500/5 text-green-400' : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500'}`}>
                           <p className="font-semibold leading-tight">{n.msg}</p>
                           <p className="text-gray-600 mt-0.5">{n.time}</p>
                         </div>
@@ -2106,18 +2106,18 @@ export default function PuntingClub() {
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-sky-400" />
-                      <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-blue-400"  />
+                      <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-emerald-500" />
+                      <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-emerald-500"  />
                       <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
                       <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-purple-400"/>
                     </div>
 
                     {/* Pending notifications panel on dashboard */}
                     {adminNotifs.filter(n => !n.read).length > 0 && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
                         <div className="flex items-center justify-between mb-3">
-                          <h3 className="font-bold text-blue-400 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
-                          <button onClick={markAllNotifsRead} className="text-xs text-blue-400 hover:text-blue-300">Mark all read</button>
+                          <h3 className="font-bold text-emerald-500 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-emerald-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
+                          <button onClick={markAllNotifsRead} className="text-xs text-emerald-500 hover:text-emerald-400">Mark all read</button>
                         </div>
                         <div className="space-y-2">
                           {adminNotifs.filter(n => !n.read).slice(0, 5).map(n => (
@@ -2126,13 +2126,13 @@ export default function PuntingClub() {
                               onClick={() => { markNotifRead(n.id); if (n.notifType === 'new_team') setAdminTab('teams'); else if (n.notifType === 'competition_request') setAdminTab('competitions'); }}
                               className="flex items-start gap-3 bg-black/30 rounded-lg px-3 py-2.5 cursor-pointer hover:bg-black/50 transition-colors"
                             >
-                              <span className="flex-shrink-0 flex items-center">{n.notifType === 'new_team' ? <Trophy className="w-4 h-4 text-sky-400" /> : n.notifType === 'competition_request' ? <Building2 className="w-4 h-4 text-blue-400" /> : <Bell className="w-4 h-4 text-gray-400" />}</span>
+                              <span className="flex-shrink-0 flex items-center">{n.notifType === 'new_team' ? <Trophy className="w-4 h-4 text-emerald-500" /> : n.notifType === 'competition_request' ? <Building2 className="w-4 h-4 text-emerald-500" /> : <Bell className="w-4 h-4 text-gray-400" />}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-white">{n.msg}</p>
                                 {n.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.detail}</p>}
                                 <p className="text-xs text-gray-600 mt-1">{n.time}</p>
                               </div>
-                              <span className="text-xs text-blue-400 flex-shrink-0 mt-0.5">{n.notifType === 'new_team' ? 'View →' : 'Review →'}</span>
+                              <span className="text-xs text-emerald-500 flex-shrink-0 mt-0.5">{n.notifType === 'new_team' ? 'View →' : 'Review →'}</span>
                             </div>
                           ))}
                         </div>
@@ -2177,8 +2177,8 @@ export default function PuntingClub() {
 
                     {/* KYC pending */}
                     {adminUsers.some(u => u.kyc === 'pending') && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-                        <h3 className="font-bold text-sky-400 mb-3 flex items-center gap-2"><Clock className="w-4 h-4"/>KYC Pending Review</h3>
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+                        <h3 className="font-bold text-emerald-500 mb-3 flex items-center gap-2"><Clock className="w-4 h-4"/>KYC Pending Review</h3>
                         <div className="space-y-2">
                           {adminUsers.filter(u => u.kyc === 'pending').map(u => (
                             <div key={u.phone} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2.5">
@@ -2200,17 +2200,17 @@ export default function PuntingClub() {
                     {/* Recent activity */}
                     <div className="rounded-xl p-5" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.08)"}}>
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-white flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400"/>Recent Activity</h3>
-                        <button onClick={() => setAdminTab('audit')} className="text-xs text-blue-400 hover:text-blue-300">View all →</button>
+                        <h3 className="font-bold text-white flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-500"/>Recent Activity</h3>
+                        <button onClick={() => setAdminTab('audit')} className="text-xs text-emerald-500 hover:text-emerald-400">View all →</button>
                       </div>
                       <div className="space-y-0">
                         {adminAuditLog.slice(0, 8).map((e, i) => (
                           <div key={i} className="flex items-start gap-3 py-2.5 border-b border-white/5 last:border-0">
-                            <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <div className="w-2 h-2 rounded-full bg-blue-400"/>
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <div className="w-2 h-2 rounded-full bg-emerald-400"/>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white font-medium"><span className="text-blue-400">{e.action}</span>{e.target ? ` — ${e.target}` : ''}</p>
+                              <p className="text-sm text-white font-medium"><span className="text-emerald-500">{e.action}</span>{e.target ? ` — ${e.target}` : ''}</p>
                               {e.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{e.detail}</p>}
                             </div>
                             <div className="text-right flex-shrink-0 ml-2">
@@ -2259,7 +2259,7 @@ export default function PuntingClub() {
                                   <StatusPill s={t.status} />
                                   {t.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
                                   {pendingCount > 0 && (
-                                    <span className="bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                                    <span className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 text-xs font-bold px-2 py-0.5 rounded-full">
                                       {pendingCount} pending
                                     </span>
                                   )}
@@ -2267,7 +2267,7 @@ export default function PuntingClub() {
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gray-500">
                                   <span>Captain: <span className="text-gray-300">{t.captain}</span></span>
                                   <span>Members: <span className="text-gray-300">{t.members}</span></span>
-                                  <span>Deposits: <span className={t.depositsPaid === t.members ? 'text-green-400' : 'text-sky-400'}>{t.depositsPaid}/{t.members}</span></span>
+                                  <span>Deposits: <span className={t.depositsPaid === t.members ? 'text-green-400' : 'text-emerald-500'}>{t.depositsPaid}/{t.members}</span></span>
                                   <span>Comp: <span className="text-gray-300">{t.compCode || '—'}</span></span>
                                   <span>Created: <span className="text-gray-300">{t.createdAt}</span></span>
                                   <span>Total Bet: <span className="text-green-400 font-semibold">{t.totalBet}</span></span>
@@ -2281,9 +2281,9 @@ export default function PuntingClub() {
                                   <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
                                 )}
                                 {t.status === 'suspended' && canAdmin('bets') && (
-                                  <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
+                                  <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
                                 )}
-                                <button onClick={() => flagTeam(t.id)} className="bg-blue-500/10 border border-blue-500/20 text-sky-500 hover:text-sky-400 px-2.5 py-1 rounded-lg text-xs">🚩</button>
+                                <button onClick={() => flagTeam(t.id)} className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 hover:text-emerald-500 px-2.5 py-1 rounded-lg text-xs">🚩</button>
                                 {adminUser?.role === 'owner' && (
                                   <button onClick={() => deleteTeam(t.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-300 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
                                 )}
@@ -2303,7 +2303,7 @@ export default function PuntingClub() {
                               <div className="px-4 py-3 flex items-center justify-between">
                                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Team Members ({t.memberList?.length || 0})</span>
                                 {pendingCount > 0 && (
-                                  <span className="text-xs text-indigo-400 font-semibold">{pendingCount} awaiting approval</span>
+                                  <span className="text-xs text-emerald-500 font-semibold">{pendingCount} awaiting approval</span>
                                 )}
                               </div>
                               {(!t.memberList || t.memberList.length === 0) ? (
@@ -2313,19 +2313,19 @@ export default function PuntingClub() {
                                   {t.memberList.map((m, mi) => {
                                     const isPending = m.role === 'pending';
                                     const roleBg = m.role === 'captain'
-                                      ? 'bg-blue-500/15 text-sky-400 border-blue-200'
+                                      ? 'bg-emerald-500/15 text-emerald-500 border-emerald-200'
                                       : isPending
-                                      ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30'
+                                      ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
                                       : m.role === 'view-only'
                                       ? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
-                                      : 'bg-blue-500/15 text-blue-400 border-blue-200';
+                                      : 'bg-emerald-500/15 text-emerald-500 border-emerald-200';
                                     const kycBg = m.kyc === 'approved'
                                       ? 'text-green-400'
                                       : m.kyc === 'rejected'
                                       ? 'text-red-400'
-                                      : 'text-sky-400';
+                                      : 'text-emerald-500';
                                     return (
-                                      <div key={mi} className={`flex items-center gap-3 px-4 py-3 ${isPending ? 'bg-indigo-500/5' : ''}`}>
+                                      <div key={mi} className={`flex items-center gap-3 px-4 py-3 ${isPending ? 'bg-emerald-500/5' : ''}`}>
                                         {/* Avatar initial */}
                                         <div className="w-8 h-8 rounded-full bg-white/8 border border-white/10 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
                                           {(m.name || '?')[0].toUpperCase()}
@@ -2342,7 +2342,7 @@ export default function PuntingClub() {
                                             <span className={`text-xs ${m.depositPaid ? 'text-green-400' : 'text-gray-600'}`}>
                                               {m.depositPaid ? '✓ Deposit paid' : '— No deposit'}
                                             </span>
-                                            <span className={`text-xs ${m.canBet ? 'text-blue-400' : 'text-gray-600'}`}>
+                                            <span className={`text-xs ${m.canBet ? 'text-emerald-500' : 'text-gray-600'}`}>
                                               {m.canBet ? '✓ Can bet' : '— No betting'}
                                             </span>
                                           </div>
@@ -2425,7 +2425,7 @@ export default function PuntingClub() {
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                 <p className="font-bold text-sm">{u.name}</p>
                                 <StatusPill s={u.kyc} />
-                                <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs px-1.5 py-0.5 rounded capitalize">{u.role}</span>
+                                <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs px-1.5 py-0.5 rounded capitalize">{u.role}</span>
                                 {!u.active && <span className="text-red-400 text-xs font-bold">Suspended</span>}
                                 {u.flagged && <span className="text-red-400 text-xs">🚩</span>}
                               </div>
@@ -2445,9 +2445,9 @@ export default function PuntingClub() {
                                 </>
                               )}
                               {u.kyc === 'verified' && (
-                                <button onClick={() => setKycStatus(u.phone,'pending')} className="bg-blue-500/10 border border-blue-500/20 text-sky-500 px-2.5 py-1 rounded-lg text-xs">Re-review</button>
+                                <button onClick={() => setKycStatus(u.phone,'pending')} className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 px-2.5 py-1 rounded-lg text-xs">Re-review</button>
                               )}
-                              <button onClick={() => resetPassword(u.phone)} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">Reset Pwd</button>
+                              <button onClick={() => resetPassword(u.phone)} className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 px-2.5 py-1 rounded-lg text-xs">Reset Pwd</button>
                               {adminUser?.role === 'owner' && (
                                 <button onClick={() => deleteUser(u.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-300 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
                               )}
@@ -2458,10 +2458,10 @@ export default function PuntingClub() {
                     </div>
 
                     {/* GDPR note */}
-                    <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4 flex gap-3">
-                      <Shield className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="bg-emerald-50 border border-emerald-500/20 rounded-xl p-4 flex gap-3">
+                      <Shield className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-blue-400 text-xs font-bold mb-1">Data Privacy & GDPR Compliance</p>
+                        <p className="text-emerald-500 text-xs font-bold mb-1">Data Privacy & GDPR Compliance</p>
                         <p className="text-gray-500 text-xs">User PII is encrypted at rest. DOB and postcode used for KYC age verification only. Export logs maintained for audit. Users may request data deletion via support.</p>
                       </div>
                     </div>
@@ -2479,13 +2479,13 @@ export default function PuntingClub() {
                     {/* AI confidence legend */}
                     <div className="bg-white border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
                       <div><span className="text-gray-500">AI Confidence: </span><span className="text-green-400 font-bold">90-100%</span><span className="text-gray-600"> = High</span></div>
-                      <div><span className="text-sky-400 font-bold">70-89%</span><span className="text-gray-600"> = Review recommended</span></div>
+                      <div><span className="text-emerald-500 font-bold">70-89%</span><span className="text-gray-600"> = Review recommended</span></div>
                       <div><span className="text-red-400 font-bold">&lt;70%</span><span className="text-gray-600"> = Manual review required</span></div>
                     </div>
 
                     <div className="space-y-3">
                       {filteredBets.map(b => (
-                        <div key={b.id} className={`bg-white border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-blue-200' : 'border-white/8'}`}>
+                        <div key={b.id} className={`bg-white border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-emerald-200' : 'border-white/8'}`}>
                           <div className="px-4 py-3 flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -2493,22 +2493,22 @@ export default function PuntingClub() {
                                 <p className="font-bold text-sm">{b.team}</p>
                                 <StatusPill s={b.status} />
                                 {b.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
-                                {!b.valid && <span className="text-sky-400 text-xs font-bold">⚠ Invalid</span>}
+                                {!b.valid && <span className="text-emerald-500 text-xs font-bold">⚠ Invalid</span>}
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-xs text-gray-500 mb-2">
                                 <span>Type: <span className="text-gray-300">{b.type}</span></span>
                                 <span>Stake: {editingBetField?.betId === b.id && editingBetField?.field === 'stake' ? (
-                                  <input defaultValue={b.stake} onBlur={e => { correctBetField(b.id,'stake',e.target.value); setEditingBetField(null); }} className="bg-black border border-blue-500/50 rounded px-1 text-sky-300 w-20 text-xs" autoFocus />
-                                ) : <span className="text-sky-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'stake' })}>{b.stake} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
+                                  <input defaultValue={b.stake} onBlur={e => { correctBetField(b.id,'stake',e.target.value); setEditingBetField(null); }} className="bg-black border border-emerald-500/50 rounded px-1 text-emerald-400 w-20 text-xs" autoFocus />
+                                ) : <span className="text-emerald-400 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'stake' })}>{b.stake} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
                                 <span>Odds: {editingBetField?.betId === b.id && editingBetField?.field === 'odds' ? (
-                                  <input defaultValue={b.odds} onBlur={e => { correctBetField(b.id,'combined_odds',e.target.value); setEditingBetField(null); }} className="bg-black border border-blue-500/50 rounded px-1 text-sky-300 w-20 text-xs" autoFocus />
+                                  <input defaultValue={b.odds} onBlur={e => { correctBetField(b.id,'combined_odds',e.target.value); setEditingBetField(null); }} className="bg-black border border-emerald-500/50 rounded px-1 text-emerald-400 w-20 text-xs" autoFocus />
                                 ) : <span className="text-gray-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'odds' })}>{b.odds} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
                                 <span>To Win: {editingBetField?.betId === b.id && editingBetField?.field === 'toWin' ? (
                                   <input defaultValue={b.toWin} onBlur={e => { correctBetField(b.id,'estimated_return',e.target.value); setEditingBetField(null); }} className="bg-black border border-green-500/50 rounded px-1 text-green-400 w-24 text-xs" autoFocus />
                                 ) : <span className="text-green-400 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'toWin' })}>{b.toWin} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
                                 <span>Week: <span className="text-gray-300">{b.week}</span></span>
                                 <span>Submitted: <span className="text-gray-300">{b.submittedAt}</span></span>
-                                <span>AI Confidence: <span className={b.aiConfidence >= 90 ? 'text-green-400' : b.aiConfidence >= 70 ? 'text-sky-400' : 'text-red-400'}>{b.aiConfidence}%</span></span>
+                                <span>AI Confidence: <span className={b.aiConfidence >= 90 ? 'text-green-400' : b.aiConfidence >= 70 ? 'text-emerald-500' : 'text-red-400'}>{b.aiConfidence}%</span></span>
                               </div>
                             </div>
                           </div>
@@ -2525,7 +2525,7 @@ export default function PuntingClub() {
                           {canAdmin('bets') && (b.status === 'won' || b.status === 'lost') && (
                             <div className="border-t border-white/5 bg-black/20 px-4 py-2 flex items-center gap-2">
                               <p className="text-gray-600 text-xs">Result confirmed.</p>
-                              <button onClick={() => setAdminBets(prev => prev.map(x => x.id === b.id ? {...x, status:'pending'} : x))} className="text-sky-500 text-xs hover:text-sky-400">Reopen dispute</button>
+                              <button onClick={() => setAdminBets(prev => prev.map(x => x.id === b.id ? {...x, status:'pending'} : x))} className="text-emerald-600 text-xs hover:text-emerald-500">Reopen dispute</button>
                             </div>
                           )}
                           {/* Per-leg override */}
@@ -2533,16 +2533,16 @@ export default function PuntingClub() {
                             <div className="border-t border-white/5">
                               <button
                                 onClick={() => setExpandedBetId(expandedBetId === b.id ? null : b.id)}
-                                className="w-full px-4 py-2 text-left text-xs text-gray-500 hover:text-sky-400 flex items-center gap-1.5 transition-colors"
+                                className="w-full px-4 py-2 text-left text-xs text-gray-500 hover:text-emerald-500 flex items-center gap-1.5 transition-colors"
                               >
                                 <Edit3 className="w-3 h-3" />
                                 {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})`}
                               </button>
                               {expandedBetId === b.id && (
                                 <div className="px-4 pb-4 space-y-2 bg-black/30">
-                                  <p className="text-sky-400 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
+                                  <p className="text-emerald-500 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
                                   {b.legs.map(leg => {
-                                    const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-sky-400';
+                                    const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-emerald-500';
                                     return (
                                       <div key={leg.id} className="bg-white border border-white/8 rounded-lg p-3">
                                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -2574,7 +2574,7 @@ export default function PuntingClub() {
                                           placeholder="Result note (optional)"
                                           defaultValue={leg.resultNote || ''}
                                           onChange={e => setLegNotes(prev => ({ ...prev, [leg.id]: e.target.value }))}
-                                          className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-blue-500/50"
+                                          className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-emerald-500/50"
                                         />
                                       </div>
                                     );
@@ -2611,23 +2611,23 @@ export default function PuntingClub() {
                           <p className="text-gray-500 text-sm">{adminComps.length} competitions · {adminComps.filter(c=>c.status==='active').length} active</p>
                         </div>
                         {(adminUser.role === 'owner' || adminUser.role === 'pub_admin') && (
-                          <button onClick={() => setShowCreateComp(!showCreateComp)} className="bg-blue-500/20 border border-blue-500/40 text-sky-400 px-3 py-2 rounded-lg text-xs font-semibold">+ New Competition</button>
+                          <button onClick={() => setShowCreateComp(!showCreateComp)} className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 px-3 py-2 rounded-lg text-xs font-semibold">+ New Competition</button>
                         )}
                       </div>
 
                       {/* Create form */}
                       {showCreateComp && (
-                        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-3">
-                          <h3 className="font-bold text-sky-400">Create New Competition</h3>
+                        <div className="bg-white border border-emerald-200 rounded-xl p-5 space-y-3">
+                          <h3 className="font-bold text-emerald-500">Create New Competition</h3>
                           <div className="grid sm:grid-cols-2 gap-3">
                             {[['Competition Name','name','text','RSL Summer Cup'],['Pub / Club Name','pub','text','RSL Club Sydney'],['Buy-In Amount','buyIn','text','$1,000'],['Max Teams','maxTeams','number','20'],['Start Date','startDate','date',''],['End Date','endDate','date','']].map(([l,k,t,p]) => (
                               <div key={k}>
-                                <label className="block text-xs font-semibold text-sky-400 mb-1">{l}</label>
-                                <input type={t} value={newComp[k]} onChange={e => setNewComp(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder={p} />
+                                <label className="block text-xs font-semibold text-emerald-500 mb-1">{l}</label>
+                                <input type={t} value={newComp[k]} onChange={e => setNewComp(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder={p} />
                               </div>
                             ))}
                             <div>
-                              <label className="block text-xs font-semibold text-sky-400 mb-1">Season Length</label>
+                              <label className="block text-xs font-semibold text-emerald-500 mb-1">Season Length</label>
                               {(() => {
                                 const weeks = newComp.startDate && newComp.endDate
                                   ? Math.round((new Date(newComp.endDate) - new Date(newComp.startDate)) / (7 * 86400000))
@@ -2642,7 +2642,7 @@ export default function PuntingClub() {
                           </div>
                           {/* Payout Structure */}
                           <div>
-                            <label className="block text-xs font-semibold text-sky-400 mb-2">Payout Structure</label>
+                            <label className="block text-xs font-semibold text-emerald-500 mb-2">Payout Structure</label>
                             <div className="grid grid-cols-1 gap-2">
                               {[
                                 ['winner_takes_all',   '🥇 Winner Takes All',            'The top team takes the full prize pool (minus admin fee)'],
@@ -2651,7 +2651,7 @@ export default function PuntingClub() {
                               ].map(([v, l, d]) => (
                                 <button key={v} type="button"
                                   onClick={() => setNewComp(p => ({...p, payoutStructure: v}))}
-                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${newComp.payoutStructure === v ? 'border-blue-500 bg-blue-500/15 text-sky-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${newComp.payoutStructure === v ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
                                 >
                                   <div className="font-bold mb-0.5">{l}</div>
                                   <div className="text-gray-500 text-xs">{d}</div>
@@ -2661,12 +2661,12 @@ export default function PuntingClub() {
                           </div>
                           {/* Private/Public toggle */}
                           <div>
-                            <label className="block text-xs font-semibold text-sky-400 mb-2">Visibility</label>
+                            <label className="block text-xs font-semibold text-emerald-500 mb-2">Visibility</label>
                             <div className="grid grid-cols-2 gap-2">
                               {[['false','🌐 Public','Visible to all users in competition list'],['true','🔒 Private','Only joinable via the competition code']].map(([v,l,d]) => (
                                 <button key={v} type="button"
                                   onClick={() => setNewComp(p => ({...p, isPrivate: v === 'true'}))}
-                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${String(newComp.isPrivate) === v ? 'border-blue-500 bg-blue-500/15 text-sky-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${String(newComp.isPrivate) === v ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
                                 >
                                   <div className="font-bold mb-0.5">{l}</div>
                                   <div className="text-gray-500 text-xs">{d}</div>
@@ -2674,12 +2674,12 @@ export default function PuntingClub() {
                               ))}
                             </div>
                           </div>
-                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-gray-400">
-                            <strong className="text-sky-400">Note:</strong> Competition requires approval from Owner Admin before going live. A unique QR code and join link will be auto-generated.
+                          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-xs text-gray-400">
+                            <strong className="text-emerald-500">Note:</strong> Competition requires approval from Owner Admin before going live. A unique QR code and join link will be auto-generated.
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false, payoutStructure:'winner_takes_all' }); }} className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-black font-bold py-2 rounded-lg text-sm">Create Competition</button>
+                            <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false, payoutStructure:'winner_takes_all' }); }} className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
                         </div>
                       )}
@@ -2688,16 +2688,16 @@ export default function PuntingClub() {
                       {adminCompRequests.length > 0 && (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-bold text-sky-400">📬 Competition Requests</h3>
-                            <span className="bg-blue-600 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{adminCompRequests.filter(r => r.status === 'requested').length}</span>
+                            <h3 className="text-sm font-bold text-emerald-500">📬 Competition Requests</h3>
+                            <span className="bg-orange-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminCompRequests.filter(r => r.status === 'requested').length}</span>
                           </div>
                           {adminCompRequests.map(req => (
-                            <div key={req.id} className={`bg-white border rounded-xl p-4 ${req.status === 'requested' ? 'border-blue-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
+                            <div key={req.id} className={`bg-white border rounded-xl p-4 ${req.status === 'requested' ? 'border-emerald-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
                                     <p className="font-bold text-sm">{req.comp_name}</p>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${req.status === 'requested' ? 'bg-blue-500/20 text-sky-400 border-blue-500/40' : req.status === 'approved' ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${req.status === 'requested' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40' : req.status === 'approved' ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
                                       {req.status === 'requested' ? '⏳ Pending' : req.status === 'approved' ? '✓ Approved' : '✗ Declined'}
                                     </span>
                                     {req.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
@@ -2758,14 +2758,14 @@ export default function PuntingClub() {
                           const showTeams = expandedCompId === compKey;
                           const setShowTeams = (v) => setExpandedCompId(v ? compKey : null);
                           return (
-                          <div key={c.code || c.id} className={`bg-white border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-blue-500/20' : 'border-white/8'}`}>
+                          <div key={c.code || c.id} className={`bg-white border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-emerald-500/20' : 'border-white/8'}`}>
                             <div className="p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                     <p className="font-bold text-base">{c.name}</p>
                                     <StatusPill s={c.status} />
-                                    <span className="font-mono text-xs bg-black/40 border border-white/10 text-sky-300 px-2 py-0.5 rounded">{c.code}</span>
+                                    <span className="font-mono text-xs bg-black/40 border border-white/10 text-emerald-400 px-2 py-0.5 rounded">{c.code}</span>
                                     {c.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
                                   </div>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
@@ -2781,13 +2781,13 @@ export default function PuntingClub() {
                                         <Users className="w-3 h-3" /> {teamCount} / {maxTeams} teams registered
                                       </span>
                                       {teamCount > 0 && (
-                                        <button onClick={() => setShowTeams(!showTeams)} className="text-xs text-blue-400 hover:text-blue-300">
+                                        <button onClick={() => setShowTeams(!showTeams)} className="text-xs text-emerald-500 hover:text-emerald-400">
                                           {showTeams ? 'Hide teams ▲' : 'View teams ▼'}
                                         </button>
                                       )}
                                     </div>
                                     <div className="w-full bg-white/5 rounded-full h-1.5">
-                                      <div className={`h-1.5 rounded-full transition-all ${c.status === 'active' ? 'bg-green-500' : 'bg-blue-600'}`}
+                                      <div className={`h-1.5 rounded-full transition-all ${c.status === 'active' ? 'bg-green-500' : 'bg-orange-500'}`}
                                         style={{width: `${Math.min(100, (teamCount / maxTeams) * 100)}%`}} />
                                     </div>
                                   </div>
@@ -2799,7 +2799,7 @@ export default function PuntingClub() {
                                     {c.status === 'active' && c.id && (
                                       <button
                                         onClick={() => { if (window.confirm(`Force week rollover for "${c.name}"? This moves current bets to history and starts a new week.`)) advanceWeek(c.id, 'forward'); }}
-                                        className="bg-blue-500/20 border border-blue-500/40 text-sky-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                        className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                       >⏭ Advance Week</button>
                                     )}
                                     {c.status === 'active' && c.id && (
@@ -2808,8 +2808,8 @@ export default function PuntingClub() {
                                         className="bg-gray-500/10 border border-gray-500/20 text-gray-500 px-2.5 py-1 rounded-lg text-xs"
                                       >↩ Rollback</button>
                                     )}
-                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-blue-500/10 border border-blue-200 text-sky-400 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-emerald-500/10 border border-emerald-200 text-emerald-500 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                     {adminUser?.role === 'owner' && (
                                       <button
                                         onClick={() => {
@@ -2828,13 +2828,13 @@ export default function PuntingClub() {
                             </div>
                             {/* Inline edit form */}
                             {editingCompId === c.id && (
-                              <div className="border-t border-blue-500/20 bg-black/30 px-4 py-4">
-                                <p className="text-xs font-bold text-sky-400 mb-3">Edit Competition</p>
+                              <div className="border-t border-emerald-500/20 bg-black/30 px-4 py-4">
+                                <p className="text-xs font-bold text-emerald-500 mb-3">Edit Competition</p>
                                 <div className="grid sm:grid-cols-2 gap-3 mb-3">
                                   {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date']].map(([l,k,t]) => (
                                     <div key={k}>
                                       <label className="block text-xs text-gray-500 mb-1">{l}</label>
-                                      <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                                      <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50" />
                                     </div>
                                   ))}
                                 </div>
@@ -2849,14 +2849,14 @@ export default function PuntingClub() {
                                     {[['false','🌐 Public'],['true','🔒 Private']].map(([v,l]) => (
                                       <button key={v} type="button"
                                         onClick={() => setEditCompForm(p => ({...p, isPrivate: v === 'true'}))}
-                                        className={`py-2 rounded-lg border text-xs font-semibold transition-all ${String(editCompForm.isPrivate) === v ? 'border-blue-500 bg-blue-500/15 text-sky-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                        className={`py-2 rounded-lg border text-xs font-semibold transition-all ${String(editCompForm.isPrivate) === v ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
                                       >{l}</button>
                                     ))}
                                   </div>
                                 </div>
                                 <div className="flex gap-2">
                                   <button onClick={() => setEditingCompId(null)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate })} className="flex-1 bg-blue-600 text-black font-bold py-2 rounded-lg text-sm">Save Changes</button>
+                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate })} className="flex-1 bg-orange-500 text-white font-bold py-2 rounded-lg text-sm">Save Changes</button>
                                 </div>
                               </div>
                             )}
@@ -2868,7 +2868,7 @@ export default function PuntingClub() {
                                   {registeredTeams.map((t, ti) => (
                                     <div key={ti} className="flex items-center justify-between bg-white/3 rounded-lg px-3 py-2">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-mono text-sky-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{t.team_code}</span>
+                                        <span className="text-xs font-mono text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">{t.team_code}</span>
                                         <span className="text-sm font-semibold text-white">{t.team_name}</span>
                                       </div>
                                       <StatusPill s={t.status || 'pending'} />
@@ -2902,13 +2902,13 @@ export default function PuntingClub() {
                         { title:'Rate Limiting', status:'Active', icon:'⚡', detail:'API: 100 req/min per user. Failed login lockout after 5 attempts (15 min cooldown).', color:'green' },
                         { title:'Data Retention', status:'Policy Set', icon:'📦', detail:'User data retained 7 years post-competition. KYC docs purged after 2 years. Logs kept 1 year.', color:'blue' },
                       ].map(item => (
-                        <div key={item.title} className={`bg-white border rounded-xl p-4 ${item.color === 'green' ? 'border-green-500/20' : item.color === 'amber' ? 'border-blue-500/20' : 'border-blue-500/20'}`}>
+                        <div key={item.title} className={`bg-white border rounded-xl p-4 ${item.color === 'green' ? 'border-green-500/20' : item.color === 'amber' ? 'border-emerald-500/20' : 'border-emerald-500/20'}`}>
                           <div className="flex items-start gap-3">
                             <span className="text-2xl">{item.icon}</span>
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="font-bold text-sm">{item.title}</p>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${item.color === 'green' ? 'bg-green-500/20 text-green-400 border-green-500/40' : item.color === 'amber' ? 'bg-blue-500/20 text-sky-400 border-blue-500/40' : 'bg-blue-500/20 text-blue-400 border-blue-500/40'}`}>{item.status}</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${item.color === 'green' ? 'bg-green-500/20 text-green-400 border-green-500/40' : item.color === 'amber' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40' : 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'}`}>{item.status}</span>
                               </div>
                               <p className="text-gray-500 text-xs leading-relaxed">{item.detail}</p>
                             </div>
@@ -2943,7 +2943,7 @@ export default function PuntingClub() {
                       <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>GDPR Data Requests</h3>
                       <p className="text-gray-400 text-sm mb-3">Handle user data deletion and export requests in compliance with Australian Privacy Act 1988 and GDPR.</p>
                       <div className="flex gap-3 flex-wrap">
-                        <button onClick={() => { addAuditEntry('owner','Data Export','All Users','GDPR compliant full export triggered'); alert('Full encrypted data export initiated. Link will be emailed to admin@puntingclub.com'); }} className="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"><Download className="w-3 h-3"/>Export All User Data</button>
+                        <button onClick={() => { addAuditEntry('owner','Data Export','All Users','GDPR compliant full export triggered'); alert('Full encrypted data export initiated. Link will be emailed to admin@puntingclub.com'); }} className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"><Download className="w-3 h-3"/>Export All User Data</button>
                         <button onClick={() => { const phone = prompt('Enter user phone number to delete:'); if(phone) { addAuditEntry('owner','Data Deletion',phone,'GDPR erasure request'); alert(`Data deletion request for ${phone} queued. Will be processed within 30 days per GDPR.`); }}} className="bg-red-500/20 border border-red-500/40 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold">Request Data Erasure</button>
                       </div>
                     </div>
@@ -2978,7 +2978,7 @@ export default function PuntingClub() {
                         {adminAuditLog.map((e, i) => (
                           <div key={i} className="grid grid-cols-12 text-xs px-4 py-2.5 hover:bg-white/2">
                             <div className="col-span-3 text-gray-600 font-mono">{e.ts}</div>
-                            <div className="col-span-2"><span className={`capitalize font-semibold ${e.adminRole === 'owner' ? 'text-red-400' : e.adminRole === 'campaign' ? 'text-blue-400' : 'text-green-400'}`}>{e.adminRole}</span></div>
+                            <div className="col-span-2"><span className={`capitalize font-semibold ${e.adminRole === 'owner' ? 'text-red-400' : e.adminRole === 'campaign' ? 'text-emerald-500' : 'text-green-400'}`}>{e.adminRole}</span></div>
                             <div className="col-span-3 text-white font-medium">{e.action}</div>
                             <div className="col-span-4 text-gray-400 truncate">{e.target}{e.detail ? ` — ${e.detail}` : ''}</div>
                           </div>
@@ -2998,7 +2998,7 @@ export default function PuntingClub() {
       <footer className="border-t border-white/5 bg-black/30 py-10 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto grid sm:grid-cols-4 gap-8 mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-3"><Sparkles className="w-5 h-5 text-sky-500" /><span className="font-black text-sky-400">PUNTING CLUB</span></div>
+            <div className="flex items-center gap-2 mb-3"><Sparkles className="w-5 h-5 text-emerald-600" /><span className="font-black text-emerald-500">PUNTING CLUB</span></div>
             <p className="text-gray-600 text-xs">The ultimate sports betting league for teams and friends.</p>
           </div>
           {[
@@ -3021,13 +3021,13 @@ export default function PuntingClub() {
             ]],
           ].map(([h, items]) => (
             <div key={h}>
-              <h4 className="font-bold text-sky-400/80 text-sm mb-3">{h}</h4>
+              <h4 className="font-bold text-emerald-500/80 text-sm mb-3">{h}</h4>
               <ul className="space-y-1.5">
                 {items.map(item => (
                   <li key={item.label}>
                     <button
                       onClick={() => { if (item.nav) navigateTo(item.nav); else if (item.action) item.action(); }}
-                      className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-sky-400/70 cursor-pointer' : 'cursor-default'}`}
+                      className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-emerald-500/70 cursor-pointer' : 'cursor-default'}`}
                     >{item.label}</button>
                   </li>
                 ))}
@@ -3052,18 +3052,18 @@ export default function PuntingClub() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-semibold text-sky-400 mb-1.5">Mobile Number</label>
-              <input type="tel" required value={loginPhone} onChange={e => { setLoginPhone(e.target.value); setApiError(null); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="+61 412 345 678" />
+              <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Mobile Number</label>
+              <input type="tel" required value={loginPhone} onChange={e => { setLoginPhone(e.target.value); setApiError(null); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="+61 412 345 678" />
               <p className="text-gray-600 text-xs mt-1">The mobile number you registered with</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-sky-400 mb-1.5">Password</label>
-              <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="Your password" />
+              <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Password</label>
+              <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="Your password" />
             </div>
-            <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Log In'}</button>
+            <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Log In'}</button>
             <div className="text-center">
               <p className="text-gray-600 text-xs mb-1.5">Don't have an account?</p>
-              <button type="button" onClick={() => { setShowLoginModal(false); setSignupMode('create'); setShowSignupModal(true); }} className="text-sky-400 hover:text-sky-300 text-sm font-semibold">Create Account</button>
+              <button type="button" onClick={() => { setShowLoginModal(false); setSignupMode('create'); setShowSignupModal(true); }} className="text-emerald-500 hover:text-emerald-400 text-sm font-semibold">Create Account</button>
             </div>
           </form>
         </Modal>
@@ -3077,7 +3077,7 @@ export default function PuntingClub() {
               <div className="text-5xl mb-2">🎉</div>
               <h3 className="text-xl font-black text-white">Request Submitted!</h3>
               <p className="text-gray-400 text-sm">Your competition request has been sent to our team. We'll be in touch within 1–2 business days.</p>
-              <button onClick={() => setShowRequestCompModal(false)} className="w-full bg-blue-600 text-black font-bold py-3 rounded-xl text-sm mt-2">Done</button>
+              <button onClick={() => setShowRequestCompModal(false)} className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl text-sm mt-2">Done</button>
             </div>
           ) : (
             <div className="p-5 space-y-4">
@@ -3089,8 +3089,8 @@ export default function PuntingClub() {
               <div className="flex items-center gap-2 mb-2">
                 {[1,2,3].map(s => (
                   <div key={s} className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${requestCompStep >= s ? 'bg-blue-600 border-blue-500 text-black' : 'border-white/20 text-gray-500'}`}>{s}</div>
-                    {s < 3 && <div className={`h-0.5 flex-1 w-8 ${requestCompStep > s ? 'bg-blue-600' : 'bg-white/10'}`} />}
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${requestCompStep >= s ? 'bg-orange-500 border-orange-500 text-white' : 'border-white/20 text-gray-500'}`}>{s}</div>
+                    {s < 3 && <div className={`h-0.5 flex-1 w-8 ${requestCompStep > s ? 'bg-orange-500' : 'bg-white/10'}`} />}
                   </div>
                 ))}
                 <span className="text-xs text-gray-500 ml-1">{requestCompStep === 1 ? (isLoggedIn ? 'Venue Details' : 'Your Details') : requestCompStep === 2 ? 'Competition Setup' : 'Preferences'}</span>
@@ -3102,30 +3102,30 @@ export default function PuntingClub() {
                     <>
                       <p className="text-gray-400 text-xs">Which pub or club is hosting this competition?</p>
                       <div>
-                        <label className="block text-xs font-semibold text-sky-400 mb-1">Pub / Club Name *</label>
-                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                        <label className="block text-xs font-semibold text-emerald-500 mb-1">Pub / Club Name *</label>
+                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
                       </div>
                     </>
                   ) : (
                     <>
                       <p className="text-gray-400 text-xs">Tell us about yourself and your venue.</p>
                       <div>
-                        <label className="block text-xs font-semibold text-sky-400 mb-1">Your Name *</label>
-                        <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="John Smith" />
+                        <label className="block text-xs font-semibold text-emerald-500 mb-1">Your Name *</label>
+                        <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="John Smith" />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-sky-400 mb-1">Phone *</label>
-                          <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="0412 345 678" />
+                          <label className="block text-xs font-semibold text-emerald-500 mb-1">Phone *</label>
+                          <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="0412 345 678" />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-sky-400 mb-1">Email *</label>
-                          <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="john@rsl.com.au" />
+                          <label className="block text-xs font-semibold text-emerald-500 mb-1">Email *</label>
+                          <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="john@rsl.com.au" />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-sky-400 mb-1">Pub / Club Name *</label>
-                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                        <label className="block text-xs font-semibold text-emerald-500 mb-1">Pub / Club Name *</label>
+                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
                       </div>
                     </>
                   )}
@@ -3140,7 +3140,7 @@ export default function PuntingClub() {
                       }
                       setRequestCompError(null); setRequestCompStep(2);
                     }}
-                    className="w-full bg-blue-600 text-black font-bold py-2.5 rounded-xl text-sm"
+                    className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-sm"
                   >Next →</button>
                 </div>
               )}
@@ -3149,27 +3149,27 @@ export default function PuntingClub() {
                 <div className="space-y-3">
                   <p className="text-gray-400 text-xs">Tell us about the competition you have in mind.</p>
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-1">Competition Name *</label>
-                    <input type="text" value={requestCompForm.compName} onChange={e => setRequestCompForm(p => ({...p, compName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="RSL Summer Cup 2026" />
+                    <label className="block text-xs font-semibold text-emerald-500 mb-1">Competition Name *</label>
+                    <input type="text" value={requestCompForm.compName} onChange={e => setRequestCompForm(p => ({...p, compName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="RSL Summer Cup 2026" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-sky-400 mb-1">Preferred Start Date</label>
-                      <input type="date" value={requestCompForm.preferredStartDate} onChange={e => setRequestCompForm(p => ({...p, preferredStartDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                      <label className="block text-xs font-semibold text-emerald-500 mb-1">Preferred Start Date</label>
+                      <input type="date" value={requestCompForm.preferredStartDate} onChange={e => setRequestCompForm(p => ({...p, preferredStartDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-sky-400 mb-1">Preferred End Date</label>
-                      <input type="date" value={requestCompForm.preferredEndDate} onChange={e => setRequestCompForm(p => ({...p, preferredEndDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                      <label className="block text-xs font-semibold text-emerald-500 mb-1">Preferred End Date</label>
+                      <input type="date" value={requestCompForm.preferredEndDate} onChange={e => setRequestCompForm(p => ({...p, preferredEndDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-sky-400 mb-1">Estimated Teams</label>
-                      <input type="number" min="2" max="200" value={requestCompForm.estimatedTeams} onChange={e => setRequestCompForm(p => ({...p, estimatedTeams: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="10" />
+                      <label className="block text-xs font-semibold text-emerald-500 mb-1">Estimated Teams</label>
+                      <input type="number" min="2" max="200" value={requestCompForm.estimatedTeams} onChange={e => setRequestCompForm(p => ({...p, estimatedTeams: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="10" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-sky-400 mb-1">Buy-In Amount</label>
-                      <input type="text" value={requestCompForm.buyIn} onChange={e => setRequestCompForm(p => ({...p, buyIn: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="$1,000" />
+                      <label className="block text-xs font-semibold text-emerald-500 mb-1">Buy-In Amount</label>
+                      <input type="text" value={requestCompForm.buyIn} onChange={e => setRequestCompForm(p => ({...p, buyIn: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="$1,000" />
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -3179,7 +3179,7 @@ export default function PuntingClub() {
                         if (!requestCompForm.compName.trim()) { setRequestCompError('Please enter a competition name.'); return; }
                         setRequestCompError(null); setRequestCompStep(3);
                       }}
-                      className="flex-1 bg-blue-600 text-black font-bold py-2.5 rounded-xl text-sm"
+                      className="flex-1 bg-orange-500 text-white font-bold py-2.5 rounded-xl text-sm"
                     >Next →</button>
                   </div>
                 </div>
@@ -3190,12 +3190,12 @@ export default function PuntingClub() {
                   <p className="text-gray-400 text-xs">Final details about your competition setup.</p>
 
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-2">Competition Type</label>
+                    <label className="block text-xs font-semibold text-emerald-500 mb-2">Competition Type</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[['public', '🌐 Public', 'Anyone can see and join the competition'], ['private', '🔒 Private', 'Only accessible via a secret code you share']].map(([v, label, desc]) => (
                         <button key={v} type="button"
                           onClick={() => setRequestCompForm(p => ({...p, isPrivate: v === 'private'}))}
-                          className={`p-3 rounded-lg border text-left text-xs transition-all ${(v === 'private') === requestCompForm.isPrivate ? 'border-blue-500 bg-blue-500/15 text-sky-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                          className={`p-3 rounded-lg border text-left text-xs transition-all ${(v === 'private') === requestCompForm.isPrivate ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
                         >
                           <div className="font-bold mb-0.5">{label}</div>
                           <div className="text-gray-500">{desc}</div>
@@ -3203,18 +3203,18 @@ export default function PuntingClub() {
                       ))}
                     </div>
                     {requestCompForm.isPrivate && (
-                      <p className="text-xs text-sky-400 mt-2 bg-blue-500/10 border border-blue-500/20 rounded-lg p-2">
+                      <p className="text-xs text-emerald-500 mt-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2">
                         🔑 A private access code will be generated when the competition is approved. Team captains use this code to register.
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-1">Additional Notes</label>
+                    <label className="block text-xs font-semibold text-emerald-500 mb-1">Additional Notes</label>
                     <textarea
                       value={requestCompForm.notes}
                       onChange={e => setRequestCompForm(p => ({...p, notes: e.target.value}))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600 resize-none"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600 resize-none"
                       rows={3}
                       placeholder="Any other details, special requirements, or questions..."
                     />
@@ -3236,7 +3236,7 @@ export default function PuntingClub() {
                           setRequestCompLoading(false);
                         }
                       }}
-                      className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-black font-bold py-2.5 rounded-xl text-sm disabled:opacity-60"
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-60"
                     >
                       {requestCompLoading ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1" />Submitting...</> : 'Submit Request'}
                     </button>
@@ -3260,22 +3260,22 @@ export default function PuntingClub() {
             {/* Toggle */}
             <div className="flex gap-2 p-1 bg-black/30 rounded-lg">
               {[['create','Create Team'],['join','Join Team']].map(([m,l]) => (
-                <button key={m} type="button" onClick={() => setSignupMode(m)} className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${signupMode === m ? 'bg-blue-600 text-black' : 'text-gray-400 hover:text-white'}`}>{l}</button>
+                <button key={m} type="button" onClick={() => setSignupMode(m)} className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${signupMode === m ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white'}`}>{l}</button>
               ))}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               {[['firstName','First Name','text','John','given-name'],['lastName','Last Name','text','Smith','family-name']].map(([f,l,t,p,ac]) => (
                 <div key={f}>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">{l} *</label>
-                  <input type={t} required autoComplete={ac} value={formData[f]} onChange={e => setFormData(p => ({...p, [f]: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder={p} />
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">{l} *</label>
+                  <input type={t} required autoComplete={ac} value={formData[f]} onChange={e => setFormData(p => ({...p, [f]: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder={p} />
                 </div>
               ))}
             </div>
 
             {/* Phone with live validation */}
             <div>
-              <label className="block text-xs font-semibold text-sky-400 mb-1.5">Mobile Number <span className="text-red-400">*</span></label>
+              <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Mobile Number <span className="text-red-400">*</span></label>
               <input
                 type="tel"
                 required
@@ -3290,7 +3290,7 @@ export default function PuntingClub() {
                     setPhoneError('');
                   }
                 }}
-                className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${phoneError ? 'border-red-500/60 focus:border-red-500' : formData.phone.length > 5 && !phoneError ? 'border-green-500/50 focus:border-green-500' : 'border-white/10 focus:border-blue-500/50'}`}
+                className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${phoneError ? 'border-red-500/60 focus:border-red-500' : formData.phone.length > 5 && !phoneError ? 'border-green-500/50 focus:border-green-500' : 'border-white/10 focus:border-emerald-500/50'}`}
                 placeholder="0412 345 678"
               />
               {phoneError
@@ -3302,34 +3302,34 @@ export default function PuntingClub() {
             </div>
             {[['email','Email','email','john@example.com','email']].map(([f,l,t,p,ac]) => (
               <div key={f}>
-                <label className="block text-xs font-semibold text-sky-400 mb-1">{l} *</label>
-                <input type={t} required autoComplete={ac} value={formData[f]} onChange={e => setFormData(prev => ({...prev, [f]: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder={p} />
+                <label className="block text-xs font-semibold text-emerald-500 mb-1">{l} *</label>
+                <input type={t} required autoComplete={ac} value={formData[f]} onChange={e => setFormData(prev => ({...prev, [f]: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder={p} />
                 {f === 'phone' && <p className="text-gray-600 text-xs mt-0.5">This is your username for login</p>}
               </div>
             ))}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-sky-400 mb-1">Date of Birth *</label>
-                <input type="date" required value={formData.dob} onChange={e => setFormData(p => ({...p, dob: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                <label className="block text-xs font-semibold text-emerald-500 mb-1">Date of Birth *</label>
+                <input type="date" required value={formData.dob} onChange={e => setFormData(p => ({...p, dob: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-sky-400 mb-1">Postcode *</label>
-                <input type="text" required value={formData.postcode} onChange={e => setFormData(p => ({...p, postcode: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="2000" />
+                <label className="block text-xs font-semibold text-emerald-500 mb-1">Postcode *</label>
+                <input type="text" required value={formData.postcode} onChange={e => setFormData(p => ({...p, postcode: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="2000" />
               </div>
             </div>
 
             {signupMode === 'create' && (
               <>
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Team Name *</label>
-                  <input type="text" required value={formData.teamName} onChange={e => setFormData(p => ({...p, teamName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="The Legends" />
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Team Name *</label>
+                  <input type="text" required value={formData.teamName} onChange={e => setFormData(p => ({...p, teamName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="The Legends" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1.5">Buy-In Payment</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Buy-In Payment</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[['captain','Captain pays full $1,000'],['split','Split between members']].map(([v,l]) => (
-                      <button key={v} type="button" onClick={() => setFormData(p => ({...p, buyInMode: v}))} className={`p-3 rounded-lg border text-left text-xs transition-all ${formData.buyInMode === v ? 'border-blue-500 bg-blue-500/15 text-sky-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}>
+                      <button key={v} type="button" onClick={() => setFormData(p => ({...p, buyInMode: v}))} className={`p-3 rounded-lg border text-left text-xs transition-all ${formData.buyInMode === v ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}>
                         <div className="font-bold mb-0.5">{v === 'captain' ? '👑 Captain Pays' : '🤝 Split'}</div>
                         <div className="text-gray-500 text-xs">{l}</div>
                       </button>
@@ -3341,8 +3341,8 @@ export default function PuntingClub() {
 
             {signupMode === 'join' && (
               <div>
-                <label className="block text-xs font-semibold text-sky-400 mb-1">Team Code *</label>
-                <input type="text" required value={formData.teamCode} onChange={e => setFormData(p => ({...p, teamCode: e.target.value.toUpperCase()}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600 tracking-widest" placeholder="ABC123" maxLength={6} />
+                <label className="block text-xs font-semibold text-emerald-500 mb-1">Team Code *</label>
+                <input type="text" required value={formData.teamCode} onChange={e => setFormData(p => ({...p, teamCode: e.target.value.toUpperCase()}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600 tracking-widest" placeholder="ABC123" maxLength={6} />
                 <p className="text-gray-600 text-xs mt-0.5">Ask your captain for this code</p>
               </div>
             )}
@@ -3350,7 +3350,7 @@ export default function PuntingClub() {
             {/* Competition — public dropdown + private code entry */}
             {signupMode === 'create' && (
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-sky-400">
+                <label className="block text-xs font-semibold text-emerald-500">
                   Competition <span className="text-gray-600 font-normal">(optional)</span>
                 </label>
                 {/* Public competitions dropdown */}
@@ -3358,7 +3358,7 @@ export default function PuntingClub() {
                   <select
                     value={formData.competitionCode}
                     onChange={e => { setFormData(p => ({...p, competitionCode: e.target.value})); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
                     style={{backgroundColor:'#111827'}}
                   >
                     <option value="">— Select a public competition —</option>
@@ -3372,8 +3372,8 @@ export default function PuntingClub() {
                 {formData.competitionCode && (() => {
                   const sel = activeCompetitions.find(c => c.code === formData.competitionCode);
                   return sel ? (
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
-                      <p className="text-sky-400 text-xs font-semibold">✓ Joining: {sel.name}</p>
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                      <p className="text-emerald-500 text-xs font-semibold">✓ Joining: {sel.name}</p>
                       <p className="text-gray-500 text-xs mt-0.5">{sel.pub} · {sel.weeks} weeks · Buy-in: ${sel.buy_in?.toLocaleString()}</p>
                     </div>
                   ) : null;
@@ -3386,7 +3386,7 @@ export default function PuntingClub() {
                       type="text"
                       value={formData.privateCompCode || ''}
                       onChange={e => { setFormData(p => ({...p, privateCompCode: e.target.value.toUpperCase(), competitionCode: ''})); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600 tracking-widest"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600 tracking-widest"
                       placeholder="PRIV-CODE"
                       maxLength={10}
                     />
@@ -3408,7 +3408,7 @@ export default function PuntingClub() {
                           setPrivateCompLookupLoading(false);
                         }
                       }}
-                      className="bg-blue-500/20 border border-blue-500/40 text-sky-400 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-40"
+                      className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-40"
                     >{privateCompLookupLoading ? '...' : 'Find'}</button>
                   </div>
                   {privateCompLookupError && <p className="text-red-400 text-xs mt-1">✗ {privateCompLookupError}</p>}
@@ -3429,12 +3429,12 @@ export default function PuntingClub() {
 
             <div className="border-t border-white/5 pt-3 space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-sky-400 mb-1">Password *</label>
-                <input type="password" required minLength={6} value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600" placeholder="Min 6 characters" />
+                <label className="block text-xs font-semibold text-emerald-500 mb-1">Password *</label>
+                <input type="password" required minLength={6} value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600" placeholder="Min 6 characters" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-sky-400 mb-1">Confirm Password *</label>
-                <input type="password" required minLength={6} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-blue-500/50'}`} placeholder="Re-enter password" />
+                <label className="block text-xs font-semibold text-emerald-500 mb-1">Confirm Password *</label>
+                <input type="password" required minLength={6} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-emerald-500/50'}`} placeholder="Re-enter password" />
                 {formData.confirmPassword && (
                   formData.password === formData.confirmPassword
                     ? <p className="text-green-400 text-xs mt-1">✓ Passwords match</p>
@@ -3443,12 +3443,12 @@ export default function PuntingClub() {
               </div>
             </div>
 
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-gray-300">
-              <strong className="text-sky-400">Buy-in:</strong> $1,000 per team {signupMode === 'join' && '· Joining requests are approved by the captain'}
-              {signupMode === 'join' && <><br /><span className="text-indigo-400">⚠ Your request will be pending captain approval</span></>}
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-xs text-gray-300">
+              <strong className="text-emerald-500">Buy-in:</strong> $1,000 per team {signupMode === 'join' && '· Joining requests are approved by the captain'}
+              {signupMode === 'join' && <><br /><span className="text-emerald-500">⚠ Your request will be pending captain approval</span></>}
             </div>
 
-            <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-black font-bold py-3 rounded-xl transition-all text-sm disabled:opacity-60 flex items-center justify-center gap-2">
+            <button type="submit" disabled={apiLoading} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-3 rounded-xl transition-all text-sm disabled:opacity-60 flex items-center justify-center gap-2">
               {apiLoading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> {signupMode === 'create' ? 'Creating...' : 'Joining...'}</>
                 : signupMode === 'create' ? 'Create Team & Register' : 'Request to Join Team'}
@@ -3468,18 +3468,18 @@ export default function PuntingClub() {
             </div>
             <div className="bg-white/3 border border-white/8 rounded-xl p-4">
               <p className="text-gray-400 text-xs font-semibold mb-2">Shareable Link</p>
-              <p className="text-sky-300 text-xs break-all mb-2">{shareableLink}</p>
-              <button onClick={() => { navigator.clipboard?.writeText(shareableLink); showToast('Invite link copied!', 'success'); }} className="bg-blue-500/20 hover:bg-blue-500/30 text-sky-400 px-3 py-1.5 rounded-lg text-xs font-semibold w-full">Copy Invite Link</button>
+              <p className="text-emerald-400 text-xs break-all mb-2">{shareableLink}</p>
+              <button onClick={() => { navigator.clipboard?.writeText(shareableLink); showToast('Invite link copied!', 'success'); }} className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-500 px-3 py-1.5 rounded-lg text-xs font-semibold w-full">Copy Invite Link</button>
             </div>
-            <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4">
-              <p className="text-blue-400 text-xs font-semibold mb-2">How to invite:</p>
+            <div className="bg-emerald-50 border border-emerald-500/20 rounded-xl p-4">
+              <p className="text-emerald-500 text-xs font-semibold mb-2">How to invite:</p>
               <ol className="space-y-1 text-gray-400 text-xs">
                 {['Share the team code or invite link','They click Sign Up → Join Team','Enter the team code','Submit request — you\'ll get notified to approve','Once approved they\'re on the team!'].map((s, i) => (
-                  <li key={i} className="flex gap-2"><span className="text-blue-400 font-bold">{i+1}.</span>{s}</li>
+                  <li key={i} className="flex gap-2"><span className="text-emerald-500 font-bold">{i+1}.</span>{s}</li>
                 ))}
               </ol>
             </div>
-            <button onClick={() => { navigator.clipboard?.writeText(`Join my Punting Club team "${currentUser?.teamName || 'The Legends'}"!\n\nTeam Code: ${currentUser?.teamCode || 'XXXXXX'}\nOr use this link: ${shareableLink}`); showToast('Invitation message copied!', 'success'); }} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-black font-bold py-2.5 rounded-xl text-sm">Copy Full Invitation Message</button>
+            <button onClick={() => { navigator.clipboard?.writeText(`Join my Punting Club team "${currentUser?.teamName || 'The Legends'}"!\n\nTeam Code: ${currentUser?.teamCode || 'XXXXXX'}\nOr use this link: ${shareableLink}`); showToast('Invitation message copied!', 'success'); }} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-2.5 rounded-xl text-sm">Copy Full Invitation Message</button>
           </div>
         </Modal>
       )}
@@ -3492,19 +3492,19 @@ export default function PuntingClub() {
             <div className="space-y-2">
               {bettingOrder.map((name, i) => (
                 <div key={name} className="flex items-center gap-3 bg-black/30 border border-white/8 rounded-lg px-3 py-2.5">
-                  <span className="text-sky-400 font-bold text-sm w-6">{i+1}.</span>
+                  <span className="text-emerald-500 font-bold text-sm w-6">{i+1}.</span>
                   <span className="flex-1 text-sm font-semibold">{name}</span>
                   <div className="flex gap-1">
-                    <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i > 0) [a[i-1],a[i]] = [a[i],a[i-1]]; return a; })} disabled={i === 0} className="text-gray-500 hover:text-sky-400 disabled:opacity-20 px-1.5 py-1 text-xs">↑</button>
-                    <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i < a.length-1) [a[i],a[i+1]] = [a[i+1],a[i]]; return a; })} disabled={i === bettingOrder.length-1} className="text-gray-500 hover:text-sky-400 disabled:opacity-20 px-1.5 py-1 text-xs">↓</button>
+                    <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i > 0) [a[i-1],a[i]] = [a[i],a[i-1]]; return a; })} disabled={i === 0} className="text-gray-500 hover:text-emerald-500 disabled:opacity-20 px-1.5 py-1 text-xs">↑</button>
+                    <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i < a.length-1) [a[i],a[i+1]] = [a[i+1],a[i]]; return a; })} disabled={i === bettingOrder.length-1} className="text-gray-500 hover:text-emerald-500 disabled:opacity-20 px-1.5 py-1 text-xs">↓</button>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="bg-blue-50 border border-blue-500/20 rounded-lg p-3 text-xs text-gray-400">
-              <strong className="text-blue-400">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
+            <div className="bg-emerald-50 border border-emerald-500/20 rounded-lg p-3 text-xs text-gray-400">
+              <strong className="text-emerald-500">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
             </div>
-            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-black font-bold py-2.5 rounded-xl text-sm">Save Order</button>
+            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-2.5 rounded-xl text-sm">Save Order</button>
           </div>
         </Modal>
       )}
@@ -3515,10 +3515,10 @@ export default function PuntingClub() {
           <div className="p-5 space-y-4">
 
             {/* What finalising does */}
-            <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4 flex gap-3">
+            <div className="bg-emerald-50 border border-emerald-500/20 rounded-xl p-4 flex gap-3">
               <span className="text-xl flex-shrink-0">ℹ️</span>
               <div>
-                <p className="font-bold text-blue-400 text-sm mb-1">What does finalising do?</p>
+                <p className="font-bold text-emerald-500 text-sm mb-1">What does finalising do?</p>
                 <ul className="text-gray-400 text-xs space-y-1">
                   <li>• Locks in the current member count</li>
                   <li>• Calculates the equal deposit amount per member</li>
@@ -3535,7 +3535,7 @@ export default function PuntingClub() {
                 {teamMembers.map(m => (
                   <div key={m.phone} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-sky-400 text-xs font-bold">{m.name.charAt(0)}</div>
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 text-xs font-bold">{m.name.charAt(0)}</div>
                       <span className="text-sm">{m.name}</span>
                       <PermissionBadge role={m.role} />
                     </div>
@@ -3574,7 +3574,7 @@ export default function PuntingClub() {
                     <div className="border-t border-white/10 pt-2 mt-2">
                       <div className="flex justify-between">
                         <span className="text-gray-400 text-sm">Per member (all {allMembers}):</span>
-                        <span className="font-black text-sky-400 text-lg">${perMemberAll.toLocaleString()}</span>
+                        <span className="font-black text-emerald-500 text-lg">${perMemberAll.toLocaleString()}</span>
                       </div>
                       {confirmedMembers !== allMembers && (
                         <div className="flex justify-between mt-1">
@@ -3591,9 +3591,9 @@ export default function PuntingClub() {
 
             {/* Warning if unconfirmed members */}
             {teamMembers.some(m => !m.depositPaid) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-2">
-                <AlertCircle className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sky-300 text-xs">{teamMembers.filter(m => !m.depositPaid).length} member(s) not yet confirmed. You can still finalise — the deposit will be split equally across <strong>all</strong> members regardless.</p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex gap-2">
+                <AlertCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                <p className="text-emerald-400 text-xs">{teamMembers.filter(m => !m.depositPaid).length} member(s) not yet confirmed. You can still finalise — the deposit will be split equally across <strong>all</strong> members regardless.</p>
               </div>
             )}
 
@@ -3613,7 +3613,7 @@ export default function PuntingClub() {
           <div className="p-4 space-y-4">
             {!analyzedBet ? (
               <>
-                <div className="border-2 border-dashed border-blue-200 rounded-xl p-8 text-center hover:bg-blue-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
+                <div className="border-2 border-dashed border-emerald-200 rounded-xl p-8 text-center hover:bg-emerald-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
                   <p className="text-gray-600 text-xs mt-1">PNG, JPG up to 10MB · $50 weekly max enforced</p>
@@ -3628,7 +3628,7 @@ export default function PuntingClub() {
                     ))}
                   </div>
                 )}
-                <button onClick={analyzeBetSlips} disabled={analyzing || !uploadedImages.length} className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-700 disabled:to-gray-800 text-black disabled:text-gray-500 font-bold py-3 rounded-xl transition-all text-sm">
+                <button onClick={analyzeBetSlips} disabled={analyzing || !uploadedImages.length} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 disabled:from-gray-700 disabled:to-gray-800 text-white disabled:text-gray-500 font-bold py-3 rounded-xl transition-all text-sm">
                   {analyzing ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />Analyzing… (10–15 seconds)</> : 'Analyze Bet Slip'}
                 </button>
               </>
@@ -3651,13 +3651,13 @@ export default function PuntingClub() {
                   const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed);
                   return (
                     <div>
-                      <label className="block text-xs font-semibold text-sky-400 mb-1.5">Submit for team *</label>
-                      <select value={selectedTeamForBet} onChange={e => setSelectedTeamForBet(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                      <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Submit for team *</label>
+                      <select value={selectedTeamForBet} onChange={e => setSelectedTeamForBet(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50">
                         <option value="">Choose a team…</option>
                         {myTeams.map(t => <option key={t.team} value={t.team}>{t.team}</option>)}
                       </select>
                       {selectedTeamForBet && (
-                        <div className={`mt-2 flex items-center justify-between text-xs px-1 ${remaining <= 0 ? 'text-red-400' : remaining < 25 ? 'text-sky-400' : 'text-gray-500'}`}>
+                        <div className={`mt-2 flex items-center justify-between text-xs px-1 ${remaining <= 0 ? 'text-red-400' : remaining < 25 ? 'text-emerald-500' : 'text-gray-500'}`}>
                           <span>Weekly budget used: <strong>${weeklyUsed.toFixed(2)}</strong> of ${WEEK_BUDGET}</span>
                           <span className="font-semibold">${remaining.toFixed(2)} remaining</span>
                         </div>
@@ -3666,7 +3666,7 @@ export default function PuntingClub() {
                   );
                 })()}
                 <div className="flex gap-3">
-                  <button onClick={resetBetAnalyzer} className="flex-1 border border-blue-500/40 hover:bg-blue-500/10 text-sky-400 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
+                  <button onClick={resetBetAnalyzer} className="flex-1 border border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-500 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
                   <button onClick={submitBet} className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2.5 rounded-xl text-sm">Submit Bet ✓</button>
                 </div>
               </>
@@ -3686,11 +3686,11 @@ export default function PuntingClub() {
               <p className="text-red-300/80 text-xs">Restricted access. All logins are audited.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-sky-400 mb-1.5">Admin ID</label>
+              <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Admin ID</label>
               <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin ID" autoComplete="off" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-sky-400 mb-1.5">Password</label>
+              <label className="block text-xs font-semibold text-emerald-500 mb-1.5">Password</label>
               <input type="password" required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
@@ -3714,7 +3714,7 @@ export default function PuntingClub() {
             <div className="flex border-b border-white/5">
               {[['create','Create New'],['join','Join Existing']].map(([tab, label]) => (
                 <button key={tab} onClick={() => { setTeamModalTab(tab); setCreateTeamError(null); setJoinTeamError(null); setJoinTeamSuccess(null); }}
-                  className={`flex-1 py-3 text-sm font-semibold transition-colors ${teamModalTab === tab ? 'text-sky-400 border-b-2 border-sky-400' : 'text-gray-500 hover:text-gray-300'}`}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors ${teamModalTab === tab ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-500 hover:text-gray-300'}`}
                 >{label}</button>
               ))}
             </div>
@@ -3727,31 +3727,31 @@ export default function PuntingClub() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Team Name *</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Team Name *</label>
                   <input
                     type="text"
                     value={createTeamForm.teamName}
                     onChange={e => setCreateTeamForm(p => ({ ...p, teamName: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                     placeholder="e.g. The Golden Eagles"
                     maxLength={50}
                     required
                   />
                   {currentUser?.teamName && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Must match your existing team name. <button type="button" className="text-sky-400 hover:underline" onClick={() => setCreateTeamForm(p => ({ ...p, teamName: currentUser.teamName }))}>{currentUser.teamName}</button>
+                      Must match your existing team name. <button type="button" className="text-emerald-500 hover:underline" onClick={() => setCreateTeamForm(p => ({ ...p, teamName: currentUser.teamName }))}>{currentUser.teamName}</button>
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Competition <span className="text-gray-600 font-normal">(optional)</span></label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Competition <span className="text-gray-600 font-normal">(optional)</span></label>
                   {activeCompetitions.filter(c => !c.is_private).length > 0 ? (
                     <>
                       <select
                         value={createTeamForm.competitionCode}
                         onChange={e => { setCreateTeamForm(p => ({ ...p, competitionCode: e.target.value, privateCompCode: '' })); setPrivateCompLookup(null); setPrivateCompLookupError(null); }}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
                         style={{ backgroundColor: '#111827' }}
                       >
                         <option value="">— No competition (register team only) —</option>
@@ -3764,8 +3764,8 @@ export default function PuntingClub() {
                       {createTeamForm.competitionCode && !privateCompLookup && (() => {
                         const sel = activeCompetitions.find(c => c.code === createTeamForm.competitionCode);
                         return sel ? (
-                          <div className="mt-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
-                            <p className="text-sky-400 text-xs font-semibold">✓ Joining: {sel.name}</p>
+                          <div className="mt-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                            <p className="text-emerald-500 text-xs font-semibold">✓ Joining: {sel.name}</p>
                             <p className="text-gray-500 text-xs mt-0.5">{sel.pub} · {sel.weeks} weeks · Buy-in: ${sel.buy_in?.toLocaleString()}</p>
                           </div>
                         ) : null;
@@ -3817,23 +3817,23 @@ export default function PuntingClub() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Buy-In Mode</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Buy-In Mode</label>
                   <div className="flex gap-2">
                     {[['split','Members split equally'],['captain','Captain pays all']].map(([val, label]) => (
                       <button key={val} type="button"
                         onClick={() => setCreateTeamForm(p => ({ ...p, buyInMode: val }))}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border transition-all ${createTeamForm.buyInMode === val ? 'bg-blue-500/20 border-blue-500 text-sky-400' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border transition-all ${createTeamForm.buyInMode === val ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}
                       >{label}</button>
                     ))}
                   </div>
                 </div>
 
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
                   You can be in up to <span className="text-white font-semibold">3 teams</span> per competition. Team names must be unique within each competition.
                 </div>
 
                 <button type="submit" disabled={createTeamLoading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-black font-bold py-3 rounded-xl text-sm transition-all">
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 disabled:opacity-50 text-black font-bold py-3 rounded-xl text-sm transition-all">
                   {createTeamLoading ? 'Creating…' : 'Create Team'}
                 </button>
               </form>
@@ -3850,12 +3850,12 @@ export default function PuntingClub() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Team Code *</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Team Code *</label>
                   <input
                     type="text"
                     value={joinTeamCode}
                     onChange={e => setJoinTeamCode(e.target.value.toUpperCase())}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                     placeholder="e.g. ABC123"
                     maxLength={8}
                     autoComplete="off"
@@ -3864,12 +3864,12 @@ export default function PuntingClub() {
                   <p className="text-gray-600 text-xs mt-1">Ask the team captain for their 6-character team code.</p>
                 </div>
 
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
-                  Your request will be <span className="text-sky-400 font-semibold">pending captain approval</span> before you can bet. You can be in up to <span className="text-white font-semibold">3 teams</span> per competition.
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-gray-400">
+                  Your request will be <span className="text-emerald-500 font-semibold">pending captain approval</span> before you can bet. You can be in up to <span className="text-white font-semibold">3 teams</span> per competition.
                 </div>
 
                 <button type="submit" disabled={joinTeamLoading || !!joinTeamSuccess}
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all">
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-500 hover:to-red-600 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all">
                   {joinTeamLoading ? 'Sending request…' : joinTeamSuccess ? 'Request sent ✓' : 'Request to Join'}
                 </button>
 
@@ -3892,7 +3892,7 @@ export default function PuntingClub() {
             <div key={t.id} className={`pointer-events-auto w-full flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold bc-toast
               ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :
                 t.type === 'error'   ? 'bg-red-950/95 border border-red-500/50 text-red-200' :
-                t.type === 'warning' ? 'bg-blue-950/95 border border-blue-500/50 text-sky-200' :
+                t.type === 'warning' ? 'bg-emerald-950/95 border border-emerald-500/50 text-emerald-300' :
                 'bg-white/95 border border-white/15 text-gray-200'}`}>
               <span className="flex-shrink-0 mt-0.5">
                 {t.type === 'success' ? '✓' : t.type === 'error' ? '✗' : t.type === 'warning' ? '⚠' : 'ℹ'}
@@ -3912,7 +3912,7 @@ export default function PuntingClub() {
               <button
                 key={tab}
                 onClick={() => { setProfileTab(tab); setProfileError(null); setProfileSuccess(null); }}
-                className={`flex-1 py-3 text-sm font-semibold transition-colors ${profileTab === tab ? 'text-sky-400 border-b-2 border-sky-400' : 'text-gray-500 hover:text-gray-300'}`}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors ${profileTab === tab ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-500 hover:text-gray-300'}`}
               >
                 {label}
               </button>
@@ -3937,46 +3937,46 @@ export default function PuntingClub() {
               <form onSubmit={handleProfileSave} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-1">First Name *</label>
+                    <label className="block text-xs font-semibold text-emerald-500 mb-1">First Name *</label>
                     <input
                       type="text" required value={profileForm.firstName}
                       onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-1">Last Name *</label>
+                    <label className="block text-xs font-semibold text-emerald-500 mb-1">Last Name *</label>
                     <input
                       type="text" required value={profileForm.lastName}
                       onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Email</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Email</label>
                   <input
                     type="email" value={profileForm.email}
                     onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                     placeholder="Optional"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-1">Date of Birth</label>
+                    <label className="block text-xs font-semibold text-emerald-500 mb-1">Date of Birth</label>
                     <input
                       type="date" value={profileForm.dob}
                       onChange={e => setProfileForm(p => ({ ...p, dob: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-sky-400 mb-1">Postcode</label>
+                    <label className="block text-xs font-semibold text-emerald-500 mb-1">Postcode</label>
                     <input
                       type="text" maxLength={10} value={profileForm.postcode}
                       onChange={e => setProfileForm(p => ({ ...p, postcode: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                       placeholder="2000"
                     />
                   </div>
@@ -3985,7 +3985,7 @@ export default function PuntingClub() {
                   <p className="text-gray-600 text-xs mb-3">Mobile number cannot be changed. Contact support if needed.</p>
                   <button
                     type="submit" disabled={profileSaving}
-                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                   >
                     {profileSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Changes'}
                   </button>
@@ -3997,20 +3997,20 @@ export default function PuntingClub() {
             {profileTab === 'password' && (
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">New Password *</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">New Password *</label>
                   <input
                     type="password" required minLength={8} value={pwForm.newPassword}
                     onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50 placeholder-gray-600"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-gray-600"
                     placeholder="Min 8 characters"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1">Confirm New Password *</label>
+                  <label className="block text-xs font-semibold text-emerald-500 mb-1">Confirm New Password *</label>
                   <input
                     type="password" required minLength={8} value={pwForm.confirmPassword}
                     onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))}
-                    className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${pwForm.confirmPassword ? (pwForm.newPassword === pwForm.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-blue-500/50'}`}
+                    className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${pwForm.confirmPassword ? (pwForm.newPassword === pwForm.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-emerald-500/50'}`}
                     placeholder="Re-enter new password"
                   />
                   {pwForm.confirmPassword && (
@@ -4021,7 +4021,7 @@ export default function PuntingClub() {
                 </div>
                 <button
                   type="submit" disabled={profileSaving}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-black font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {profileSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating...</> : 'Change Password'}
                 </button>
@@ -4049,7 +4049,7 @@ export default function PuntingClub() {
               </div>
               <BetSlipCard bet={{ ...analyzedBet, type: analyzedBet.betType, overallStatus: 'pending' }} />
               <div className="flex flex-col sm:flex-row gap-3 mt-5">
-                <button onClick={() => { setShowBetResults(false); setShowBetAnalyzer(true); resetBetAnalyzer(); }} className="flex-1 border border-blue-500/40 text-sky-400 font-bold py-3 rounded-xl text-sm hover:bg-blue-500/10">Submit Another</button>
+                <button onClick={() => { setShowBetResults(false); setShowBetAnalyzer(true); resetBetAnalyzer(); }} className="flex-1 border border-emerald-500/40 text-emerald-500 font-bold py-3 rounded-xl text-sm hover:bg-emerald-500/10">Submit Another</button>
                 <button onClick={() => { setShowBetResults(false); navigateTo('leaderboard'); resetBetAnalyzer(); }} className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-3 rounded-xl text-sm">View Leaderboard</button>
               </div>
             </div>
