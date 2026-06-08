@@ -63,20 +63,23 @@ const MyTeamView = ({
 
         {/* Team header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-3xl font-black mb-1">{myTeamName}</h1>
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-black mb-1.5 truncate">{myTeamName}</h1>
+            <div className="flex items-center gap-2 flex-wrap text-sm">
               <PermissionBadge role={viewedRole} />
-              <span className="text-slate-400 text-sm">·</span>
-              <span className="text-slate-500 text-sm">#{myTeamData?.rank || 1} on leaderboard</span>
-              {effectiveViewedCode && (
+              <span className="text-slate-500">#{myTeamData?.rank || 1} on leaderboard</span>
+              {effectiveViewedCode && userCompetitions.length <= 1 && (
                 <span className="text-xs bg-teal-500/10 border border-teal-500/20 text-teal-600 px-2 py-0.5 rounded-full">{activeCompetitions.find(c => c.code === effectiveViewedCode)?.name || effectiveViewedCode}</span>
               )}
-              {!allDepositsConfirmed && <span className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Deposits pending</span>}
-              {allDepositsConfirmed && <span className="bg-green-500/20 border border-green-500/40 text-green-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3" /> All deposits confirmed</span>}
             </div>
+            {!allDepositsConfirmed && (
+              <span className="inline-flex items-center gap-1 bg-red-100 border border-red-300 text-red-700 text-xs px-2 py-1 rounded-full mt-2"><AlertTriangle className="w-3 h-3" /> Deposits pending</span>
+            )}
+            {allDepositsConfirmed && (
+              <span className="inline-flex items-center gap-1 bg-green-100 border border-green-300 text-green-700 text-xs px-2 py-1 rounded-full mt-2"><CheckCircle className="w-3 h-3" /> All deposits confirmed</span>
+            )}
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
             {!teamFinalised && (
               <button onClick={() => setShowInviteModal(true)} className="bg-teal-500/10 border border-teal-200 hover:bg-teal-500/20 text-teal-600 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
             )}
@@ -84,7 +87,7 @@ const MyTeamView = ({
               <button onClick={() => setShowOrderModal(true)} className="bg-teal-500/10 border border-teal-200 hover:bg-teal-500/20 text-teal-600 px-3 py-2 rounded-lg text-xs font-semibold">Betting Order</button>
             )}
             {viewedRole === 'captain' && !teamFinalised && (
-              <button onClick={() => setShowFinaliseModal(true)} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1">
+              <button onClick={() => setShowFinaliseModal(true)} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
                 <CheckCircle className="w-3.5 h-3.5" />Finalise Team
               </button>
             )}
