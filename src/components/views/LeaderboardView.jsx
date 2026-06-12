@@ -33,7 +33,7 @@ const LeaderboardView = () => {
     <section className="pt-28 pb-16 px-0 sm:px-0">
       <div className="max-w-5xl mx-auto px-2 sm:px-6">
         {navHistory.length > 0 && (
-          <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-teal-700 text-sm font-semibold mb-4 px-2 transition-colors group">
+          <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-brand-700 text-sm font-semibold mb-4 px-2 transition-colors group">
             <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
           </button>
         )}
@@ -58,7 +58,7 @@ const LeaderboardView = () => {
             ))}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowBetAnalyzer(true)} className="bg-teal-600 hover:bg-teal-500 text-black px-4 py-2 rounded-lg font-bold text-xs transition-colors">
+            <button onClick={() => setShowBetAnalyzer(true)} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2 rounded-lg font-bold text-xs transition-colors">
               Submit Bet
             </button>
           </div>
@@ -70,7 +70,7 @@ const LeaderboardView = () => {
             <span className="text-xs text-slate-500 font-semibold">Competition:</span>
             {activeCompetitions.map(c => (
               <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-teal-500/20 text-teal-600 border-teal-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
                 {c.name}
               </button>
             ))}
@@ -83,7 +83,7 @@ const LeaderboardView = () => {
             <span className="text-xs text-slate-500 font-semibold">Team:</span>
             {teamsInViewedComp.map(t => (
               <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-teal-500/20 text-teal-600 border-teal-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
                 {t.team_name}
               </button>
             ))}
@@ -93,7 +93,7 @@ const LeaderboardView = () => {
         {/* View toggle */}
         <div className="flex gap-1 mb-4 px-2">
           {[['current', 'This Week'], ['season', 'Season View']].map(([v, l]) => (
-            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${leaderboardView === v ? 'bg-teal-50 text-teal-700 border-teal-200' : 'text-slate-500 hover:text-slate-700 border-transparent'}`}>{l}</button>
+            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${leaderboardView === v ? 'bg-brand-50 text-brand-700 border-brand-200' : 'text-slate-500 hover:text-slate-700 border-transparent'}`}>{l}</button>
           ))}
         </div>
 
@@ -119,7 +119,7 @@ const LeaderboardView = () => {
         <div className="space-y-1.5">
           {enrichedLeaderboardTeams.length === 0 && (
             <div className="text-center py-16">
-              <Trophy className="w-16 h-16 text-teal-700/30 mb-4 mx-auto" />
+              <Trophy className="w-16 h-16 text-brand-700/30 mb-4 mx-auto" />
               <p className="text-slate-500 font-semibold text-lg">No teams yet</p>
               <p className="text-slate-500 text-sm mt-1">Teams will appear here once they register and submit bets.</p>
             </div>
@@ -142,15 +142,15 @@ const LeaderboardView = () => {
             })();
 
             const rowBg = isMe
-              ? 'border-teal-500/40 bg-teal-500/5'
+              ? 'border-brand-500/40 bg-brand-500/5'
               : computedStatus === 'won'         ? 'border-green-500/20 bg-green-50'
               : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-50'
-              : computedStatus === 'partial'     ? 'border-teal-200 bg-teal-50'
-              : computedStatus === 'in_progress' ? 'border-teal-200 bg-teal-50'
+              : computedStatus === 'partial'     ? 'border-brand-200 bg-brand-50'
+              : computedStatus === 'in_progress' ? 'border-brand-200 bg-brand-50'
               : 'border-gray-200 bg-white';
 
             return (
-              <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-teal-400/30' : ''}`}>
+              <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-brand-400/30' : ''}`}>
                 <div className="grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors" onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}>
                   {/* Rank */}
                   <div className="col-span-1">
@@ -160,13 +160,13 @@ const LeaderboardView = () => {
                   <div className="col-span-4 sm:col-span-3 min-w-0 pl-1">
                     <div className="font-bold text-sm truncate flex items-center gap-1">
                       {team.team}
-                      {isMe && <span className="text-teal-600 text-xs">(You)</span>}
+                      {isMe && <span className="text-brand-600 text-xs">(You)</span>}
                     </div>
                     <div className="text-slate-400 text-xs">{team.members} members</div>
                   </div>
                   {/* Total */}
                   <div className="hidden sm:block col-span-2 text-center">
-                    <div className="font-bold text-teal-600 text-sm">{team.total}</div>
+                    <div className="font-bold text-brand-600 text-sm">{team.total}</div>
                   </div>
 
                   {/* This week / season */}
@@ -190,10 +190,10 @@ const LeaderboardView = () => {
                     ) : (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {team.weekHistory?.length > 0 ? team.weekHistory.map((result, wi) => {
-                          const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-teal-500/20 border-teal-500/50 text-teal-600' : 'bg-gray-100 border-gray-300 text-slate-400';
+                          const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-brand-500/20 border-brand-500/50 text-brand-600' : 'bg-gray-100 border-gray-300 text-slate-400';
                           return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
                         }) : <span className="text-slate-500 text-xs italic">No history yet</span>}
-                        <span className="text-teal-600 font-bold text-sm ml-auto">{team.total}</span>
+                        <span className="text-brand-600 font-bold text-sm ml-auto">{team.total}</span>
                       </div>
                     )}
                   </div>
@@ -209,11 +209,11 @@ const LeaderboardView = () => {
                         <div className="flex flex-wrap gap-2">
                           {team.memberList.map((m, mi) => (
                             <div key={mi} className="flex items-center gap-1.5 bg-gray-100 rounded-full px-2.5 py-1">
-                              <div className="w-5 h-5 rounded-full bg-teal-500/20 border border-teal-200 flex items-center justify-center text-teal-600 font-bold text-xs flex-shrink-0">
+                              <div className="w-5 h-5 rounded-full bg-brand-500/20 border border-brand-200 flex items-center justify-center text-brand-600 font-bold text-xs flex-shrink-0">
                                 {(m.name || m).charAt(0).toUpperCase()}
                               </div>
                               <span className="text-xs text-slate-700 font-medium">{m.name || m}</span>
-                              {m.role === 'captain' && <Crown className="w-3 h-3 text-teal-600" />}
+                              {m.role === 'captain' && <Crown className="w-3 h-3 text-brand-600" />}
                             </div>
                           ))}
                         </div>
