@@ -5,15 +5,15 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
   <section className="pt-28 pb-16 px-4 sm:px-6">
     <div className="max-w-3xl mx-auto">
       {navHistory.length > 0 && (
-        <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-teal-700 text-sm font-semibold mb-6 transition-colors group">
+        <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-brand-700 text-sm font-semibold mb-6 transition-colors group">
           <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
         </button>
       )}
 
       <div className="mb-10">
-        <div className="inline-flex items-center gap-2 bg-teal-500/10 border border-teal-500/25 rounded-full px-4 py-1.5 mb-4">
-          <HelpCircle className="w-3.5 h-3.5 text-teal-600" />
-          <span className="text-teal-600 text-xs font-bold tracking-widest uppercase">Help Centre</span>
+        <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/25 rounded-full px-4 py-1.5 mb-4">
+          <HelpCircle className="w-3.5 h-3.5 text-brand-600" />
+          <span className="text-brand-600 text-xs font-bold tracking-widest uppercase">Help Centre</span>
         </div>
         <h1 className="text-4xl font-black mb-2">Frequently Asked Questions</h1>
         <p className="text-slate-500">Everything you need to know about using Punting Club.</p>
@@ -22,7 +22,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
       {[
         {
           category: 'Getting Started',
-          icon: <Sparkles className="w-4 h-4 text-teal-600" />,
+          icon: <Sparkles className="w-4 h-4 text-brand-600" />,
           items: [
             { q: 'How do I sign up?', a: 'Tap Sign Up in the top navigation bar. Enter your first name, mobile number, and password. Once registered you can create a new team or join an existing one using a team code.' },
             { q: 'How do I join a competition?', a: 'You join a competition by creating or joining a team with a valid competition code. Your competition host (pub, group organiser, etc.) will provide you with that code.' },
@@ -32,7 +32,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
         },
         {
           category: 'Placing Bets',
-          icon: <FileText className="w-4 h-4 text-teal-600" />,
+          icon: <FileText className="w-4 h-4 text-brand-600" />,
           items: [
             { q: 'How do I submit a bet?', a: 'Go to the Leaderboard page and tap "Submit Bet". Upload a screenshot of your bet slip from your bookmaker. Our AI will read the slip and extract all the details automatically.' },
             { q: 'What is the weekly bet limit?', a: 'The weekly bet limit is set by your competition host. Your team can split that limit across multiple individual bets — you are not limited to one multi per week.' },
@@ -43,7 +43,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
         },
         {
           category: 'Results & Scoring',
-          icon: <Trophy className="w-4 h-4 text-teal-600" />,
+          icon: <Trophy className="w-4 h-4 text-brand-600" />,
           items: [
             { q: 'How are results updated?', a: 'Our AI checks bet results automatically every 3 hours once the first leg of a bet has started. You can also trigger a manual check by clicking "Check Results" on the Leaderboard page.' },
             { q: 'What do the leg colours mean?', a: 'Green = Won, Red = Lost, Orange = In Progress (live), Yellow = Partial (some legs settled). The overall bet result is shown in the header of each bet slip card.' },
@@ -53,7 +53,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
         },
         {
           category: 'Teams & Captains',
-          icon: <Users className="w-4 h-4 text-teal-600" />,
+          icon: <Users className="w-4 h-4 text-brand-600" />,
           items: [
             { q: 'What does a captain do?', a: 'The captain is the team manager. They approve or reject member join requests, set the betting order for members, and are responsible for confirming the buy-in deposit.' },
             { q: 'How do I approve a member who wants to join?', a: 'Go to the My Team page. Pending requests will appear at the top with an Approve / Reject option. You will also see a notification badge on the My Team nav link.' },
@@ -63,7 +63,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
         },
         {
           category: 'Buy-Ins & Prizes',
-          icon: <DollarSign className="w-4 h-4 text-teal-600" />,
+          icon: <DollarSign className="w-4 h-4 text-brand-600" />,
           items: [
             { q: 'How does the buy-in work?', a: 'The buy-in amount and structure are set by your competition host. It can be paid entirely by the captain or split equally among all team members. All buy-ins go into the jackpot prize pool.' },
             { q: 'When and how is the prize paid out?', a: 'Prize payout happens at the end of the season. The number of places paid (1st, 2nd, 3rd) depends on the total number of competing teams — your competition host will confirm the split before the season starts.' },
@@ -72,7 +72,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
         },
         {
           category: 'Account & Technical',
-          icon: <Settings2 className="w-4 h-4 text-teal-600" />,
+          icon: <Settings2 className="w-4 h-4 text-brand-600" />,
           items: [
             { q: 'How do I update my name or password?', a: 'Click or tap your profile chip in the top-right corner of the navbar (your first initial in a circle). From there you can edit your display name and change your password.' },
             { q: 'I forgot my password — what do I do?', a: 'Contact your competition admin or the pub running the competition. An admin can reset your password from the admin panel.' },
@@ -83,7 +83,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
       ].map(({ category, icon, items }) => (
         <div key={category} className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center flex-shrink-0">
               {icon}
             </div>
             <h2 className="text-lg font-black text-slate-900">{category}</h2>
@@ -104,12 +104,12 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
         </div>
       ))}
 
-      <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-6 text-center mt-8">
+      <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-6 text-center mt-8">
         <h3 className="font-bold text-lg mb-1 text-slate-900">Still have questions?</h3>
         <p className="text-slate-500 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
         <button
           onClick={() => navigateTo('competition')}
-          className="bg-gradient-to-r from-teal-600 to-teal-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
+          className="bg-brand-700 hover:bg-brand-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
         >
           View Full Rules
         </button>

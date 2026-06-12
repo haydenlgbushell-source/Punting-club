@@ -5,9 +5,9 @@ const COLORS = {
   won:         'bg-green-100 border-green-300 text-green-700',
   lost:        'bg-red-100 border-red-300 text-red-700',
   partial:     'bg-yellow-100 border-yellow-300 text-yellow-700',
-  pending:     'bg-teal-50 border-teal-200 text-teal-600',
+  pending:     'bg-brand-50 border-brand-200 text-brand-600',
   void:        'bg-gray-100 border-gray-300 text-gray-600',
-  in_progress: 'bg-teal-50 border-teal-200 text-teal-600',
+  in_progress: 'bg-brand-50 border-brand-200 text-brand-600',
 };
 
 const CONFIG = {

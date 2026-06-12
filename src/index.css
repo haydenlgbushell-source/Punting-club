@@ -2,11 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* Athletic display type for page-level headings */
+  h1, h2 {
+    font-family: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.01em;
+  }
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; background: #f8fafc; font-family: 'Inter', sans-serif; }
+body { margin: 0; background: #FAFAF7; font-family: 'Inter', sans-serif; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #e2e8f0; }
-::-webkit-scrollbar-thumb { background: #0d948855; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #2B634755; border-radius: 3px; }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
 @keyframes ticker {
