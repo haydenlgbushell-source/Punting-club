@@ -1,8 +1,9 @@
 import React from 'react';
 
 const MAP = {
-  captain:    { label: 'Captain',   cls: 'bg-brand-500/20 text-brand-600 border-brand-500/50' },
-  member:     { label: 'Member',    cls: 'bg-brand-500/20 text-brand-600 border-brand-500/50' },
+  // Light pill works on both the light page and the dark navbar chip
+  captain:    { label: 'Captain',   cls: 'bg-brand-100 text-brand-800 border-brand-300' },
+  member:     { label: 'Member',    cls: 'bg-brand-100 text-brand-800 border-brand-300' },
   'view-only':{ label: 'View Only', cls: 'bg-gray-100 text-gray-600 border-gray-300' },
 };
 
