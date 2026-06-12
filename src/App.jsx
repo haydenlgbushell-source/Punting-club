@@ -1653,7 +1653,7 @@ export default function PuntingClub() {
             </div>
 
             {/* Desktop Nav Links */}
-            <div className="hidden md:flex items-center gap-0.5 mx-6">
+            <div className="hidden md:flex items-center gap-0.5 mx-4">
               {[
                 ['home',        'Home',        <Home className="w-3.5 h-3.5" />],
                 ['competition', 'Rules',       <BookOpen className="w-3.5 h-3.5" />],
@@ -1665,7 +1665,7 @@ export default function PuntingClub() {
                 <button
                   key={key}
                   onClick={() => navigateTo(key)}
-                  className={`relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                  className={`relative px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                     activeNav === key
                       ? 'text-gold-400 bg-white/5 border border-gold-500/20'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
@@ -1707,7 +1707,7 @@ export default function PuntingClub() {
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-[11px] font-black flex-shrink-0">
                         {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
                       </div>
-                      <div className="leading-tight min-w-0">
+                      <div className="leading-tight min-w-0 max-w-[140px]">
                         <p className="text-brand-300 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
                           {myTeamName || currentUser?.teamName}
                           {viewedRole === 'captain' && <Crown className="w-2.5 h-2.5 text-brand-300 flex-shrink-0" />}
@@ -1759,9 +1759,11 @@ export default function PuntingClub() {
                   )}
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:bg-red-500/8 border border-transparent hover:border-red-500/15"
+                    title="Logout"
+                    aria-label="Logout"
+                    className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:bg-red-500/8 border border-transparent hover:border-red-500/15 flex-shrink-0"
                   >
-                    <LogOut className="w-3.5 h-3.5" />Logout
+                    <LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Logout</span>
                   </button>
                 </>
               ) : (
@@ -1958,7 +1960,7 @@ export default function PuntingClub() {
         const filteredBets  = adminBets.filter(b => adminSearch === '' || b.team.toLowerCase().includes(adminSearch.toLowerCase()) || b.id.toLowerCase().includes(adminSearch.toLowerCase()));
 
         return (
-          <section style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
+          <section className="text-gray-100" style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
             {/* Admin top bar */}
             <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:0,zIndex:10}} className="px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -2109,12 +2111,12 @@ export default function PuntingClub() {
                       <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-brand-300" />
                       <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-brand-300"  />
                       <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
-                      <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-purple-400"/>
+                      <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-brand-300"/>
                     </div>
 
                     {/* Pending notifications panel on dashboard */}
                     {adminNotifs.filter(n => !n.read).length > 0 && (
-                      <div className="bg-brand-50 border border-brand-200 rounded-xl p-5">
+                      <div className="bg-white/5 border border-brand-500/20 rounded-xl p-5">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="font-bold text-brand-300 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-brand-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
                           <button onClick={markAllNotifsRead} className="text-xs text-brand-300 hover:text-brand-300">Mark all read</button>
@@ -2177,7 +2179,7 @@ export default function PuntingClub() {
 
                     {/* KYC pending */}
                     {adminUsers.some(u => u.kyc === 'pending') && (
-                      <div className="bg-brand-50 border border-brand-200 rounded-xl p-5">
+                      <div className="bg-white/5 border border-brand-500/20 rounded-xl p-5">
                         <h3 className="font-bold text-brand-300 mb-3 flex items-center gap-2"><Clock className="w-4 h-4"/>KYC Pending Review</h3>
                         <div className="space-y-2">
                           {adminUsers.filter(u => u.kyc === 'pending').map(u => (
@@ -2249,7 +2251,7 @@ export default function PuntingClub() {
                         const isExpanded = expandedTeamId === t.id;
                         const pendingCount = (t.memberList || []).filter(m => m.role === 'pending').length;
                         return (
-                        <div key={t.id} className={`bg-white border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
+                        <div key={t.id} className={`bg-white/5 border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
                           {/* ── Team header row ── */}
                           <div className="p-4">
                             <div className="flex items-start justify-between gap-3">
@@ -2419,7 +2421,7 @@ export default function PuntingClub() {
                         </div>
                       )}
                       {filteredUsers.map(u => (
-                        <div key={u.phone} className={`bg-white border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-white/8'}`}>
+                        <div key={u.phone} className={`bg-white/5 border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-white/8'}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -2458,7 +2460,7 @@ export default function PuntingClub() {
                     </div>
 
                     {/* GDPR note */}
-                    <div className="bg-brand-50 border border-brand-500/20 rounded-xl p-4 flex gap-3">
+                    <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex gap-3">
                       <Shield className="w-4 h-4 text-brand-300 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-brand-300 text-xs font-bold mb-1">Data Privacy & GDPR Compliance</p>
@@ -2485,7 +2487,7 @@ export default function PuntingClub() {
 
                     <div className="space-y-3">
                       {filteredBets.map(b => (
-                        <div key={b.id} className={`bg-white border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-brand-200' : 'border-white/8'}`}>
+                        <div key={b.id} className={`bg-white/5 border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-brand-200' : 'border-white/8'}`}>
                           <div className="px-4 py-3 flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -2617,7 +2619,7 @@ export default function PuntingClub() {
 
                       {/* Create form */}
                       {showCreateComp && (
-                        <div className="bg-white border border-brand-200 rounded-xl p-5 space-y-3">
+                        <div className="bg-white/5 border border-brand-500/30 rounded-xl p-5 space-y-3">
                           <h3 className="font-bold text-brand-300">Create New Competition</h3>
                           <div className="grid sm:grid-cols-2 gap-3">
                             {[['Competition Name','name','text','RSL Summer Cup'],['Pub / Club Name','pub','text','RSL Club Sydney'],['Buy-In Amount','buyIn','text','$1,000'],['Max Teams','maxTeams','number','20'],['Start Date','startDate','date',''],['End Date','endDate','date','']].map(([l,k,t,p]) => (
@@ -2692,7 +2694,7 @@ export default function PuntingClub() {
                             <span className="bg-brand-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminCompRequests.filter(r => r.status === 'requested').length}</span>
                           </div>
                           {adminCompRequests.map(req => (
-                            <div key={req.id} className={`bg-white border rounded-xl p-4 ${req.status === 'requested' ? 'border-brand-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
+                            <div key={req.id} className={`bg-white/5 border rounded-xl p-4 ${req.status === 'requested' ? 'border-brand-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -2758,7 +2760,7 @@ export default function PuntingClub() {
                           const showTeams = expandedCompId === compKey;
                           const setShowTeams = (v) => setExpandedCompId(v ? compKey : null);
                           return (
-                          <div key={c.code || c.id} className={`bg-white border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-brand-500/20' : 'border-white/8'}`}>
+                          <div key={c.code || c.id} className={`bg-white/5 border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-brand-500/20' : 'border-white/8'}`}>
                             <div className="p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
@@ -3471,7 +3473,7 @@ export default function PuntingClub() {
               <p className="text-brand-300 text-xs break-all mb-2">{shareableLink}</p>
               <button onClick={() => { navigator.clipboard?.writeText(shareableLink); showToast('Invite link copied!', 'success'); }} className="bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 px-3 py-1.5 rounded-lg text-xs font-semibold w-full">Copy Invite Link</button>
             </div>
-            <div className="bg-brand-50 border border-brand-500/20 rounded-xl p-4">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
               <p className="text-brand-300 text-xs font-semibold mb-2">How to invite:</p>
               <ol className="space-y-1 text-gray-400 text-xs">
                 {['Share the team code or invite link','They click Sign Up → Join Team','Enter the team code','Submit request — you\'ll get notified to approve','Once approved they\'re on the team!'].map((s, i) => (
@@ -3486,7 +3488,7 @@ export default function PuntingClub() {
 
       {/* BETTING ORDER */}
       {showOrderModal && (
-        <Modal title="🎯 Betting Order" onClose={() => setShowOrderModal(false)}>
+        <Modal title="Betting Order" onClose={() => setShowOrderModal(false)}>
           <div className="p-5 space-y-4">
             <p className="text-gray-400 text-sm">Set the rotation order for who places the bet each week. Drag to reorder (use the buttons below).</p>
             <div className="space-y-2">
@@ -3501,7 +3503,7 @@ export default function PuntingClub() {
                 </div>
               ))}
             </div>
-            <div className="bg-brand-50 border border-brand-500/20 rounded-lg p-3 text-xs text-gray-400">
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-xs text-gray-400">
               <strong className="text-brand-300">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
             </div>
             <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm">Save Order</button>
@@ -3511,12 +3513,12 @@ export default function PuntingClub() {
 
       {/* FINALISE TEAM MODAL */}
       {showFinaliseModal && (
-        <Modal title="🏁 Finalise Team Roster" onClose={() => setShowFinaliseModal(false)}>
+        <Modal title="Finalise Team Roster" onClose={() => setShowFinaliseModal(false)}>
           <div className="p-5 space-y-4">
 
             {/* What finalising does */}
-            <div className="bg-brand-50 border border-brand-500/20 rounded-xl p-4 flex gap-3">
-              <span className="text-xl flex-shrink-0">ℹ️</span>
+            <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex gap-3">
+              
               <div>
                 <p className="font-bold text-brand-300 text-sm mb-1">What does finalising do?</p>
                 <ul className="text-gray-400 text-xs space-y-1">
@@ -3591,7 +3593,7 @@ export default function PuntingClub() {
 
             {/* Warning if unconfirmed members */}
             {teamMembers.some(m => !m.depositPaid) && (
-              <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 flex gap-2">
+              <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 flex gap-2">
                 <AlertCircle className="w-4 h-4 text-brand-300 flex-shrink-0 mt-0.5" />
                 <p className="text-brand-300 text-xs">{teamMembers.filter(m => !m.depositPaid).length} member(s) not yet confirmed. You can still finalise — the deposit will be split equally across <strong>all</strong> members regardless.</p>
               </div>
@@ -3609,7 +3611,7 @@ export default function PuntingClub() {
 
       {/* BET ANALYZER */}
       {showBetAnalyzer && (
-        <Modal title="📸 Analyze Bet Slip" maxWidth="max-w-2xl" onClose={() => { setShowBetAnalyzer(false); resetBetAnalyzer(); }}>
+        <Modal title="Analyze Bet Slip" maxWidth="max-w-2xl" onClose={() => { setShowBetAnalyzer(false); resetBetAnalyzer(); }}>
           <div className="p-4 space-y-4">
             {!analyzedBet ? (
               <>
@@ -3679,7 +3681,7 @@ export default function PuntingClub() {
 
       {/* ── ADMIN LOGIN MODAL ─────────────────────────────────────────────── */}
       {showAdminLogin && (
-        <Modal title="🔐 Admin Access" onClose={() => { setShowAdminLogin(false); setAdminLoginId(''); setAdminLoginPw(''); }}>
+        <Modal title="Admin Access" onClose={() => { setShowAdminLogin(false); setAdminLoginId(''); setAdminLoginPw(''); }}>
           <form onSubmit={handleAdminLogin} className="p-5 space-y-4">
             <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-3 flex items-center gap-2">
               <Shield className="w-4 h-4 text-red-400 flex-shrink-0" />
