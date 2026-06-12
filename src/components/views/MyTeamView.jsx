@@ -79,22 +79,14 @@ const MyTeamView = ({
               <span className="inline-flex items-center gap-1 bg-green-100 border border-green-300 text-green-700 text-xs px-2 py-1 rounded-full mt-2"><CheckCircle className="w-3 h-3" /> All deposits confirmed</span>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          {/* Header keeps team-management only — betting actions live in the bets card below */}
+          <div className="flex gap-2 flex-wrap sm:justify-end">
             {!teamFinalised && (
               <button onClick={() => setShowInviteModal(true)} className="bg-brand-500/10 border border-brand-200 hover:bg-brand-500/20 text-brand-600 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
-            )}
-            {viewedRole === 'captain' && (
-              <button onClick={() => setShowOrderModal(true)} className="bg-brand-500/10 border border-brand-200 hover:bg-brand-500/20 text-brand-600 px-3 py-2 rounded-lg text-xs font-semibold">Betting Order</button>
-            )}
-            {viewedRole === 'captain' && !teamFinalised && (
-              <button onClick={() => setShowFinaliseModal(true)} className="bg-brand-700 hover:bg-brand-800 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
-                <CheckCircle className="w-3.5 h-3.5" />Finalise Team
-              </button>
             )}
             {viewedRole === 'captain' && teamFinalised && (
               <button onClick={unfinaliseTeam} className="bg-gray-100 border border-gray-300 text-slate-500 px-3 py-2 rounded-lg text-xs font-semibold">Re-open Team</button>
             )}
-            <button onClick={() => setShowBetAnalyzer(true)} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-3 py-2 rounded-lg text-xs font-bold">Submit Bet</button>
           </div>
         </div>
 
@@ -162,9 +154,17 @@ const MyTeamView = ({
 
         {/* This week's bets */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-brand-600 flex items-center gap-1.5"><BarChart3 className="w-4 h-4" /> This Week's Bets</h3>
-          </div>
+          {(() => {
+            const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
+            return (
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-brand-600 flex items-center gap-1.5"><BarChart3 className="w-4 h-4" /> This Week's Bets</h3>
+                {thisWeekBets.length > 0 && (
+                  <button onClick={() => setShowBetAnalyzer(true)} className="text-xs font-semibold text-brand-600 hover:text-brand-700 border border-brand-200 hover:bg-brand-500/10 px-2.5 py-1.5 rounded-lg transition-all">+ Add Bet</button>
+                )}
+              </div>
+            );
+          })()}
           {(() => {
             const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
             return thisWeekBets.length > 0 ? (
