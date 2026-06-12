@@ -67,7 +67,7 @@ const HomeView = ({
           </div>
 
           {/* Secondary CTAs */}
-          <div className="flex flex-col sm:flex-row justify-center gap-2.5 mb-12">
+          <div className="flex flex-row flex-wrap justify-center gap-2.5 mb-12">
             <button
               onClick={() => {
                 setRequestCompStep(1);

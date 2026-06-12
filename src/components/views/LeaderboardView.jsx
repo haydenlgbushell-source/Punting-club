@@ -52,16 +52,18 @@ const LeaderboardView = () => {
             </p>
             {lastChecked && <p className="text-slate-400 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
             {resultLog.slice(0, 2).map((l, i) => (
-              <p key={i} className="text-green-400 text-xs mt-0.5 flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-green-400 inline mr-1" />{l.time} — {l.message}
+              <p key={i} className="text-green-600 text-xs mt-0.5 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-green-600 inline mr-1" />{l.time} — {l.message}
               </p>
             ))}
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowBetAnalyzer(true)} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2 rounded-lg font-bold text-xs transition-colors">
-              Submit Bet
-            </button>
-          </div>
+          {isLoggedIn && (
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowBetAnalyzer(true)} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2 rounded-lg font-bold text-xs transition-colors">
+                Submit Bet
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Competition switcher */}
