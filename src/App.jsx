@@ -187,20 +187,6 @@ export default function PuntingClub() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeNav]);
 
-  // Landscape hint (mobile)
-  const [showLandscapeHint, setShowLandscapeHint] = useState(false);
-  useEffect(() => {
-    const check = () => {
-      if (activeNav === 'leaderboard' && window.innerWidth < 768 && window.innerHeight > window.innerWidth) {
-        setShowLandscapeHint(true);
-      } else setShowLandscapeHint(false);
-    };
-    check();
-    window.addEventListener('resize', check);
-    window.addEventListener('orientationchange', check);
-    return () => { window.removeEventListener('resize', check); window.removeEventListener('orientationchange', check); };
-  }, [activeNav]);
-
   // ── AUTH ──────────────────────────────────────────────────────────────────
   const handleLogin = useCallback(async (e) => {
     e.preventDefault();
@@ -1628,14 +1614,6 @@ export default function PuntingClub() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Landscape hint */}
-      {showLandscapeHint && (
-        <div className="fixed bottom-4 left-1/2 z-50 bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 bc-landscape-hint">
-          <Smartphone className="w-3.5 h-3.5 flex-shrink-0" /> Rotate to landscape for best view
-          <button onClick={() => setShowLandscapeHint(false)} className="cursor-pointer"><X className="w-3 h-3" /></button>
         </div>
       )}
 

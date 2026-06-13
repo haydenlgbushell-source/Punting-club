@@ -33,10 +33,6 @@ body { margin: 0; background: #FAFAF7; font-family: 'Inter', sans-serif; }
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes floatHint {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50%       { transform: translateX(-50%) translateY(-5px); }
-}
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -63,18 +59,12 @@ body { margin: 0; background: #FAFAF7; font-family: 'Inter', sans-serif; }
   animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: opacity, transform;
 }
-.bc-landscape-hint {
-  animation: floatHint 2.2s ease-in-out infinite;
-  will-change: transform;
-}
-
 /* ── Reduced motion ─────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .bc-ticker         { animation: none; }
-  .bc-fadeup         { animation: none; opacity: 1; transform: none; }
-  .bc-modal          { animation: none; opacity: 1; transform: none; }
-  .bc-backdrop       { animation: none; opacity: 1; }
-  .bc-toast          { animation: none; opacity: 1; transform: none; }
-  .bc-landscape-hint { animation: none; }
+  .bc-ticker   { animation: none; }
+  .bc-fadeup   { animation: none; opacity: 1; transform: none; }
+  .bc-modal    { animation: none; opacity: 1; transform: none; }
+  .bc-backdrop { animation: none; opacity: 1; }
+  .bc-toast    { animation: none; opacity: 1; transform: none; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
