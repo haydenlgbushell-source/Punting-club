@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Football World Cup — Punting Club</title>
+    <meta name="description" content="Form a team, place weekly bets, and compete with friends in the Punting Club Football World Cup competition." />
+    <meta name="theme-color" content="#0B2419" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Football World Cup — Punting Club" />
+    <meta property="og:description" content="Form a team, place weekly bets, and compete with friends in the Punting Club Football World Cup competition." />
+    <meta property="og:type" content="website" />
+
+    <!-- Favicon (SVG emoji) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+    <style>
+      :root {
+        --brand-950: #0B2419;
+        --brand-900: #123424;
+        --brand-800: #18402E;
+        --brand-700: #1F4F38;
+        --brand-500: #3E7D5C;
+        --brand-300: #8FBFA3;
+        --gold-300: #FCD34D;
+        --gold-400: #FBBF24;
+        --gold-500: #EAB308;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        background: radial-gradient(circle at top, var(--brand-900) 0%, var(--brand-950) 60%);
+        color: #F0F7F2;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .card {
+        max-width: 640px;
+        width: 100%;
+        text-align: center;
+        padding: 48px 32px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(8px);
+      }
+
+      .emoji {
+        font-size: 56px;
+        line-height: 1;
+        margin-bottom: 16px;
+      }
+
+      h1 {
+        font-family: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        margin: 0 0 8px;
+        background: linear-gradient(135deg, var(--gold-300), var(--gold-500));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-transform: uppercase;
+      }
+
+      .tagline {
+        font-size: 1.05rem;
+        color: var(--brand-300);
+        margin: 0 0 32px;
+        font-weight: 500;
+      }
+
+      .details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+        margin-bottom: 32px;
+      }
+
+      .detail {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 16px 12px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .detail .label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6b7280;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .detail .value {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--gold-400);
+      }
+
+      p.body {
+        color: #cbd5e1;
+        line-height: 1.6;
+        margin: 0 0 32px;
+      }
+
+      .cta {
+        display: inline-block;
+        background: linear-gradient(135deg, var(--gold-400), var(--gold-500));
+        color: var(--brand-950);
+        font-weight: 800;
+        padding: 14px 32px;
+        border-radius: 12px;
+        text-decoration: none;
+        font-size: 1rem;
+        box-shadow: 0 8px 24px rgba(234, 179, 8, 0.25);
+        transition: transform 0.2s ease;
+      }
+
+      .cta:hover {
+        transform: translateY(-2px);
+      }
+
+      footer {
+        margin-top: 40px;
+        font-size: 0.8rem;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="emoji">⚽🏆</div>
+      <h1>Football World Cup</h1>
+      <p class="tagline">A Punting Club Competition</p>
+
+      <div class="details">
+        <div class="detail">
+          <div class="label">Format</div>
+          <div class="value">Weekly Bets</div>
+        </div>
+        <div class="detail">
+          <div class="label">Teams</div>
+          <div class="value">Friends &amp; Crews</div>
+        </div>
+        <div class="detail">
+          <div class="label">Prize Pool</div>
+          <div class="value">Live Jackpot</div>
+        </div>
+      </div>
+
+      <p class="body">
+        Form a team, lock in your weekly picks, and battle it out on the Football World Cup
+        leaderboard. Track every leg of every bet with AI-powered scoring and see how your
+        squad stacks up against the rest of the club.
+      </p>
+
+      <a class="cta" href="https://github.com/haydenlgbushell-source/punting-club">Join the Competition</a>
+
+      <footer>Punting Club &mdash; The Ultimate Sports Betting League</footer>
+    </div>
+  </body>
+</html>
