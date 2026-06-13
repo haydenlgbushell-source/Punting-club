@@ -158,32 +158,35 @@ const LeaderboardView = () => {
                   <div className="col-span-1">
                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
                   </div>
-                  {/* Name */}
-                  <div className="col-span-4 sm:col-span-3 min-w-0 pl-1">
-                    <div className="font-bold text-sm truncate flex items-center gap-1">
-                      {team.team}
-                      {isMe && <span className="text-brand-600 text-xs">(You)</span>}
+                  {/* Name + total */}
+                  <div className="col-span-5 sm:col-span-3 min-w-0 pl-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="font-bold text-sm truncate flex items-center gap-1 min-w-0">
+                        {team.team}
+                        {isMe && <span className="text-brand-600 text-xs flex-shrink-0">(You)</span>}
+                      </div>
+                      <span className="sm:hidden font-bold text-brand-600 text-xs flex-shrink-0">{team.total}</span>
                     </div>
                     <div className="text-slate-400 text-xs">{team.members} members</div>
                   </div>
-                  {/* Total */}
+                  {/* Total (desktop) */}
                   <div className="hidden sm:block col-span-2 text-center">
                     <div className="font-bold text-brand-600 text-sm">{team.total}</div>
                   </div>
 
                   {/* This week / season */}
-                  <div className="col-span-7 sm:col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-gray-200">
+                  <div className="col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-gray-200">
                     {leaderboardView === 'current' ? (
                       weekBet ? (
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge status={computedStatus} />
                           <span className="text-slate-900 text-xs font-semibold">{weekBet.type}</span>
                           <span className="text-slate-500 text-xs">·</span>
-                          <span className="text-green-400 text-xs font-semibold">{weekBet.stake}</span>
+                          <span className="text-green-600 text-xs font-semibold">{weekBet.stake}</span>
                           <span className="hidden sm:inline text-slate-500 text-xs">/</span>
-                          <span className="hidden sm:inline text-green-400 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
+                          <span className="hidden sm:inline text-green-600 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
                           {weekBet.legs?.length > 0 && (
-                            <div className="flex gap-1 ml-auto">
+                            <div className="flex gap-1 flex-wrap">
                               {weekBet.legs.map((leg, li) => <LegDot key={li} leg={leg} />)}
                             </div>
                           )}
@@ -192,10 +195,9 @@ const LeaderboardView = () => {
                     ) : (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {team.weekHistory?.length > 0 ? team.weekHistory.map((result, wi) => {
-                          const cls = result === 'W' ? 'bg-green-500/30 border-green-500 text-green-400' : result === 'L' ? 'bg-red-500/30 border-red-500 text-red-400' : result === 'P' ? 'bg-brand-500/20 border-brand-500/50 text-brand-600' : 'bg-gray-100 border-gray-300 text-slate-400';
+                          const cls = result === 'W' ? 'bg-green-100 border-green-400 text-green-700' : result === 'L' ? 'bg-red-100 border-red-400 text-red-700' : result === 'P' ? 'bg-brand-100 border-brand-400 text-brand-700' : 'bg-gray-100 border-gray-300 text-slate-400';
                           return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
                         }) : <span className="text-slate-500 text-xs italic">No history yet</span>}
-                        <span className="text-brand-600 font-bold text-sm ml-auto">{team.total}</span>
                       </div>
                     )}
                   </div>
