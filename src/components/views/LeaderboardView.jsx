@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
-import { Trophy, Users, ChevronLeft, CheckCircle, Crown } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Trophy, Users, ChevronLeft, CheckCircle, Crown, ChevronDown } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+
+const parseCurrency = (s) => {
+  if (typeof s === 'number') return s;
+  return parseFloat(String(s).replace(/[^0-9.\-]/g, '')) || 0;
+};
 
 const LeaderboardView = () => {
   const {
@@ -20,15 +25,37 @@ const LeaderboardView = () => {
   const [leaderboardView, setLeaderboardView] = useState('current');
   const [selectedTeamIdx, setSelectedTeamIdx] = useState(null);
 
-  const tickerItems = enrichedLeaderboardTeams.flatMap(t =>
-    (t.bets || []).flatMap(b =>
-      (b.legs || [])
-        .filter(l => l.resultNote && ['won', 'lost', 'in_progress'].includes(l.status))
-        .map(l => `${l.selection} — ${l.resultNote}`)
-    )
-  );
-  const ticker = tickerItems.length > 0 ? tickerItems
-    : ['Results update automatically · Click "Check Results" to refresh · Expand a team row to see the full bet slip'];
+  const leaderTotal = useMemo(() => {
+    if (!enrichedLeaderboardTeams.length) return 0;
+    return Math.max(...enrichedLeaderboardTeams.map(t => parseCurrency(t.total)));
+  }, [enrichedLeaderboardTeams]);
+
+  const getComputedStatus = (weekBet) => {
+    const legs = weekBet?.legs || [];
+    if (!legs.length) return weekBet?.overallStatus || 'pending';
+    if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
+    if (legs.some(l => l.status === 'pending')) return 'pending';
+    if (!legs.every(l => ['won', 'lost', 'void'].includes(l.status))) return 'pending';
+    if (legs.every(l => l.status === 'won')) return 'won';
+    if (legs.some(l => l.status === 'lost')) return 'lost';
+    return 'partial';
+  };
+
+  const getRowBg = (isMe, computedStatus) => {
+    if (isMe) return 'border-brand-500/40 bg-brand-500/5';
+    if (computedStatus === 'won') return 'border-green-500/20 bg-green-50';
+    if (computedStatus === 'lost') return 'border-red-500/20 bg-red-50';
+    if (computedStatus === 'partial' || computedStatus === 'in_progress') return 'border-brand-200 bg-brand-50';
+    return 'border-gray-200 bg-white';
+  };
+
+  const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
+  const weekLabel = (() => {
+    const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
+    const total = comp?.weeks || '—';
+    return `Week ${wk} of ${total}`;
+  })();
+  const cutoffLabel = nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <section className="pt-28 pb-16 px-0 sm:px-0">
@@ -44,12 +71,7 @@ const LeaderboardView = () => {
           <div>
             <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
             <p className="text-slate-500 text-sm">
-              {(() => {
-                const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
-                const wk = comp?.start_date ? calcCurrentWeek(comp.start_date) : '—';
-                const total = comp?.weeks || '—';
-                return `Week ${wk} of ${total} · Closes Wed 12:00 AEST (${nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })})`;
-              })()}
+              {weekLabel} · Closes Wed 12:00 AEST ({cutoffLabel})
             </p>
             {lastChecked && <p className="text-slate-400 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
             {resultLog.slice(0, 2).map((l, i) => (
@@ -67,7 +89,7 @@ const LeaderboardView = () => {
           )}
         </div>
 
-        {/* Competition switcher dropdown */}
+        {/* Competition switcher */}
         {activeCompetitions.length > 1 && (
           <SwitcherDropdown
             label="Competition"
@@ -98,25 +120,18 @@ const LeaderboardView = () => {
           ))}
         </div>
 
-        {/* Column headers */}
-        {leaderboardView === 'current' && (
-          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <div className="col-span-1">#</div>
-            <div className="col-span-3">Team</div>
-            <div className="col-span-2 text-center">Total</div>
-            <div className="col-span-6 pl-3 border-l border-gray-200">This Week's Bet</div>
+        {/* ── DESKTOP COLUMN HEADERS (hidden on mobile) ── */}
+        <div className="hidden md:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="col-span-1">#</div>
+          <div className="col-span-3">Team</div>
+          <div className="col-span-1 text-right">Total</div>
+          <div className="col-span-1 text-right">Behind</div>
+          <div className="col-span-6 pl-3 border-l border-gray-200">
+            {leaderboardView === 'current' ? "This Week's Bet" : 'Week History'}
           </div>
-        )}
-        {leaderboardView === 'season' && (
-          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <div className="col-span-1">#</div>
-            <div className="col-span-3">Team</div>
-            <div className="col-span-2 text-center">Total</div>
-            <div className="col-span-6 pl-3 border-l border-gray-200">Week History</div>
-          </div>
-        )}
+        </div>
 
-        {/* Rows */}
+        {/* ── TEAM ROWS ── */}
         <div className="space-y-1.5">
           {enrichedLeaderboardTeams.length === 0 && (
             <div className="text-center py-16">
@@ -130,51 +145,84 @@ const LeaderboardView = () => {
             const currentWeek = currentWeekNum + 1;
             const weekBet = team.bets.find(b => b.weekNumber === currentWeek) || null;
             const isOpen = selectedTeamIdx === idx;
-
-            const computedStatus = (() => {
-              const legs = weekBet?.legs || [];
-              if (!legs.length) return weekBet?.overallStatus || 'pending';
-              if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-              if (legs.some(l => l.status === 'pending'))     return 'pending';
-              if (!legs.every(l => ['won', 'lost', 'void'].includes(l.status))) return 'pending';
-              if (legs.every(l => l.status === 'won'))  return 'won';
-              if (legs.some(l => l.status === 'lost'))  return 'lost';
-              return 'partial';
-            })();
-
-            const rowBg = isMe
-              ? 'border-brand-500/40 bg-brand-500/5'
-              : computedStatus === 'won'         ? 'border-green-500/20 bg-green-50'
-              : computedStatus === 'lost'        ? 'border-red-500/20 bg-red-50'
-              : computedStatus === 'partial'     ? 'border-brand-200 bg-brand-50'
-              : computedStatus === 'in_progress' ? 'border-brand-200 bg-brand-50'
-              : 'border-gray-200 bg-white';
+            const computedStatus = getComputedStatus(weekBet);
+            const rowBg = getRowBg(isMe, computedStatus);
+            const teamTotal = parseCurrency(team.total);
+            const behind = leaderTotal - teamTotal;
 
             return (
               <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-brand-400/30' : ''}`}>
-                <div className="grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors" onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}>
-                  {/* Rank */}
-                  <div className="col-span-1">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
-                  </div>
-                  {/* Name + total */}
-                  <div className="col-span-5 sm:col-span-3 min-w-0 pl-1">
-                    <div className="flex items-center justify-between gap-1.5">
-                      <div className="font-bold text-sm truncate flex items-center gap-1 min-w-0">
+
+                {/* ── MOBILE CARD (shown below md) ── */}
+                <div
+                  className="md:hidden cursor-pointer active:bg-gray-100/60 transition-colors"
+                  onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}
+                >
+                  {/* Top row: rank, name, total */}
+                  <div className="flex items-center gap-2.5 px-3 pt-3 pb-1">
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm flex-shrink-0`}>
+                      {team.rank}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-sm truncate flex items-center gap-1">
                         {team.team}
                         {isMe && <span className="text-brand-600 text-xs flex-shrink-0">(You)</span>}
                       </div>
-                      <span className="sm:hidden font-bold text-brand-600 text-xs flex-shrink-0">{team.total}</span>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="font-black text-brand-700 text-base leading-tight">{team.total}</div>
+                    </div>
+                  </div>
+
+                  {/* Bottom row: behind, members, status, chevron */}
+                  <div className="flex items-center gap-2 px-3 pb-3 pt-0.5">
+                    <span className="text-slate-400 text-xs">{team.members} members</span>
+                    {behind > 0 && (
+                      <>
+                        <span className="text-slate-300 text-xs">·</span>
+                        <span className="text-red-400 text-xs font-semibold">
+                          ${behind.toFixed(2)} behind
+                        </span>
+                      </>
+                    )}
+                    {behind === 0 && team.rank === 1 && (
+                      <>
+                        <span className="text-slate-300 text-xs">·</span>
+                        <span className="text-green-600 text-xs font-bold">Leader</span>
+                      </>
+                    )}
+                    <div className="ml-auto flex items-center gap-1.5">
+                      {weekBet && <Badge status={computedStatus} />}
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── DESKTOP ROW (shown at md+) ── */}
+                <div
+                  className="hidden md:grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors"
+                  onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}
+                >
+                  <div className="col-span-1">
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
+                  </div>
+                  <div className="col-span-3 min-w-0 pl-1">
+                    <div className="font-bold text-sm truncate flex items-center gap-1">
+                      {team.team}
+                      {isMe && <span className="text-brand-600 text-xs flex-shrink-0">(You)</span>}
                     </div>
                     <div className="text-slate-400 text-xs">{team.members} members</div>
                   </div>
-                  {/* Total (desktop) */}
-                  <div className="hidden sm:block col-span-2 text-center">
+                  <div className="col-span-1 text-right">
                     <div className="font-bold text-brand-600 text-sm">{team.total}</div>
                   </div>
-
-                  {/* This week / season */}
-                  <div className="col-span-6 pl-0 sm:pl-3 sm:border-l sm:border-gray-200">
+                  <div className="col-span-1 text-right">
+                    {behind > 0
+                      ? <span className="text-red-400 text-xs font-semibold">${behind.toFixed(2)}</span>
+                      : <span className="text-green-600 text-xs font-bold">{team.rank === 1 ? 'Leader' : '—'}</span>
+                    }
+                  </div>
+                  <div className="col-span-6 pl-3 border-l border-gray-200">
                     {leaderboardView === 'current' ? (
                       weekBet ? (
                         <div className="flex items-center gap-2 flex-wrap">
@@ -182,8 +230,8 @@ const LeaderboardView = () => {
                           <span className="text-slate-900 text-xs font-semibold">{weekBet.type}</span>
                           <span className="text-slate-500 text-xs">·</span>
                           <span className="text-green-600 text-xs font-semibold">{weekBet.stake}</span>
-                          <span className="hidden sm:inline text-slate-500 text-xs">/</span>
-                          <span className="hidden sm:inline text-green-600 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
+                          <span className="text-slate-500 text-xs">/</span>
+                          <span className="text-green-600 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
                           {weekBet.legs?.length > 0 && (
                             <div className="flex gap-1 flex-wrap">
                               {weekBet.legs.map((leg, li) => <LegDot key={li} leg={leg} />)}
@@ -202,9 +250,43 @@ const LeaderboardView = () => {
                   </div>
                 </div>
 
-                {/* Expanded bet slip */}
+                {/* ── EXPANDED DETAIL (shared mobile + desktop) ── */}
                 {isOpen && (
                   <div className="border-t border-gray-200 bg-gray-50 px-3 py-3">
+                    {/* Week-by-week breakdown (mobile: always show; desktop: show in current view) */}
+                    {leaderboardView === 'current' && team.weekHistory?.length > 0 && (
+                      <div className="mb-3 pb-3 border-b border-gray-200">
+                        <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">Week History</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {team.weekHistory.map((result, wi) => {
+                            const cls = result === 'W' ? 'bg-green-100 border-green-400 text-green-700' : result === 'L' ? 'bg-red-100 border-red-400 text-red-700' : result === 'P' ? 'bg-brand-100 border-brand-400 text-brand-700' : 'bg-gray-100 border-gray-300 text-slate-400';
+                            return <div key={wi} title={`Week ${wi + 1}`} className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-bold ${cls}`}>{result || '–'}</div>;
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* All bets grid for mobile season view */}
+                    {leaderboardView === 'season' && team.bets?.length > 0 && (
+                      <div className="mb-3 pb-3 border-b border-gray-200 md:hidden">
+                        <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">Bet History</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {team.bets.map((bet, bi) => {
+                            const st = getComputedStatus(bet);
+                            return (
+                              <div key={bi} className="bg-white rounded-lg border border-gray-200 p-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-semibold text-slate-600">Wk {bet.weekNumber}</span>
+                                  <Badge status={st} />
+                                </div>
+                                <div className="text-xs text-slate-500">{bet.stake} → {bet.estimatedReturn || 'N/A'}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Member roster */}
                     {team.memberList?.length > 0 && (
                       <div className="mb-3 pb-3 border-b border-gray-200">
@@ -222,6 +304,8 @@ const LeaderboardView = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Current week bet slip */}
                     {weekBet ? <BetSlipCard bet={weekBet} /> : <p className="text-slate-400 text-sm italic text-center py-4">No bet submitted this week</p>}
                   </div>
                 )}
