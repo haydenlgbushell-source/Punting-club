@@ -2319,9 +2319,11 @@ export default function PuntingClub() {
                                           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                                             <span className="text-xs text-gray-500">{m.phone || 'No phone'}</span>
                                             <span className={`text-xs font-semibold ${kycBg}`}>KYC: {m.kyc || 'unknown'}</span>
+                                            {/* deposit status disabled for now
                                             <span className={`text-xs ${m.depositPaid ? 'text-green-400' : 'text-gray-600'}`}>
                                               {m.depositPaid ? '✓ Deposit paid' : '— No deposit'}
                                             </span>
+                                            */}
                                             <span className={`text-xs ${m.canBet ? 'text-brand-300' : 'text-gray-600'}`}>
                                               {m.canBet ? '✓ Can bet' : '— No betting'}
                                             </span>

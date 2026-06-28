@@ -73,12 +73,14 @@ const MyTeamView = ({
                 <span className="text-xs bg-brand-500/10 border border-brand-500/20 text-brand-600 px-2 py-0.5 rounded-full">{activeCompetitions.find(c => c.code === effectiveViewedCode)?.name || effectiveViewedCode}</span>
               )}
             </div>
+            {/* deposit status icons disabled for now
             {!allDepositsConfirmed && (
               <span className="inline-flex items-center gap-1 bg-red-100 border border-red-300 text-red-700 text-xs px-2 py-1 rounded-full mt-2"><AlertTriangle className="w-3 h-3" /> Deposits pending</span>
             )}
             {allDepositsConfirmed && (
               <span className="inline-flex items-center gap-1 bg-green-100 border border-green-300 text-green-700 text-xs px-2 py-1 rounded-full mt-2"><CheckCircle className="w-3 h-3" /> All deposits confirmed</span>
             )}
+            */}
           </div>
           {/* Header keeps team-management only — betting actions live in the bets card below */}
           <div className="flex gap-2 flex-wrap sm:justify-end">
@@ -292,9 +294,11 @@ const MyTeamView = ({
             <div className="flex items-center gap-2">
               {teamFinalised && <CheckCircle className="w-4 h-4 text-green-400" />}
               <h3 className={`font-bold flex items-center gap-1.5 ${teamFinalised ? 'text-green-400' : 'text-brand-600'}`}><Users className="w-4 h-4" /> Team Members</h3>
+              {/* deposit per member badge disabled for now
               {teamFinalised && depositPerMember && (
                 <span className="text-xs bg-green-500/15 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full font-semibold">${depositPerMember.toLocaleString()} / member</span>
               )}
+              */}
             </div>
             {teamFinalised && viewedRole === 'captain' && (
               <button onClick={unfinaliseTeam} className="text-slate-400 hover:text-slate-500 text-xs border border-gray-300 px-2 py-1 rounded-lg">Re-open</button>
@@ -302,9 +306,9 @@ const MyTeamView = ({
           </div>
           <div className="space-y-2">
             {teamMembers.map(m => (
-              <div key={m.user_id || m.phone} className={`rounded-xl px-3 py-3 flex items-start gap-3 ${teamFinalised ? (m.depositPaid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200') : 'bg-gray-50'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${teamFinalised ? (m.depositPaid ? 'bg-green-500 text-black' : 'bg-red-500/20 border border-red-500/40 text-red-400') : 'bg-brand-500/20 border border-brand-200 text-brand-600'}`}>
-                  {teamFinalised ? (m.depositPaid ? '✓' : '!') : (m.name || '?').charAt(0).toUpperCase()}
+              <div key={m.user_id || m.phone} className="rounded-xl px-3 py-3 flex items-start gap-3 bg-gray-50">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-brand-500/20 border border-brand-200 text-brand-600">
+                  {(m.name || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -313,6 +317,7 @@ const MyTeamView = ({
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <PermissionBadge role={m.role} />
+                    {/* deposit status icons disabled for now
                     {teamFinalised && depositPerMember ? (
                       m.depositPaid
                         ? <span className="text-green-400 text-xs font-bold flex items-center gap-0.5"><CheckCircle className="w-3 h-3" />${depositPerMember.toLocaleString()} paid</span>
@@ -322,6 +327,7 @@ const MyTeamView = ({
                         ? <span className="text-green-400 text-xs flex items-center gap-0.5"><CheckCircle className="w-3 h-3" />Deposit paid</span>
                         : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3" />Deposit pending</span>
                     )}
+                    */}
                     {m.canBet && m.role !== 'view-only' && <span className="text-brand-600 text-xs">Can bet</span>}
                   </div>
                 </div>
@@ -331,15 +337,17 @@ const MyTeamView = ({
                       <option value="member">Member</option>
                       <option value="view-only">View Only</option>
                     </select>
+                    {/* deposit toggle button disabled for now
                     <button onClick={() => toggleDepositPaid(m.phone)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
                       {m.depositPaid ? 'Mark Unpaid' : 'Mark Paid'}
                     </button>
+                    */}
                   </div>
                 )}
               </div>
             ))}
           </div>
-          {/* Payment summary */}
+          {/* Payment summary — disabled for now
           {teamFinalised && depositPerMember && teamMembers.length > 0 && (
             <div className="mt-4 pt-3 border-t border-green-500/15 flex items-center justify-between">
               <div>
@@ -352,6 +360,7 @@ const MyTeamView = ({
               }
             </div>
           )}
+          */}
         </div>
       </div>
     </section>
