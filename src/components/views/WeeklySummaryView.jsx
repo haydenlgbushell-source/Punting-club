@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trophy, XCircle, Clock, ChevronLeft } from 'lucide-react';
+import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 const WeeklySummaryView = () => {
@@ -56,27 +57,26 @@ const WeeklySummaryView = () => {
           Week {thisWeek} of {totalWeeks}{comp?.name ? ` · ${comp.name}` : ''}
         </p>
 
-        {activeCompetitions.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="text-xs text-slate-500 font-semibold">Competition:</span>
-            {activeCompetitions.map(c => (
-              <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {c.name}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isLoggedIn && teamsInViewedComp.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-8">
-            <span className="text-xs text-slate-500 font-semibold">Team:</span>
-            {teamsInViewedComp.map(t => (
-              <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {t.team_name}
-              </button>
-            ))}
+        {(activeCompetitions.length > 1 || (isLoggedIn && teamsInViewedComp.length > 1)) && (
+          <div className="flex flex-col sm:flex-row gap-2 mb-5">
+            {activeCompetitions.length > 1 && (
+              <SwitcherDropdown
+                label="Competition"
+                items={activeCompetitions}
+                selectedValue={effectiveViewedCode}
+                onSelect={switchViewedCompetition}
+              />
+            )}
+            {isLoggedIn && teamsInViewedComp.length > 1 && (
+              <SwitcherDropdown
+                label="Team"
+                items={teamsInViewedComp}
+                selectedValue={viewedMyTeam?.id}
+                onSelect={switchViewedTeam}
+                valueKey="id"
+                labelKey="team_name"
+              />
+            )}
           </div>
         )}
 

@@ -1,47 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Trophy, Users, ChevronLeft, CheckCircle, Crown, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trophy, Users, ChevronLeft, CheckCircle, Crown } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
+import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
-
-const CompetitionDropdown = ({ competitions, selectedCode, onSelect }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const selected = competitions.find(c => c.code === selectedCode);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  return (
-    <div className="relative mb-3 px-2" ref={ref}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:border-gray-400 transition-colors text-sm font-semibold text-slate-700 min-w-[180px]"
-      >
-        <span className="text-xs text-slate-400 font-semibold">Competition:</span>
-        <span className="truncate">{selected?.name || 'Select'}</span>
-        <ChevronDown className={`w-4 h-4 ml-auto text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute z-50 mt-1 left-2 min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-lg py-1">
-          {competitions.map(c => (
-            <button
-              key={c.code}
-              onClick={() => { onSelect(c.code); setOpen(false); }}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${selectedCode === c.code ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-slate-600 hover:bg-gray-50 hover:text-slate-900'}`}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 const LeaderboardView = () => {
   const {
@@ -106,24 +69,26 @@ const LeaderboardView = () => {
 
         {/* Competition switcher dropdown */}
         {activeCompetitions.length > 1 && (
-          <CompetitionDropdown
-            competitions={activeCompetitions}
-            selectedCode={effectiveViewedCode}
+          <SwitcherDropdown
+            label="Competition"
+            items={activeCompetitions}
+            selectedValue={effectiveViewedCode}
             onSelect={switchViewedCompetition}
+            className="mb-3 px-2"
           />
         )}
 
         {/* Team toggle */}
         {isLoggedIn && teamsInViewedComp.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-            <span className="text-xs text-slate-500 font-semibold">Team:</span>
-            {teamsInViewedComp.map(t => (
-              <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {t.team_name}
-              </button>
-            ))}
-          </div>
+          <SwitcherDropdown
+            label="Team"
+            items={teamsInViewedComp}
+            selectedValue={viewedMyTeam?.id}
+            onSelect={switchViewedTeam}
+            valueKey="id"
+            labelKey="team_name"
+            className="mb-3 px-2"
+          />
         )}
 
         {/* View toggle */}
