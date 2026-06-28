@@ -3,6 +3,7 @@ import { Trophy, Users, ChevronLeft, CheckCircle, Crown } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
+import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 const LeaderboardView = () => {
@@ -66,30 +67,28 @@ const LeaderboardView = () => {
           )}
         </div>
 
-        {/* Competition switcher */}
+        {/* Competition switcher dropdown */}
         {activeCompetitions.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-            <span className="text-xs text-slate-500 font-semibold">Competition:</span>
-            {activeCompetitions.map(c => (
-              <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {c.name}
-              </button>
-            ))}
-          </div>
+          <SwitcherDropdown
+            label="Competition"
+            items={activeCompetitions}
+            selectedValue={effectiveViewedCode}
+            onSelect={switchViewedCompetition}
+            className="mb-3 px-2"
+          />
         )}
 
         {/* Team toggle */}
         {isLoggedIn && teamsInViewedComp.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-3 px-2">
-            <span className="text-xs text-slate-500 font-semibold">Team:</span>
-            {teamsInViewedComp.map(t => (
-              <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {t.team_name}
-              </button>
-            ))}
-          </div>
+          <SwitcherDropdown
+            label="Team"
+            items={teamsInViewedComp}
+            selectedValue={viewedMyTeam?.id}
+            onSelect={switchViewedTeam}
+            valueKey="id"
+            labelKey="team_name"
+            className="mb-3 px-2"
+          />
         )}
 
         {/* View toggle */}

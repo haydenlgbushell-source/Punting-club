@@ -2,6 +2,7 @@ import React from 'react';
 import { CheckCircle, AlertCircle, AlertTriangle, Clock, Users, Edit3, Share2, User, ChevronLeft, Crown, DollarSign, BarChart3, History, Target, Sparkles } from 'lucide-react';
 import BetSlipCard from '../BetSlipCard.jsx';
 import PermissionBadge from '../PermissionBadge.jsx';
+import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 const MyTeamView = ({
@@ -35,29 +36,27 @@ const MyTeamView = ({
           </div>
         )}
 
-        {/* Competition switcher */}
-        {isLoggedIn && userCompetitions.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="text-xs text-slate-500 font-semibold">Competition:</span>
-            {userCompetitions.map(c => (
-              <button key={c.code} onClick={() => switchViewedCompetition(c.code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${effectiveViewedCode === c.code ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {c.name}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Team toggle */}
-        {isLoggedIn && teamsInViewedComp.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap mb-5">
-            <span className="text-xs text-slate-500 font-semibold">Team:</span>
-            {teamsInViewedComp.map(t => (
-              <button key={t.id} onClick={() => switchViewedTeam(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${viewedMyTeam?.id === t.id ? 'bg-brand-500/20 text-brand-600 border-brand-500/40' : 'text-slate-500 border-gray-300 hover:border-gray-400 hover:text-slate-800'}`}>
-                {t.team_name}
-              </button>
-            ))}
+        {/* Competition & Team dropdowns */}
+        {isLoggedIn && (userCompetitions.length > 1 || teamsInViewedComp.length > 1) && (
+          <div className="flex flex-col sm:flex-row gap-2 mb-5">
+            {userCompetitions.length > 1 && (
+              <SwitcherDropdown
+                label="Competition"
+                items={userCompetitions}
+                selectedValue={effectiveViewedCode}
+                onSelect={switchViewedCompetition}
+              />
+            )}
+            {teamsInViewedComp.length > 1 && (
+              <SwitcherDropdown
+                label="Team"
+                items={teamsInViewedComp}
+                selectedValue={viewedMyTeam?.id}
+                onSelect={switchViewedTeam}
+                valueKey="id"
+                labelKey="team_name"
+              />
+            )}
           </div>
         )}
 
