@@ -96,9 +96,15 @@ exports.handler = async (event) => {
     });
 
     const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Anthropic API error:', response.status, JSON.stringify(data));
+      return err('Bet slip analysis is temporarily unavailable. Please try again later.', 502);
+    }
+
     return { statusCode: response.status, headers: HEADERS, body: JSON.stringify(data) };
   } catch (e) {
     console.error('Claude proxy error:', e);
-    return err(e.message, 500);
+    return err('Bet slip analysis is temporarily unavailable. Please try again later.', 500);
   }
 };

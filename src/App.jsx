@@ -1259,7 +1259,10 @@ export default function PuntingClub() {
       ]}] }) });
       const data = await res.json();
       if (!res.ok || data.error || data.type === 'error') {
-        const errMsg = data.error?.message || data.error || `API error ${res.status}`;
+        const rawMsg = data.error?.message || data.error || '';
+        const errMsg = typeof rawMsg === 'string' && rawMsg.length < 120 && !rawMsg.toLowerCase().includes('api')
+          ? rawMsg
+          : 'Bet slip analysis is temporarily unavailable. Please try again later.';
         showToast(`Analysis failed: ${errMsg}`, 'error');
         return;
       }
