@@ -1,5 +1,5 @@
-import React from 'react';
-import { CheckCircle, AlertCircle, AlertTriangle, Clock, Users, Edit3, Share2, User, ChevronLeft, Crown, DollarSign, BarChart3, History, Target, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, AlertCircle, AlertTriangle, Clock, Users, Edit3, Share2, User, ChevronLeft, ChevronDown, Crown, DollarSign, BarChart3, History, Target, Sparkles } from 'lucide-react';
 import BetSlipCard from '../BetSlipCard.jsx';
 import PermissionBadge from '../PermissionBadge.jsx';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
@@ -21,6 +21,8 @@ const MyTeamView = ({
     approveMember, rejectMember, toggleDepositPaid, updateMemberRole,
     unfinaliseTeam, shareBet,
   } = useApp();
+
+  const [expandedPastBet, setExpandedPastBet] = useState(null);
 
   return (
     <section className="pt-28 pb-16 px-4 sm:px-6">
@@ -215,9 +217,13 @@ const MyTeamView = ({
                   })();
                   const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'partial' ? 'text-brand-600 bg-brand-500/15 border-brand-500/40' : 'text-slate-500 bg-gray-100 border-gray-300';
                   const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
+                  const isExpanded = expandedPastBet === (bet.id || i);
                   return (
                     <div key={bet.id || i} className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="flex items-center gap-3 px-4 py-3">
+                      <div
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-100/60 transition-colors"
+                        onClick={() => setExpandedPastBet(isExpanded ? null : (bet.id || i))}
+                      >
                         <div className="w-9 h-9 rounded-lg bg-brand-50 border border-brand-200 flex items-center justify-center flex-shrink-0">
                           <span className="text-brand-600 font-black text-xs">W{bet.weekNumber}</span>
                         </div>
@@ -235,17 +241,22 @@ const MyTeamView = ({
                             <span className="text-slate-400 text-xs">{bet.submittedAt}</span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => shareBet(bet)}
-                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand-700 border border-gray-300 hover:border-brand-200 bg-gray-100 hover:bg-brand-500/8 px-3 py-1.5 rounded-lg transition-all flex-shrink-0"
-                          title="Share this bet"
-                        >
-                          <Share2 className="w-3 h-3" /> Share
-                        </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); shareBet(bet); }}
+                            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand-700 border border-gray-300 hover:border-brand-200 bg-gray-100 hover:bg-brand-500/8 px-3 py-1.5 rounded-lg transition-all"
+                            title="Share this bet"
+                          >
+                            <Share2 className="w-3 h-3" /> Share
+                          </button>
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
                       </div>
-                      <div className="border-t border-gray-200">
-                        <BetSlipCard bet={bet} compact onCheckBet={null} />
-                      </div>
+                      {isExpanded && (
+                        <div className="border-t border-gray-200">
+                          <BetSlipCard bet={bet} compact onCheckBet={null} />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
