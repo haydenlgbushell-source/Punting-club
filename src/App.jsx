@@ -3593,6 +3593,12 @@ export default function PuntingClub() {
           <div className="p-4 space-y-4">
             {!analyzedBet ? (
               <>
+                {myTeamName && (
+                  <div className="flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-2">
+                    <Users className="w-4 h-4 text-brand-400 flex-shrink-0" />
+                    <span className="text-sm text-brand-300">Submitting for <strong className="text-brand-200">{myTeamName}</strong></span>
+                  </div>
+                )}
                 <div className="border-2 border-dashed border-brand-200 rounded-xl p-8 text-center hover:bg-brand-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
