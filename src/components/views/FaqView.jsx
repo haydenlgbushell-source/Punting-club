@@ -106,13 +106,15 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
 
       <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-6 text-center mt-8">
         <h3 className="font-bold text-lg mb-1 text-slate-900">Still have questions?</h3>
-        <p className="text-slate-500 text-sm mb-4">Check the Rules page for full competition details, or speak to your competition host.</p>
-        <button
-          onClick={() => navigateTo('competition')}
-          className="bg-brand-700 hover:bg-brand-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
-        >
-          View Full Rules
-        </button>
+        <p className="text-slate-500 text-sm mb-4">Use the chat assistant in the bottom-right corner for instant help, or check the full rules.</p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={() => navigateTo('competition')}
+            className="bg-brand-700 hover:bg-brand-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
+          >
+            View Full Rules
+          </button>
+        </div>
       </div>
     </div>
   </section>

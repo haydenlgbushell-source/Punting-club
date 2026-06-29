@@ -5,6 +5,7 @@ import Badge from './components/Badge.jsx';
 import LegDot from './components/LegDot.jsx';
 import PermissionBadge from './components/PermissionBadge.jsx';
 import BetSlipCard from './components/BetSlipCard.jsx';
+import SupportChat from './components/SupportChat.jsx';
 import FaqView from './components/views/FaqView.jsx';
 import CompetitionView from './components/views/CompetitionView.jsx';
 import HomeView from './components/views/HomeView.jsx';
@@ -4059,6 +4060,9 @@ export default function PuntingClub() {
       {activeNav === 'faq' && (
         <FaqView navHistory={navHistory} goBack={goBack} navigateTo={navigateTo} />
       )}
+
+      {/* ── SUPPORT CHAT ──────────────────────────────────────────────────────── */}
+      <SupportChat />
     </div>
     </AppContext.Provider>
   );
