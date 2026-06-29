@@ -32,6 +32,7 @@ exports.handler = async (event) => {
       'update_kyc','update_user','delete_user','add_audit',
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
       'delete_team',
+      'generate_recap',
     ]);
     if (ADMIN_ACTIONS.has(action)) {
       try {
@@ -869,6 +870,69 @@ exports.handler = async (event) => {
           .eq('read', false);
         if (e) return error(e.message);
         return json({ success: true });
+      }
+
+      // ══════════════════════════════════════════════════════
+      //  WEEKLY RECAPS
+      // ══════════════════════════════════════════════════════
+
+      case 'get_weekly_recap': {
+        const { competitionId, weekNumber } = payload;
+        if (!competitionId) return error('competitionId is required');
+        if (!weekNumber)    return error('weekNumber is required');
+        const { data, error: e } = await supabase
+          .from('weekly_recaps')
+          .select('*')
+          .eq('competition_id', competitionId)
+          .eq('week_number', weekNumber)
+          .eq('published', true)
+          .maybeSingle();
+        if (e) return error(e.message);
+        return json(data);
+      }
+
+      case 'get_latest_recap': {
+        const { competitionId } = payload;
+        if (!competitionId) return error('competitionId is required');
+        const { data, error: e } = await supabase
+          .from('weekly_recaps')
+          .select('*')
+          .eq('competition_id', competitionId)
+          .eq('published', true)
+          .order('week_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (e) return error(e.message);
+        return json(data);
+      }
+
+      case 'get_all_recaps': {
+        const { competitionId } = payload;
+        if (!competitionId) return error('competitionId is required');
+        const { data, error: e } = await supabase
+          .from('weekly_recaps')
+          .select('id, competition_id, week_number, headline, stats, generated_at, published')
+          .eq('competition_id', competitionId)
+          .order('week_number', { ascending: false });
+        if (e) return error(e.message);
+        return json(data || []);
+      }
+
+      case 'generate_recap': {
+        const { competitionId, weekNumber, adminRole } = payload;
+        if (!adminRole) return error('Admin access required', 403);
+        if (!competitionId) return error('competitionId is required');
+        // Trigger the background function via internal fetch
+        const bgUrl = process.env.URL
+          ? `${process.env.URL}/.netlify/functions/generate-recap-background`
+          : null;
+        if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
+        fetch(bgUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competitionId, weekNumber: weekNumber || null }),
+        }).catch(e => console.error('[generate_recap] trigger error:', e.message));
+        return json({ success: true, message: 'Recap generation started' });
       }
 
       default:

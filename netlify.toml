@@ -16,6 +16,10 @@
   schedule = "0 */3 * * *"
   timeout = 900
 
+[functions."generate-recap-background"]
+  schedule = "0 4 * * 3"
+  timeout = 900
+
 [[redirects]]
   from = "/api/auth"
   to = "/.netlify/functions/auth"
@@ -34,6 +38,11 @@
 [[redirects]]
   from = "/api/check-results"
   to = "/.netlify/functions/check-results"
+  status = 200
+
+[[redirects]]
+  from = "/api/generate-recap"
+  to = "/.netlify/functions/generate-recap-background"
   status = 200
 
 [[redirects]]

@@ -24,6 +24,7 @@ import {
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
   apiUpdateProfile, apiChangePassword,
+  apiGenerateRecap,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
@@ -2787,6 +2788,17 @@ export default function PuntingClub() {
                                         onClick={() => { if (window.confirm(`Roll back one week for "${c.name}"?`)) advanceWeek(c.id, 'back'); }}
                                         className="bg-gray-500/10 border border-gray-500/20 text-gray-500 px-2.5 py-1 rounded-lg text-xs"
                                       >↩ Rollback</button>
+                                    )}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            await apiGenerateRecap(c.id, null, adminToken);
+                                            showToast(`Recap generation started for ${c.name}`, 'success');
+                                          } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
+                                        }}
+                                        className="bg-purple-500/20 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                      >✨ Generate Recap</button>
                                     )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
                                     <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
