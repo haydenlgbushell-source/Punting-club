@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Settings2, CalendarRange, Building2, ChevronLeft } from 'lucide-react';
+import WeeklyRecapCard from '../WeeklyRecapCard.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 const HomeView = ({
@@ -10,7 +11,7 @@ const HomeView = ({
   setRequestCompStep, setRequestCompForm, setRequestCompSuccess,
   setRequestCompError, setShowRequestCompModal,
 }) => {
-  const { isLoggedIn, currentUser, viewedRole, navigateTo, setShowSignupModal, setSignupMode } = useApp();
+  const { isLoggedIn, currentUser, viewedRole, navigateTo, setShowSignupModal, setSignupMode, activeCompetitions } = useApp();
 
   return (
     <>
@@ -117,6 +118,18 @@ const HomeView = ({
           </div>
         </div>
       </section>
+
+      {/* Latest Match Report */}
+      {activeCompetitions.length > 0 && (
+        <section className="pb-8 px-4 sm:px-6">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-xl font-black text-slate-900 mb-4">Latest Match Report</h2>
+            {activeCompetitions.map(comp => (
+              <WeeklyRecapCard key={comp.id} competitionId={comp.id} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Feature cards */}
       <section className="pb-20 px-4 sm:px-6">

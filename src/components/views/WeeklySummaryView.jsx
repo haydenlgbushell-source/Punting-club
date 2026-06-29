@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trophy, XCircle, Clock, ChevronLeft } from 'lucide-react';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
+import WeeklyRecapCard from '../WeeklyRecapCard.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 const WeeklySummaryView = () => {
@@ -78,6 +79,11 @@ const WeeklySummaryView = () => {
               />
             )}
           </div>
+        )}
+
+        {/* ── AI MATCH REPORT ── */}
+        {prevWeek >= 1 && comp?.id && (
+          <WeeklyRecapCard competitionId={comp.id} weekNumber={prevWeek} />
         )}
 
         {/* ── PREVIOUS WEEK REVIEW ── */}

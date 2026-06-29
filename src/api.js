@@ -76,6 +76,12 @@ export const apiGetAdminNotifications    = (adminToken, unreadOnly = false) => c
 export const apiMarkNotificationRead    = (id, adminToken) => call('data', { action: 'mark_notification_read', id, adminToken });
 export const apiMarkAllNotificationsRead = (adminToken)    => call('data', { action: 'mark_all_notifications_read', adminToken });
 
+// ── WEEKLY RECAPS ───────────────────────────────────────────
+export const apiGetWeeklyRecap  = (competitionId, weekNumber) => call('data', { action: 'get_weekly_recap', competitionId, weekNumber });
+export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get_latest_recap', competitionId });
+export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
+export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
+
 // ── CLAUDE AI ────────────────────────────────────────────────
 export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {
   model: 'claude-haiku-4-5-20251001',
