@@ -82,6 +82,18 @@ export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get
 export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
 export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
 
+// ── ADMIN ASSISTANT ─────────────────────────────────────────
+export const apiAdminAssistant = async (adminToken, messages) => {
+  const res = await fetch('/api/admin-assistant', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminToken, messages }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`);
+  return data;
+};
+
 // ── SUPPORT CHAT ────────────────────────────────────────────
 export const apiSaveChatMessage   = (sessionId, userId, userName, userMessage, assistantMessage) => call('data', { action: 'save_chat_message', sessionId, userId, userName, userMessage, assistantMessage });
 export const apiGetSupportChats   = (adminToken, limit = 50, offset = 0) => call('data', { action: 'get_support_chats', adminToken, limit, offset });

@@ -6,6 +6,7 @@ import LegDot from './components/LegDot.jsx';
 import PermissionBadge from './components/PermissionBadge.jsx';
 import BetSlipCard from './components/BetSlipCard.jsx';
 import SupportChat from './components/SupportChat.jsx';
+import AdminAssistant from './components/AdminAssistant.jsx';
 import FaqView from './components/views/FaqView.jsx';
 import CompetitionView from './components/views/CompetitionView.jsx';
 import HomeView from './components/views/HomeView.jsx';
@@ -28,7 +29,7 @@ import {
   apiGenerateRecap,
   apiGetSupportChats, apiGetSupportChat,
 } from './api.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle, MessageCircle } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle, MessageCircle, Bot } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function PuntingClub() {
@@ -1936,6 +1937,7 @@ export default function PuntingClub() {
           { id:'bets',         label:'Bets',         icon:<FileText className="w-4 h-4" />,        roles:['owner','campaign'] },
           { id:'competitions', label:'Competitions', icon:<Building2 className="w-4 h-4" />,       roles:['owner','pub_admin'] },
           { id:'security',     label:'Security',     icon:<Shield className="w-4 h-4" />,          roles:['owner'] },
+          { id:'assistant',    label:'AI Assistant', icon:<Bot className="w-4 h-4" />,             roles:['owner','campaign','pub_admin'] },
           { id:'audit',        label:'Audit Log',    icon:<Activity className="w-4 h-4" />,        roles:['owner','campaign'] },
           { id:'chatlogs',     label:'Chat Logs',    icon:<MessageCircle className="w-4 h-4" />,   roles:['owner','campaign'] },
         ].filter(t => t.roles.includes(adminUser.role));
@@ -2946,6 +2948,11 @@ export default function PuntingClub() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* ── AI ASSISTANT ───────────────────────────────────────── */}
+                {adminTab === 'assistant' && (
+                  <AdminAssistant adminToken={adminToken} />
                 )}
 
                 {/* ── AUDIT LOG ─────────────────────────────────────────────── */}

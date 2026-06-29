@@ -9,6 +9,9 @@
 [functions."claude"]
   timeout = 26
 
+[functions."admin-assistant"]
+  timeout = 30
+
 [functions."check-results"]
   timeout = 26
 
@@ -43,6 +46,11 @@
 [[redirects]]
   from = "/api/generate-recap"
   to = "/.netlify/functions/generate-recap-background"
+  status = 200
+
+[[redirects]]
+  from = "/api/admin-assistant"
+  to = "/.netlify/functions/admin-assistant"
   status = 200
 
 [[redirects]]
