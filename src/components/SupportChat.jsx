@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageCircle, X, Send, Loader2, Sparkles, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
+import { apiSaveChatMessage } from '../api.js';
 
 const SYSTEM_PROMPT = `You are the Punting Club support assistant — a friendly, knowledgeable helper embedded in an Australian pub sports betting competition platform.
 
@@ -65,6 +66,7 @@ const SupportChat = () => {
   const [hasInteracted, setHasInteracted] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const sessionIdRef = useRef(`chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -122,10 +124,13 @@ const SupportChat = () => {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error?.message || data.error || 'Failed to get response');
 
-      const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-      setMessages(prev => [...prev, { role: 'assistant', content: reply || "Sorry, I couldn't generate a response. Try again!" }]);
+      const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || "Sorry, I couldn't generate a response. Try again!";
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      apiSaveChatMessage(sessionIdRef.current, currentUser?.id || null, currentUser?.firstName || null, text.trim(), reply).catch(() => {});
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${e.message}. Please try again.` }]);
+      const errReply = `Sorry, something went wrong: ${e.message}. Please try again.`;
+      setMessages(prev => [...prev, { role: 'assistant', content: errReply }]);
+      apiSaveChatMessage(sessionIdRef.current, currentUser?.id || null, currentUser?.firstName || null, text.trim(), errReply).catch(() => {});
     } finally {
       setLoading(false);
     }

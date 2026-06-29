@@ -82,6 +82,11 @@ export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get
 export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
 export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
 
+// ── SUPPORT CHAT ────────────────────────────────────────────
+export const apiSaveChatMessage   = (sessionId, userId, userName, userMessage, assistantMessage) => call('data', { action: 'save_chat_message', sessionId, userId, userName, userMessage, assistantMessage });
+export const apiGetSupportChats   = (adminToken, limit = 50, offset = 0) => call('data', { action: 'get_support_chats', adminToken, limit, offset });
+export const apiGetSupportChat    = (chatId, adminToken) => call('data', { action: 'get_support_chat', chatId, adminToken });
+
 // ── CLAUDE AI ────────────────────────────────────────────────
 export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {
   model: 'claude-haiku-4-5-20251001',

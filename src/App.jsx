@@ -26,8 +26,9 @@ import {
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
   apiUpdateProfile, apiChangePassword,
   apiGenerateRecap,
+  apiGetSupportChats, apiGetSupportChat,
 } from './api.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle, MessageCircle } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function PuntingClub() {
@@ -145,6 +146,9 @@ export default function PuntingClub() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [chatLogs, setChatLogs] = useState([]);
+  const [chatLogsLoading, setChatLogsLoading] = useState(false);
+  const [selectedChat, setSelectedChat] = useState(null);
 
   // Profile editing
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -1933,6 +1937,7 @@ export default function PuntingClub() {
           { id:'competitions', label:'Competitions', icon:<Building2 className="w-4 h-4" />,       roles:['owner','pub_admin'] },
           { id:'security',     label:'Security',     icon:<Shield className="w-4 h-4" />,          roles:['owner'] },
           { id:'audit',        label:'Audit Log',    icon:<Activity className="w-4 h-4" />,        roles:['owner','campaign'] },
+          { id:'chatlogs',     label:'Chat Logs',    icon:<MessageCircle className="w-4 h-4" />,   roles:['owner','campaign'] },
         ].filter(t => t.roles.includes(adminUser.role));
 
         const filteredTeams = adminTeams.filter(t => adminSearch === '' || t.name.toLowerCase().includes(adminSearch.toLowerCase()) || t.captain.toLowerCase().includes(adminSearch.toLowerCase()));
@@ -2980,6 +2985,116 @@ export default function PuntingClub() {
                     </div>
                   </div>
                 )}
+
+                {/* ── CHAT LOGS ──────────────────────────────────────────── */}
+                {adminTab === 'chatlogs' && (() => {
+                  const loadChats = async () => {
+                    setChatLogsLoading(true);
+                    try {
+                      const data = await apiGetSupportChats(adminToken);
+                      setChatLogs(data);
+                    } catch (e) { console.error('Failed to load chat logs:', e); }
+                    finally { setChatLogsLoading(false); }
+                  };
+                  if (chatLogs.length === 0 && !chatLogsLoading && !selectedChat) loadChats();
+
+                  if (selectedChat) {
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setSelectedChat(null)} className="text-gray-400 hover:text-white transition-colors text-sm flex items-center gap-1">
+                            <ChevronRight className="w-4 h-4 rotate-180" /> Back
+                          </button>
+                          <div>
+                            <h2 className="text-xl font-black">{selectedChat.user_name || 'Anonymous'}</h2>
+                            <p className="text-gray-500 text-sm">
+                              {selectedChat.message_count} messages · Started {new Date(selectedChat.started_at).toLocaleDateString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit', hour12:true })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bg-white/5 border border-white/8 rounded-xl p-4 space-y-3 max-h-[600px] overflow-y-auto">
+                          {(selectedChat.messages || []).map((msg, i) => (
+                            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm ${
+                                msg.role === 'user'
+                                  ? 'bg-brand-600/20 border border-brand-500/30 text-brand-200'
+                                  : 'bg-white/5 border border-white/10 text-gray-300'
+                              }`}>
+                                <p className="text-[10px] font-semibold mb-1 uppercase tracking-wider opacity-50">{msg.role === 'user' ? 'User' : 'AI'}</p>
+                                {msg.content.split('\n').map((line, li) => (
+                                  <p key={li} className={li > 0 ? 'mt-1' : ''}>{line}</p>
+                                ))}
+                                {msg.ts && <p className="text-[10px] text-gray-600 mt-1">{new Date(msg.ts).toLocaleTimeString('en-AU', { hour:'numeric', minute:'2-digit', hour12:true })}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-xl font-black">Chat Logs</h2>
+                          <p className="text-gray-500 text-sm">{chatLogs.length} conversations · Support chat history</p>
+                        </div>
+                        <button onClick={loadChats} disabled={chatLogsLoading} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1">
+                          <RefreshCw className={`w-3 h-3 ${chatLogsLoading ? 'animate-spin' : ''}`} /> Refresh
+                        </button>
+                      </div>
+                      <div className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
+                        <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
+                          <div className="col-span-3">User</div>
+                          <div className="col-span-2">Messages</div>
+                          <div className="col-span-3">Started</div>
+                          <div className="col-span-3">Last Message</div>
+                          <div className="col-span-1"></div>
+                        </div>
+                        <div className="divide-y divide-white/5">
+                          {chatLogsLoading && (
+                            <div className="text-center py-10 text-gray-600">
+                              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                              <p className="text-sm">Loading conversations...</p>
+                            </div>
+                          )}
+                          {!chatLogsLoading && chatLogs.length === 0 && (
+                            <div className="text-center py-10 text-gray-600">
+                              <p className="text-2xl mb-2"><MessageCircle className="w-6 h-6 mx-auto" /></p>
+                              <p className="font-semibold text-sm">No conversations yet</p>
+                              <p className="text-xs mt-1">Support chat conversations will appear here.</p>
+                            </div>
+                          )}
+                          {chatLogs.map(chat => (
+                            <div key={chat.id} onClick={async () => {
+                              try {
+                                const full = await apiGetSupportChat(chat.id, adminToken);
+                                setSelectedChat(full);
+                              } catch { setSelectedChat(chat); }
+                            }} className="grid grid-cols-12 text-xs px-4 py-3 hover:bg-white/5 cursor-pointer transition-colors items-center">
+                              <div className="col-span-3 text-white font-medium truncate">
+                                {chat.user_name || 'Anonymous'}
+                              </div>
+                              <div className="col-span-2 text-gray-400">
+                                <span className="bg-white/10 px-2 py-0.5 rounded-full">{chat.message_count}</span>
+                              </div>
+                              <div className="col-span-3 text-gray-500 font-mono">
+                                {new Date(chat.started_at).toLocaleDateString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit', hour12:true })}
+                              </div>
+                              <div className="col-span-3 text-gray-500 font-mono">
+                                {new Date(chat.last_message_at).toLocaleDateString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit', hour12:true })}
+                              </div>
+                              <div className="col-span-1 text-right">
+                                <ChevronRight className="w-3.5 h-3.5 text-gray-600 inline" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
               </main>
             </div>

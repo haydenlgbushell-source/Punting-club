@@ -33,6 +33,7 @@ exports.handler = async (event) => {
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
       'delete_team',
       'generate_recap',
+      'get_support_chats','get_support_chat',
     ]);
     if (ADMIN_ACTIONS.has(action)) {
       try {
@@ -933,6 +934,72 @@ exports.handler = async (event) => {
           body: JSON.stringify({ competitionId, weekNumber: weekNumber || null }),
         }).catch(e => console.error('[generate_recap] trigger error:', e.message));
         return json({ success: true, message: 'Recap generation started' });
+      }
+
+      // ══════════════════════════════════════════════════════
+      //  SUPPORT CHAT LOGGING
+      // ══════════════════════════════════════════════════════
+
+      case 'save_chat_message': {
+        const { sessionId, userId, userName, userMessage, assistantMessage } = payload;
+        if (!sessionId || !userMessage || !assistantMessage) return error('sessionId, userMessage, and assistantMessage are required');
+
+        const { data: existing } = await supabase
+          .from('support_chats')
+          .select('id, messages, message_count')
+          .eq('session_id', sessionId)
+          .single();
+
+        if (existing) {
+          const msgs = [...(existing.messages || []),
+            { role: 'user', content: userMessage, ts: new Date().toISOString() },
+            { role: 'assistant', content: assistantMessage, ts: new Date().toISOString() },
+          ];
+          const { error: updErr } = await supabase
+            .from('support_chats')
+            .update({ messages: msgs, message_count: msgs.length, last_message_at: new Date().toISOString() })
+            .eq('id', existing.id);
+          if (updErr) throw updErr;
+          return json({ success: true, chatId: existing.id });
+        }
+
+        const msgs = [
+          { role: 'user', content: userMessage, ts: new Date().toISOString() },
+          { role: 'assistant', content: assistantMessage, ts: new Date().toISOString() },
+        ];
+        const { data: newChat, error: insErr } = await supabase
+          .from('support_chats')
+          .insert({ session_id: sessionId, user_id: userId || null, user_name: userName || null, messages: msgs, message_count: msgs.length, last_message_at: new Date().toISOString() })
+          .select('id')
+          .single();
+        if (insErr) throw insErr;
+        return json({ success: true, chatId: newChat.id });
+      }
+
+      case 'get_support_chats': {
+        if (!payload.adminRole) return error('Admin access required', 403);
+        const limit = payload.limit || 50;
+        const offset = payload.offset || 0;
+        const { data, error: qErr } = await supabase
+          .from('support_chats')
+          .select('*')
+          .order('last_message_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+        if (qErr) throw qErr;
+        return json(data);
+      }
+
+      case 'get_support_chat': {
+        if (!payload.adminRole) return error('Admin access required', 403);
+        const { chatId } = payload;
+        if (!chatId) return error('chatId is required');
+        const { data, error: qErr } = await supabase
+          .from('support_chats')
+          .select('*')
+          .eq('id', chatId)
+          .single();
+        if (qErr) throw qErr;
+        return json(data);
       }
 
       default:
