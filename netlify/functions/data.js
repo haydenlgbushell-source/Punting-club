@@ -873,6 +873,50 @@ exports.handler = async (event) => {
       }
 
       // ══════════════════════════════════════════════════════
+      //  USER NOTIFICATIONS (bet results, weekly recaps)
+      // ══════════════════════════════════════════════════════
+
+      case 'get_user_notifications': {
+        const { userId, unreadOnly = false } = payload;
+        if (!userId) return error('userId is required');
+        let query = supabase
+          .from('user_notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (unreadOnly) query = query.eq('read', false);
+        const { data, error: e } = await query;
+        if (e) return error(e.message);
+        return json(data || []);
+      }
+
+      case 'mark_user_notification_read': {
+        const { id, userId } = payload;
+        if (!userId) return error('userId is required');
+        const { data, error: e } = await supabase
+          .from('user_notifications')
+          .update({ read: true })
+          .eq('id', id)
+          .eq('user_id', userId)
+          .select().single();
+        if (e) return error(e.message);
+        return json(data);
+      }
+
+      case 'mark_all_user_notifications_read': {
+        const { userId } = payload;
+        if (!userId) return error('userId is required');
+        const { error: e } = await supabase
+          .from('user_notifications')
+          .update({ read: true })
+          .eq('user_id', userId)
+          .eq('read', false);
+        if (e) return error(e.message);
+        return json({ success: true });
+      }
+
+      // ══════════════════════════════════════════════════════
       //  WEEKLY RECAPS
       // ══════════════════════════════════════════════════════
 

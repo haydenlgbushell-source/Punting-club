@@ -76,6 +76,11 @@ export const apiGetAdminNotifications    = (adminToken, unreadOnly = false) => c
 export const apiMarkNotificationRead    = (id, adminToken) => call('data', { action: 'mark_notification_read', id, adminToken });
 export const apiMarkAllNotificationsRead = (adminToken)    => call('data', { action: 'mark_all_notifications_read', adminToken });
 
+// ── USER NOTIFICATIONS ──────────────────────────────────────
+export const apiGetUserNotifications         = (userId, unreadOnly = false) => call('data', { action: 'get_user_notifications', userId, unreadOnly });
+export const apiMarkUserNotificationRead     = (id, userId) => call('data', { action: 'mark_user_notification_read', id, userId });
+export const apiMarkAllUserNotificationsRead = (userId)     => call('data', { action: 'mark_all_user_notifications_read', userId });
+
 // ── WEEKLY RECAPS ───────────────────────────────────────────
 export const apiGetWeeklyRecap  = (competitionId, weekNumber) => call('data', { action: 'get_weekly_recap', competitionId, weekNumber });
 export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get_latest_recap', competitionId });

@@ -282,6 +282,21 @@ exports.handler = async (event) => {
         message: headline,
         data:    { competitionId: comp.id, weekNumber: recapWeek },
       }).catch(() => {});
+
+      // Notify every team member in the competition that the recap is ready
+      const recapNotifRows = teams.flatMap(team =>
+        (team.team_members || []).map(tm => ({
+          user_id: tm.user_id,
+          team_id: team.id,
+          type:    'recap_ready',
+          title:   `Weekly Recap: ${comp.name} Week ${recapWeek}`,
+          message: headline,
+          data:    { competitionId: comp.id, weekNumber: recapWeek },
+        }))
+      );
+      if (recapNotifRows.length) {
+        await supabase.from('user_notifications').insert(recapNotifRows).catch(() => {});
+      }
     }
 
     console.log(`[generate-recap] Done — ${recapsGenerated} recap(s) generated`);

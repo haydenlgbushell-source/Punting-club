@@ -159,7 +159,7 @@ exports.handler = async (event) => {
     const todayStr = `${aestDate.getUTCFullYear()}-${pad(aestDate.getUTCMonth()+1)}-${pad(aestDate.getUTCDate())}`;
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
+    let betsQuery = supabase.from('bets').select('id, overall_status, team_id, week_number, estimated_return, bet_legs(*)');
     if (betId) {
       betsQuery = betsQuery.eq('id', betId);
     } else {
@@ -269,6 +269,26 @@ Report results for every match — do not skip any.`;
         } else {
           totalBetsUpdated++;
           console.log(`[check-results-bg] ✓ Bet ${bet.id} overall → "${newOverall}"`);
+
+          if (['won', 'lost', 'partial'].includes(newOverall)) {
+            try {
+              const { data: members } = await supabase.from('team_members').select('user_id').eq('team_id', bet.team_id);
+              if (members?.length) {
+                const resultLabel = newOverall === 'won' ? 'won 🎉' : newOverall === 'lost' ? 'lost' : 'partially won';
+                const returnNote  = newOverall !== 'lost' && bet.estimated_return ? ` — $${(bet.estimated_return / 100).toFixed(2)} return` : '';
+                await supabase.from('user_notifications').insert(members.map(m => ({
+                  user_id: m.user_id,
+                  team_id: bet.team_id,
+                  type:    `bet_${newOverall}`,
+                  title:   `Your bet ${resultLabel}`,
+                  message: `Week ${bet.week_number || ''} bet settled: ${resultLabel}${returnNote}`.trim(),
+                  data:    { betId: bet.id },
+                })));
+              }
+            } catch (notifErr) {
+              console.error(`[check-results-bg] Notification error bet ${bet.id}:`, notifErr.message);
+            }
+          }
         }
       }
     }

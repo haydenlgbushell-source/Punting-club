@@ -24,6 +24,7 @@ import {
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
+  apiGetUserNotifications, apiMarkUserNotificationRead, apiMarkAllUserNotificationsRead,
   apiUpdateProfile, apiChangePassword,
   apiGenerateRecap,
 } from './api.js';
@@ -145,6 +146,10 @@ export default function PuntingClub() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+  // User-facing notifications (bet results, weekly recaps)
+  const [userNotifs, setUserNotifs] = useState([]);
+  const [showUserNotifPanel, setShowUserNotifPanel] = useState(false);
 
   // Profile editing
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -821,6 +826,16 @@ export default function PuntingClub() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showNotifPanel]);
 
+  // Close user notification panel on outside click
+  useEffect(() => {
+    if (!showUserNotifPanel) return;
+    const handler = (e) => {
+      if (!e.target.closest('[data-user-notif-panel]')) setShowUserNotifPanel(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showUserNotifPanel]);
+
   // Initialise viewedCompetitionCode from the user's primary competition
   useEffect(() => {
     if (currentUser?.competitionCode && !viewedCompetitionCode) {
@@ -1197,6 +1212,16 @@ export default function PuntingClub() {
   };
   const unreadNotifs = adminNotifs.filter(n => !n.read).length;
 
+  const markUserNotifRead = async (id) => {
+    setUserNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    try { await apiMarkUserNotificationRead(id, currentUser.id); } catch(e) { /* non-critical */ }
+  };
+  const markAllUserNotifsRead = async () => {
+    setUserNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    try { await apiMarkAllUserNotificationsRead(currentUser.id); } catch(e) { /* non-critical */ }
+  };
+  const unreadUserNotifs = userNotifs.filter(n => !n.read).length;
+
   // canAdmin: owner can do everything; campaign can edit bets/kyc; pub_admin can only see their comp
   const canAdmin = (action) => {
     if (!adminUser) return false;
@@ -1519,6 +1544,15 @@ export default function PuntingClub() {
     return () => clearInterval(id);
   }, [isLoggedIn, viewedRole, currentTeamId]);
 
+  // Load + poll user-facing notifications (bet results, recaps) every 30 s
+  useEffect(() => {
+    if (!isLoggedIn || !currentUser?.id) return;
+    const load = () => { apiGetUserNotifications(currentUser.id).then(setUserNotifs).catch(() => {}); };
+    load();
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
+  }, [isLoggedIn, currentUser?.id]);
+
   const allDepositsConfirmed = teamMembers.every(m => m.depositPaid || m.deposit_paid);
 
   // ── RENDER ────────────────────────────────────────────────────────────────
@@ -1677,6 +1711,59 @@ export default function PuntingClub() {
             <div className="hidden md:flex items-center gap-2 flex-shrink-0">
               {isLoggedIn ? (
                 <>
+                  {/* User Notification Bell */}
+                  <div className="relative" data-user-notif-panel>
+                    <button onClick={() => setShowUserNotifPanel(p => !p)} className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                      <Bell className="w-4 h-4" />
+                      {unreadUserNotifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"/>}
+                    </button>
+                    {showUserNotifPanel && (
+                      <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,width:'340px',backgroundColor:'#0f172a',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'12px',boxShadow:'0 20px 60px rgba(0,0,0,0.6)',zIndex:100,maxHeight:'480px',display:'flex',flexDirection:'column'}}>
+                        <div style={{padding:'12px 16px',borderBottom:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+                          <span style={{fontWeight:700,fontSize:'13px',color:'#f1f5f9'}}>Notifications {unreadUserNotifs > 0 && <span style={{backgroundColor:'#ef4444',color:'white',borderRadius:'999px',padding:'1px 7px',fontSize:'11px',marginLeft:'6px'}}>{unreadUserNotifs}</span>}</span>
+                          {unreadUserNotifs > 0 && (
+                            <button onClick={() => { markAllUserNotifsRead(); }} style={{fontSize:'11px',color:'#60a5fa',background:'none',border:'none',cursor:'pointer',padding:0}}>Mark all read</button>
+                          )}
+                        </div>
+                        <div style={{overflowY:'auto',flex:1}}>
+                          {userNotifs.length === 0 && (
+                            <div style={{padding:'32px 16px',textAlign:'center',color:'#4b5563',fontSize:'13px'}}>No notifications yet</div>
+                          )}
+                          {userNotifs.map(n => (
+                            <div
+                              key={n.id}
+                              onClick={() => { markUserNotifRead(n.id); setShowUserNotifPanel(false); if (n.type === 'recap_ready') navigateTo('weekly'); else navigateTo('team'); }}
+                              style={{
+                                padding:'12px 16px',
+                                borderBottom:'1px solid rgba(255,255,255,0.05)',
+                                cursor:'pointer',
+                                backgroundColor: n.read ? 'transparent' : 'rgba(255,255,255,0.03)',
+                                transition:'background 0.15s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor='rgba(255,255,255,0.06)'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor= n.read ? 'transparent' : 'rgba(255,255,255,0.03)'}
+                            >
+                              <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
+                                <span style={{flexShrink:0,marginTop:'1px',display:'flex',alignItems:'center'}}>
+                                  {n.type === 'bet_won' ? <CheckCircle style={{width:15,height:15,color:'#22c55e'}} />
+                                    : n.type === 'bet_lost' ? <XCircle style={{width:15,height:15,color:'#ef4444'}} />
+                                    : n.type === 'bet_partial' ? <CheckCircle style={{width:15,height:15,color:'#f59e0b'}} />
+                                    : n.type === 'recap_ready' ? <BarChart3 style={{width:15,height:15,color:'#60a5fa'}} />
+                                    : <Bell style={{width:15,height:15,color:'#9ca3af'}} />}
+                                </span>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <p style={{fontSize:'12px',fontWeight:n.read ? 500 : 700,color: n.read ? '#9ca3af' : '#f1f5f9',marginBottom:'2px',lineHeight:'1.4'}}>{n.title}</p>
+                                  {n.message && <p style={{fontSize:'11px',color:'#6b7280',lineHeight:'1.4',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{n.message}</p>}
+                                  <p style={{fontSize:'10px',color:'#4b5563',marginTop:'4px'}}>{n.created_at ? new Date(n.created_at).toLocaleDateString('en-AU', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : ''}</p>
+                                </div>
+                                {!n.read && <span style={{width:'7px',height:'7px',borderRadius:'50%',backgroundColor:'#3b82f6',flexShrink:0,marginTop:'5px'}}/>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {/* User Profile Chip with team switcher */}
                   <div className="relative mr-1">
                     <div
@@ -1797,20 +1884,63 @@ export default function PuntingClub() {
               <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
                 {isLoggedIn ? (
                   <>
-                    <div onClick={() => { handleOpenProfile(); setMobileMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 mx-0 rounded-lg cursor-pointer hover:bg-white/[0.04] transition-all duration-200">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-sm font-black flex-shrink-0">
-                        {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+                    <div className="flex items-center gap-2 px-3">
+                      <div onClick={() => { handleOpenProfile(); setMobileMenuOpen(false); }} className="flex items-center gap-3 py-2 -mx-3 px-3 rounded-lg cursor-pointer hover:bg-white/[0.04] transition-all duration-200 flex-1 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-sm font-black flex-shrink-0">
+                          {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-brand-300 text-sm font-bold leading-tight flex items-center gap-1 truncate">
+                            {myTeamName || currentUser?.teamName}
+                            {viewedRole === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
+                          </p>
+                          <p className="text-gray-500 text-xs leading-tight flex items-center gap-1">
+                            {currentUser?.firstName} · <PermissionBadge role={viewedRole} /> · <span className="text-brand-300/60">Edit profile</span>
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-brand-300 text-sm font-bold leading-tight flex items-center gap-1 truncate">
-                          {myTeamName || currentUser?.teamName}
-                          {viewedRole === 'captain' && <Crown className="w-3 h-3 flex-shrink-0" />}
-                        </p>
-                        <p className="text-gray-500 text-xs leading-tight flex items-center gap-1">
-                          {currentUser?.firstName} · <PermissionBadge role={viewedRole} /> · <span className="text-brand-300/60">Edit profile</span>
-                        </p>
-                      </div>
+                      <button data-user-notif-panel onClick={() => setShowUserNotifPanel(p => !p)} className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors flex-shrink-0">
+                        <Bell className="w-4 h-4" />
+                        {unreadUserNotifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"/>}
+                      </button>
                     </div>
+                    {showUserNotifPanel && (
+                      <div data-user-notif-panel style={{margin:'0 12px',backgroundColor:'#0f172a',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'12px',maxHeight:'320px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                        <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+                          <span style={{fontWeight:700,fontSize:'12px',color:'#f1f5f9'}}>Notifications {unreadUserNotifs > 0 && <span style={{backgroundColor:'#ef4444',color:'white',borderRadius:'999px',padding:'1px 7px',fontSize:'10px',marginLeft:'6px'}}>{unreadUserNotifs}</span>}</span>
+                          {unreadUserNotifs > 0 && (
+                            <button onClick={() => { markAllUserNotifsRead(); }} style={{fontSize:'11px',color:'#60a5fa',background:'none',border:'none',cursor:'pointer',padding:0}}>Mark all read</button>
+                          )}
+                        </div>
+                        <div style={{overflowY:'auto',flex:1}}>
+                          {userNotifs.length === 0 && (
+                            <div style={{padding:'24px 14px',textAlign:'center',color:'#4b5563',fontSize:'12px'}}>No notifications yet</div>
+                          )}
+                          {userNotifs.map(n => (
+                            <div
+                              key={n.id}
+                              onClick={() => { markUserNotifRead(n.id); setShowUserNotifPanel(false); setMobileMenuOpen(false); if (n.type === 'recap_ready') navigateTo('weekly'); else navigateTo('team'); }}
+                              style={{padding:'10px 14px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',backgroundColor: n.read ? 'transparent' : 'rgba(255,255,255,0.03)'}}
+                            >
+                              <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
+                                <span style={{flexShrink:0,marginTop:'1px',display:'flex',alignItems:'center'}}>
+                                  {n.type === 'bet_won' ? <CheckCircle style={{width:14,height:14,color:'#22c55e'}} />
+                                    : n.type === 'bet_lost' ? <XCircle style={{width:14,height:14,color:'#ef4444'}} />
+                                    : n.type === 'bet_partial' ? <CheckCircle style={{width:14,height:14,color:'#f59e0b'}} />
+                                    : n.type === 'recap_ready' ? <BarChart3 style={{width:14,height:14,color:'#60a5fa'}} />
+                                    : <Bell style={{width:14,height:14,color:'#9ca3af'}} />}
+                                </span>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <p style={{fontSize:'12px',fontWeight:n.read ? 500 : 700,color: n.read ? '#9ca3af' : '#f1f5f9',marginBottom:'2px',lineHeight:'1.4'}}>{n.title}</p>
+                                  {n.message && <p style={{fontSize:'11px',color:'#6b7280',lineHeight:'1.4'}}>{n.message}</p>}
+                                </div>
+                                {!n.read && <span style={{width:'7px',height:'7px',borderRadius:'50%',backgroundColor:'#3b82f6',flexShrink:0,marginTop:'5px'}}/>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {/* Mobile team switcher — shown when user belongs to multiple teams */}
                     {allUserTeams.length > 1 && (
                       <div className="px-3 pb-1">
