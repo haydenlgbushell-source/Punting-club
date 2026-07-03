@@ -339,6 +339,13 @@ exports.handler = async (event) => {
       if (!userId || String(userId).startsWith('local_') || isUUID(userId) !== null) {
         return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'Invalid session' }) };
       }
+      // Authorise: a session may only be verified by its own holder. This closes a
+      // PII leak — user IDs are visible in the public leaderboard, so without this
+      // anyone could dump any user's profile (dob, postcode, phone, email) by ID.
+      const authUser = await requireAuth(event);
+      if (!authUser || authUser.id !== userId) {
+        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Session verification failed' }) };
+      }
       const { data: user, error: userErr } = await supabase
         .from('users').select('*').eq('id', userId).maybeSingle();
       if (userErr || !user) {
