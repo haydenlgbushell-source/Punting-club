@@ -152,7 +152,7 @@ exports.handler = async (event) => {
       case 'update_competition_request': {
         const { id, status: reqStatus, adminRole } = payload;
         if (!adminRole) return error('Admin access required', 403);
-        const reqStatusErr = isEnum(reqStatus, ['requested', 'approved', 'rejected', 'cancelled']);
+        const reqStatusErr = isEnum(reqStatus, ['requested', 'approved', 'declined']);
         if (reqStatusErr) return error(`Invalid request status. ${reqStatusErr}`);
         const { data, error: e } = await supabase
           .from('competition_requests')

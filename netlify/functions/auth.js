@@ -388,10 +388,22 @@ exports.handler = async (event) => {
 
     // ── CHANGE PASSWORD ──────────────────────────────────────────────────────
     if (action === 'change_password') {
-      const { userId, newPassword } = payload;
+      const { userId, currentPassword, newPassword } = payload;
       if (!userId || isUUID(userId) !== null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid userId.' }) };
       if (!newPassword || String(newPassword).length < 8 || String(newPassword).length > 128)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+      if (!currentPassword || !String(currentPassword).trim())
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Current password is required.' }) };
+
+      // Prove ownership of the account before changing its password. Without this,
+      // any caller could reset any user's password by supplying their user ID.
+      const { data: acct, error: acctErr } = await supabase.from('users').select('phone').eq('id', userId).maybeSingle();
+      if (acctErr || !acct) return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'User not found.' }) };
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+        email:    `${acct.phone}@puntingclub.app`,
+        password: String(currentPassword),
+      });
+      if (verifyErr) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Current password is incorrect.' }) };
 
       const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password: newPassword });
       if (pwErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: pwErr.message }) };

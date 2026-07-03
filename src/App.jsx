@@ -153,7 +153,7 @@ export default function PuntingClub() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [profileSuccess, setProfileSuccess] = useState(null);
-  const [pwForm, setPwForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
   // Bet Analyzer
   const [showBetAnalyzer, setShowBetAnalyzer] = useState(false);
@@ -256,7 +256,7 @@ export default function PuntingClub() {
     setProfileTab('details');
     setProfileError(null);
     setProfileSuccess(null);
-    setPwForm({ newPassword: '', confirmPassword: '' });
+    setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setShowProfileModal(true);
   };
 
@@ -302,14 +302,15 @@ export default function PuntingClub() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (!pwForm.currentPassword) { setProfileError('Please enter your current password.'); return; }
     if (!pwForm.newPassword || pwForm.newPassword.length < 8) { setProfileError('Password must be at least 8 characters.'); return; }
     if (pwForm.newPassword !== pwForm.confirmPassword) { setProfileError('Passwords do not match.'); return; }
     setProfileSaving(true);
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      await apiChangePassword(currentUser.id, pwForm.newPassword);
-      setPwForm({ newPassword: '', confirmPassword: '' });
+      await apiChangePassword(currentUser.id, pwForm.currentPassword, pwForm.newPassword);
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setProfileSuccess('Password changed successfully!');
       showToast('Password changed!', 'success');
     } catch (err) {
@@ -3995,6 +3996,16 @@ export default function PuntingClub() {
             {/* Change Password Tab */}
             {profileTab === 'password' && (
               <form onSubmit={handlePasswordChange} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-brand-300 mb-1">Current Password *</label>
+                  <input
+                    type="password" required value={pwForm.currentPassword}
+                    onChange={e => setPwForm(p => ({ ...p, currentPassword: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600"
+                    placeholder="Enter your current password"
+                    autoComplete="current-password"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-brand-300 mb-1">New Password *</label>
                   <input
