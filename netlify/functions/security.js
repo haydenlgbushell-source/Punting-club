@@ -75,4 +75,12 @@ const rateLimit = (event, key, { max = 10, windowMs = 60_000 } = {}) => {
   return { ok: true };
 };
 
-module.exports = { corsHeaders, rateLimit, clientIp };
+// Extract a bearer token from the Authorization header, or '' if absent.
+const bearerToken = (event = {}) => {
+  const h = event.headers || {};
+  const raw = h.authorization || h.Authorization || '';
+  const m = /^Bearer\s+(.+)$/i.exec(raw);
+  return m ? m[1].trim() : '';
+};
+
+module.exports = { corsHeaders, rateLimit, clientIp, bearerToken };

@@ -4,12 +4,48 @@
 //  Import this into App.jsx to replace all in-memory operations
 // ============================================================
 
-const call = async (endpoint, payload) => {
+const readSession = () => {
+  try { return JSON.parse(localStorage.getItem('pc_session') || '{}'); }
+  catch { return {}; }
+};
+const writeTokens = (access, refresh) => {
+  try {
+    const s = JSON.parse(localStorage.getItem('pc_session') || '{}');
+    if (access) s.token = access;
+    if (refresh) s.refreshToken = refresh;
+    localStorage.setItem('pc_session', JSON.stringify(s));
+  } catch { /* ignore */ }
+};
+
+const call = async (endpoint, payload, _retry = false) => {
+  const sess = readSession();
+  const headers = { 'Content-Type': 'application/json' };
+  if (sess.token && sess.token !== 'ok') headers.Authorization = `Bearer ${sess.token}`;
+
   const res = await fetch(`/api/${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
+
+  // If the access token has expired, transparently refresh once and retry.
+  if (res.status === 401 && !_retry && sess.refreshToken) {
+    try {
+      const rRes = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh', refreshToken: sess.refreshToken }),
+      });
+      if (rRes.ok) {
+        const rData = await rRes.json();
+        if (rData?.access_token) {
+          writeTokens(rData.access_token, rData.refresh_token);
+          return call(endpoint, payload, true);
+        }
+      }
+    } catch { /* fall through to surface the original error */ }
+  }
+
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`);
   return data;
@@ -48,8 +84,8 @@ export const apiFinaliseTeam  = (teamId, depositPerMember) => call('data', { act
 
 // ── TEAM MEMBERS ─────────────────────────────────────────────
 export const apiGetTeamMembers    = (teamId)            => call('data', { action: 'get_team_members', teamId });
-export const apiApproveMember     = (teamId, userId)    => call('data', { action: 'approve_member', teamId, userId });
-export const apiRejectMember      = (teamId, userId)    => call('data', { action: 'reject_member', teamId, userId });
+export const apiApproveMember     = (teamId, userId, adminToken)    => call('data', { action: 'approve_member', teamId, userId, adminToken });
+export const apiRejectMember      = (teamId, userId, adminToken)    => call('data', { action: 'reject_member', teamId, userId, adminToken });
 export const apiUpdateMember      = (teamId, userId, updates) => call('data', { action: 'update_member', teamId, userId, updates });
 export const apiSaveBettingOrder  = (teamId, orderedUserIds) => call('data', { action: 'save_betting_order', teamId, orderedUserIds });
 

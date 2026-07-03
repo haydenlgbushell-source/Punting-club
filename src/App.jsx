@@ -223,7 +223,7 @@ export default function PuntingClub() {
       setLoginPhone(''); setLoginPassword('');
       if (myTeam?.id) setActiveNav('team');
       // Persist session so refresh doesn't log out
-      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok', allTeamIds: teams.filter(t => t.myRole !== 'pending').map(t => t.id) })); } catch(e) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok', refreshToken: result.session?.refresh_token || null, allTeamIds: teams.filter(t => t.myRole !== 'pending').map(t => t.id) })); } catch(e) {}
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
@@ -464,7 +464,7 @@ export default function PuntingClub() {
         setIsLoggedIn(true);
         setActiveNav('team');
         // Persist session
-        try { localStorage.setItem('pc_session', JSON.stringify({ user: { ...user, first_name: formData.firstName.trim(), last_name: formData.lastName.trim() }, teamId: team.id, teamCode, teamName, role: 'captain', competitionCode: formData.competitionCode || null, token: result.session?.access_token || 'ok' })); } catch(e) {}
+        try { localStorage.setItem('pc_session', JSON.stringify({ user: { ...user, first_name: formData.firstName.trim(), last_name: formData.lastName.trim() }, teamId: team.id, teamCode, teamName, role: 'captain', competitionCode: formData.competitionCode || null, token: result.session?.access_token || 'ok', refreshToken: result.session?.refresh_token || null })); } catch(e) {}
         // Add captain to teamMembers immediately
         const captainPhone = validatePhone(formData.phone).normalised || formData.phone.trim();
         setTeamMembers([{
@@ -503,7 +503,7 @@ export default function PuntingClub() {
         setCurrentTeamId(result.team.id);
         setIsLoggedIn(true);
         setActiveNav('team');
-        try { localStorage.setItem('pc_session', JSON.stringify({ user: result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', competitionCode: null, token: result.session?.access_token || 'ok' })); } catch(e) {}
+        try { localStorage.setItem('pc_session', JSON.stringify({ user: result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', competitionCode: null, token: result.session?.access_token || 'ok', refreshToken: result.session?.refresh_token || null })); } catch(e) {}
         showToast(`Request sent to join "${result.team.team_name}" — waiting for captain approval.`, 'info');
       }
 
@@ -702,7 +702,7 @@ export default function PuntingClub() {
             // Restore finalised state from live team data
             if (myTeam?.finalised) { setTeamFinalised(true); setDepositPerMember(myTeam.deposit_per_member || null); }
             else { setTeamFinalised(false); setDepositPerMember(null); }
-            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', refreshToken: sess.refreshToken || null, allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
           }).catch(() => {
             // Server unreachable — keep cached session, data will load via normal effects
           });
@@ -1044,7 +1044,7 @@ export default function PuntingClub() {
   // ── ADMIN MEMBER APPROVE / DECLINE ────────────────────────────────────────
   const adminApproveMember = async (teamId, userId, teamName, memberName) => {
     try {
-      await apiApproveMember(teamId, userId);
+      await apiApproveMember(teamId, userId, adminToken);
       setAdminTeams(prev => prev.map(t => t.id === teamId ? {
         ...t,
         memberList: t.memberList.map(m => m.userId === userId ? { ...m, role: 'member', canBet: true } : m),
@@ -1056,7 +1056,7 @@ export default function PuntingClub() {
 
   const adminDeclineMember = async (teamId, userId, teamName, memberName) => {
     try {
-      await apiRejectMember(teamId, userId);
+      await apiRejectMember(teamId, userId, adminToken);
       setAdminTeams(prev => prev.map(t => t.id === teamId ? {
         ...t,
         memberList: t.memberList.filter(m => m.userId !== userId),

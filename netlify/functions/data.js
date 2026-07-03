@@ -4,12 +4,30 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isEnum, isString, isPositiveInt, isPositiveFloat, sanitizeUpdates } = require('./validate');
-const { corsHeaders } = require('./security');
+const { corsHeaders, bearerToken } = require('./security');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Resolve the caller's Supabase auth user from their bearer token, or null.
+const getAuthUser = async (event) => {
+  const token = bearerToken(event);
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+};
+
+// Is this user the captain of the given team? (captain_id or captain role.)
+const isTeamCaptain = async (userId, teamId) => {
+  if (!userId || !teamId) return false;
+  const { data: team } = await supabase.from('teams').select('captain_id').eq('id', teamId).maybeSingle();
+  if (team && team.captain_id === userId) return true;
+  const { data: mem } = await supabase.from('team_members').select('role').eq('team_id', teamId).eq('user_id', userId).maybeSingle();
+  return !!mem && mem.role === 'captain';
+};
 
 exports.handler = async (event) => {
   const HEADERS = corsHeaders(event);
@@ -337,6 +355,9 @@ exports.handler = async (event) => {
 
       case 'finalise_team': {
         const { teamId, depositPerMember } = payload;
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again.', 401);
+        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can finalise the team.', 403);
         const { data, error: e } = await supabase
           .from('teams')
           .update({ finalised: true, deposit_per_member: depositPerMember })
@@ -371,6 +392,12 @@ exports.handler = async (event) => {
 
       case 'approve_member': {
         const { teamId, userId } = payload;
+        const adminRole = getAdminRole(payload);
+        if (!adminRole) {
+          const actor = await getAuthUser(event);
+          if (!actor) return error('Please log in again.', 401);
+          if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain or an admin can approve members.', 403);
+        }
         const { data, error: e } = await supabase
           .from('team_members')
           .update({ role: 'member', can_bet: true })
@@ -381,6 +408,12 @@ exports.handler = async (event) => {
 
       case 'reject_member': {
         const { teamId, userId } = payload;
+        const adminRole = getAdminRole(payload);
+        if (!adminRole) {
+          const actor = await getAuthUser(event);
+          if (!actor) return error('Please log in again.', 401);
+          if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain or an admin can remove members.', 403);
+        }
         const { error: e } = await supabase
           .from('team_members').delete()
           .eq('team_id', teamId).eq('user_id', userId);
@@ -393,6 +426,9 @@ exports.handler = async (event) => {
 
       case 'update_member': {
         const { teamId, userId } = payload;
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again.', 401);
+        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can update members.', 403);
         const MEMBER_ALLOWED = ['role', 'can_bet', 'deposit_paid', 'betting_order'];
         const { clean: updates } = sanitizeUpdates(payload.updates, MEMBER_ALLOWED);
         if (Object.keys(updates).length === 0) return error('No valid fields to update.');
@@ -409,6 +445,9 @@ exports.handler = async (event) => {
 
       case 'save_betting_order': {
         const { teamId, orderedUserIds } = payload;
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again.', 401);
+        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can set the betting order.', 403);
         if (!Array.isArray(orderedUserIds)) return error('orderedUserIds must be an array.');
         if (orderedUserIds.length > 50) return error('Betting order cannot exceed 50 members.');
         await supabase.from('betting_order').delete().eq('team_id', teamId);
@@ -421,6 +460,11 @@ exports.handler = async (event) => {
       case 'create_additional_team': {
         const { userId, teamName, competitionCode, buyInMode } = payload;
         if (!userId)   return error('Not logged in');
+        {
+          const actor = await getAuthUser(event);
+          if (!actor) return error('Please log in again.', 401);
+          if (actor.id !== userId) return error('You can only create teams for your own account.', 403);
+        }
         if (!teamName?.trim()) return error('Team name is required');
 
         // Only a captain of an existing team with this name may register it in another competition
@@ -509,6 +553,11 @@ exports.handler = async (event) => {
       case 'join_existing_team': {
         const { userId, teamCode } = payload;
         if (!userId)   return error('Not logged in');
+        {
+          const actor = await getAuthUser(event);
+          if (!actor) return error('Please log in again.', 401);
+          if (actor.id !== userId) return error('You can only join teams for your own account.', 403);
+        }
         if (!teamCode?.trim()) return error('Team code is required');
 
         // Find the team
@@ -953,6 +1002,12 @@ const addAudit = async (adminRole, action, target, detail) => {
 // Helper: create admin notification
 const createAdminNotif = async (type, title, message, data = {}) => {
   await supabase.from('admin_notifications').insert({ type, title, message, data });
+};
+
+// Helper: return the admin role if a valid admin token is present, else null.
+const getAdminRole = (payload) => {
+  try { return verifyAdminToken(payload.adminToken).role; }
+  catch { return null; }
 };
 
 // Helper: verify signed admin token

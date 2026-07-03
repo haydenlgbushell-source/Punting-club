@@ -1,7 +1,17 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isString, isEmail, isDate } = require('./validate');
-const { corsHeaders, rateLimit } = require('./security');
+const { corsHeaders, rateLimit, bearerToken } = require('./security');
+
+// Verify the caller's Supabase access token and return their auth user, or null.
+// Used to authorise actions that must only touch the caller's own account.
+const requireAuth = async (event) => {
+  const token = bearerToken(event);
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+};
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -369,10 +379,25 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ token, role: acct.role, name: acct.name }) };
     }
 
+    // ── REFRESH SESSION ──────────────────────────────────────────────────────
+    // Exchange a refresh token for a fresh access token so the client can keep
+    // calling authenticated endpoints without forcing a re-login every hour.
+    if (action === 'refresh') {
+      const { refreshToken } = payload;
+      if (!refreshToken) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'refreshToken required' }) };
+      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+      if (error || !data?.session) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Session expired' }) };
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ access_token: data.session.access_token, refresh_token: data.session.refresh_token }) };
+    }
+
     // ── UPDATE PROFILE ───────────────────────────────────────────────────────
     if (action === 'update_profile') {
       const { userId, firstName, lastName, email, dob, postcode } = payload;
       if (!userId || isUUID(userId) !== null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid userId.' }) };
+      // Authorise: caller must be signed in as the account being edited.
+      const authUser = await requireAuth(event);
+      if (!authUser) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Please log in again to update your profile.' }) };
+      if (authUser.id !== userId) return { statusCode: 403, headers: HEADERS, body: JSON.stringify({ error: 'You can only edit your own profile.' }) };
       if (!firstName || String(firstName).trim().length < 1 || String(firstName).length > 64)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'First name must be 1–64 characters.' }) };
       if (!lastName || String(lastName).trim().length < 1 || String(lastName).length > 64)
