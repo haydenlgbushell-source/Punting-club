@@ -5,6 +5,7 @@ import Badge from './components/Badge.jsx';
 import LegDot from './components/LegDot.jsx';
 import PermissionBadge from './components/PermissionBadge.jsx';
 import BetSlipCard from './components/BetSlipCard.jsx';
+import PasswordInput, { PasswordStrength } from './components/PasswordInput.jsx';
 import SupportChat from './components/SupportChat.jsx';
 import FaqView from './components/views/FaqView.jsx';
 import CompetitionView from './components/views/CompetitionView.jsx';
@@ -178,9 +179,13 @@ export default function PuntingClub() {
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
+  const dismissToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
   const showToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, message, type }]);
+    // Cap at the 3 most recent so bursts don't stack off-screen
+    setToasts(prev => [...prev.slice(-2), { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3800);
   }, []);
 
@@ -421,7 +426,7 @@ export default function PuntingClub() {
     setPhoneError('');
     if (!formData.password)          { setApiError('Please enter a password.'); return; }
     if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
-    if (formData.password.length < 6) { setApiError('Password must be at least 6 characters.'); return; }
+    if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
     if (signupMode === 'create' && !formData.teamName?.trim()) { setApiError('Please enter a team name.'); return; }
     if (signupMode === 'join'   && !formData.teamCode?.trim()) { setApiError('Please enter a team code.'); return; }
 
@@ -3052,7 +3057,7 @@ export default function PuntingClub() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Password</label>
-              <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Your password" />
+              <PasswordInput required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} autoComplete="current-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Your password" />
             </div>
             <button type="submit" disabled={apiLoading} className="w-full bg-gold-500 hover:bg-gold-400 text-brand-950 font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Log In'}</button>
             <div className="text-center">
@@ -3424,11 +3429,12 @@ export default function PuntingClub() {
             <div className="border-t border-white/5 pt-3 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-brand-300 mb-1">Password *</label>
-                <input type="password" required minLength={6} value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Min 6 characters" />
+                <PasswordInput required minLength={8} value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} autoComplete="new-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Min 8 characters" />
+                <PasswordStrength value={formData.password} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-brand-300 mb-1">Confirm Password *</label>
-                <input type="password" required minLength={6} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-brand-500/50'}`} placeholder="Re-enter password" />
+                <PasswordInput required minLength={8} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} autoComplete="new-password" className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-brand-500/50'}`} placeholder="Re-enter password" />
                 {formData.confirmPassword && (
                   formData.password === formData.confirmPassword
                     ? <p className="text-green-400 text-xs mt-1">✓ Passwords match</p>
@@ -3691,7 +3697,7 @@ export default function PuntingClub() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Password</label>
-              <input type="password" required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
+              <PasswordInput required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} autoComplete="current-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
               <Shield className="w-4 h-4"/>Login to Admin Panel
@@ -3898,6 +3904,9 @@ export default function PuntingClub() {
                 {t.type === 'success' ? '✓' : t.type === 'error' ? '✗' : t.type === 'warning' ? '⚠' : 'ℹ'}
               </span>
               <span className="flex-1 leading-snug">{t.message}</span>
+              <button onClick={() => dismissToast(t.id)} aria-label="Dismiss notification" className="flex-shrink-0 -mr-1 -mt-0.5 p-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           ))}
         </div>
@@ -3998,8 +4007,8 @@ export default function PuntingClub() {
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-brand-300 mb-1">Current Password *</label>
-                  <input
-                    type="password" required value={pwForm.currentPassword}
+                  <PasswordInput
+                    required value={pwForm.currentPassword}
                     onChange={e => setPwForm(p => ({ ...p, currentPassword: e.target.value }))}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600"
                     placeholder="Enter your current password"
@@ -4008,18 +4017,21 @@ export default function PuntingClub() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-brand-300 mb-1">New Password *</label>
-                  <input
-                    type="password" required minLength={8} value={pwForm.newPassword}
+                  <PasswordInput
+                    required minLength={8} value={pwForm.newPassword}
                     onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))}
+                    autoComplete="new-password"
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600"
                     placeholder="Min 8 characters"
                   />
+                  <PasswordStrength value={pwForm.newPassword} />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-brand-300 mb-1">Confirm New Password *</label>
-                  <input
-                    type="password" required minLength={8} value={pwForm.confirmPassword}
+                  <PasswordInput
+                    required minLength={8} value={pwForm.confirmPassword}
                     onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                    autoComplete="new-password"
                     className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${pwForm.confirmPassword ? (pwForm.newPassword === pwForm.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-brand-500/50'}`}
                     placeholder="Re-enter new password"
                   />
