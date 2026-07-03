@@ -1,6 +1,7 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isString, isEmail, isDate } = require('./validate');
+const { corsHeaders, rateLimit } = require('./security');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -14,13 +15,6 @@ const normalisePhone = (raw) => {
   if (/^614\d{8}$/.test(digits)) return '0' + digits.slice(2);
   if (/^4\d{8}$/.test(digits))  return '0' + digits;
   return digits; // return as-is if unrecognised — let DB constraint catch it
-};
-
-const HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Resolve a user's teams: checks team_members first, then falls back to captain_id lookup.
@@ -90,6 +84,7 @@ const resolveUserTeams = async (userId) => {
 };
 
 exports.handler = async (event) => {
+  const HEADERS = corsHeaders(event);
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
   if (event.httpMethod !== 'POST')    return { statusCode: 405, headers: HEADERS, body: 'Method not allowed' };
 
@@ -100,6 +95,21 @@ exports.handler = async (event) => {
     payload = body;
   } catch(e) {
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid JSON' }) };
+  }
+
+  // Throttle credential-sensitive actions to blunt brute-force / stuffing.
+  const RATE_LIMITS = {
+    login:          { max: 8,  windowMs: 60_000 },
+    signup:         { max: 5,  windowMs: 60_000 },
+    admin_login:    { max: 6,  windowMs: 60_000 },
+    reset_password: { max: 4,  windowMs: 60_000 },
+    change_password:{ max: 6,  windowMs: 60_000 },
+  };
+  if (RATE_LIMITS[action]) {
+    const rl = rateLimit(event, `auth:${action}`, RATE_LIMITS[action]);
+    if (!rl.ok) {
+      return { statusCode: 429, headers: { ...HEADERS, 'Retry-After': String(rl.retryAfter) }, body: JSON.stringify({ error: 'Too many attempts. Please wait a moment and try again.' }) };
+    }
   }
 
   try {

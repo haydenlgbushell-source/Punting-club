@@ -1,6 +1,8 @@
 // netlify/functions/claude.js — Node.js proxy for Anthropic API
 'use strict';
 
+const { corsHeaders, rateLimit } = require('./security');
+
 const ALLOWED_MODELS = new Set([
   'claude-haiku-4-5-20251001',
   'claude-sonnet-4-6',
@@ -18,22 +20,22 @@ const ALLOWED_IMAGE_MEDIA_TYPES = new Set([
 const MAX_IMAGE_B64_CHARS = 7 * 1024 * 1024;
 const MAX_IMAGES_PER_REQUEST = 2;
 
-const HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-const err = (msg, status = 400) => ({
-  statusCode: status,
-  headers: HEADERS,
-  body: JSON.stringify({ error: msg }),
-});
-
 exports.handler = async (event) => {
+  const HEADERS = corsHeaders(event);
+  const err = (msg, status = 400) => ({
+    statusCode: status,
+    headers: HEADERS,
+    body: JSON.stringify({ error: msg }),
+  });
+
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
   if (event.httpMethod !== 'POST')    return err('Method not allowed', 405);
+
+  // Cap calls per client to contain Anthropic cost abuse from the public proxy.
+  const rl = rateLimit(event, 'claude', { max: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    return { statusCode: 429, headers: { ...HEADERS, 'Retry-After': String(rl.retryAfter) }, body: JSON.stringify({ error: 'Too many requests. Please wait a moment and try again.' }) };
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return err('ANTHROPIC_API_KEY not configured', 500);

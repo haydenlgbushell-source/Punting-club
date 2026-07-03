@@ -6,13 +6,7 @@
 //   Step 2 — Haiku + forced tool_use → structured settlement JSON
 
 const { createClient } = require('@supabase/supabase-js');
-
-const HEADERS = {
-  'Content-Type':                'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods':'POST, OPTIONS',
-  'Access-Control-Allow-Headers':'Content-Type, Authorization',
-};
+const { corsHeaders, rateLimit } = require('./security');
 
 const UNSETTLED = ['pending', 'in_progress'];
 const VERSION   = 'v9-two-step-haiku-tool';
@@ -146,7 +140,16 @@ async function settleLegs(apiKey, summary, legs) {
 }
 
 exports.handler = async (event) => {
+  const HEADERS = corsHeaders(event || {});
   if (event?.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
+
+  // This endpoint fans out to Anthropic web-search; throttle to contain cost.
+  if (event?.httpMethod === 'POST') {
+    const rl = rateLimit(event, 'check-results', { max: 10, windowMs: 60_000 });
+    if (!rl.ok) {
+      return { statusCode: 429, headers: { ...HEADERS, 'Retry-After': String(rl.retryAfter) }, body: JSON.stringify({ error: 'Too many requests. Please wait a moment and try again.' }) };
+    }
+  }
 
   let bodyStr = event?.body || '';
   if (event?.isBase64Encoded) bodyStr = Buffer.from(bodyStr, 'base64').toString('utf-8');
