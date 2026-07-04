@@ -1,6 +1,17 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isString, isEmail, isDate } = require('./validate');
+const { corsHeaders, rateLimit, bearerToken } = require('./security');
+
+// Verify the caller's Supabase access token and return their auth user, or null.
+// Used to authorise actions that must only touch the caller's own account.
+const requireAuth = async (event) => {
+  const token = bearerToken(event);
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+};
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -14,13 +25,6 @@ const normalisePhone = (raw) => {
   if (/^614\d{8}$/.test(digits)) return '0' + digits.slice(2);
   if (/^4\d{8}$/.test(digits))  return '0' + digits;
   return digits; // return as-is if unrecognised — let DB constraint catch it
-};
-
-const HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Resolve a user's teams: checks team_members first, then falls back to captain_id lookup.
@@ -90,6 +94,7 @@ const resolveUserTeams = async (userId) => {
 };
 
 exports.handler = async (event) => {
+  const HEADERS = corsHeaders(event);
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
   if (event.httpMethod !== 'POST')    return { statusCode: 405, headers: HEADERS, body: 'Method not allowed' };
 
@@ -100,6 +105,21 @@ exports.handler = async (event) => {
     payload = body;
   } catch(e) {
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid JSON' }) };
+  }
+
+  // Throttle credential-sensitive actions to blunt brute-force / stuffing.
+  const RATE_LIMITS = {
+    login:          { max: 8,  windowMs: 60_000 },
+    signup:         { max: 5,  windowMs: 60_000 },
+    admin_login:    { max: 6,  windowMs: 60_000 },
+    reset_password: { max: 4,  windowMs: 60_000 },
+    change_password:{ max: 6,  windowMs: 60_000 },
+  };
+  if (RATE_LIMITS[action]) {
+    const rl = rateLimit(event, `auth:${action}`, RATE_LIMITS[action]);
+    if (!rl.ok) {
+      return { statusCode: 429, headers: { ...HEADERS, 'Retry-After': String(rl.retryAfter) }, body: JSON.stringify({ error: 'Too many attempts. Please wait a moment and try again.' }) };
+    }
   }
 
   try {
@@ -319,6 +339,13 @@ exports.handler = async (event) => {
       if (!userId || String(userId).startsWith('local_') || isUUID(userId) !== null) {
         return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'Invalid session' }) };
       }
+      // Authorise: a session may only be verified by its own holder. This closes a
+      // PII leak — user IDs are visible in the public leaderboard, so without this
+      // anyone could dump any user's profile (dob, postcode, phone, email) by ID.
+      const authUser = await requireAuth(event);
+      if (!authUser || authUser.id !== userId) {
+        return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Session verification failed' }) };
+      }
       const { data: user, error: userErr } = await supabase
         .from('users').select('*').eq('id', userId).maybeSingle();
       if (userErr || !user) {
@@ -359,10 +386,25 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ token, role: acct.role, name: acct.name }) };
     }
 
+    // ── REFRESH SESSION ──────────────────────────────────────────────────────
+    // Exchange a refresh token for a fresh access token so the client can keep
+    // calling authenticated endpoints without forcing a re-login every hour.
+    if (action === 'refresh') {
+      const { refreshToken } = payload;
+      if (!refreshToken) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'refreshToken required' }) };
+      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+      if (error || !data?.session) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Session expired' }) };
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ access_token: data.session.access_token, refresh_token: data.session.refresh_token }) };
+    }
+
     // ── UPDATE PROFILE ───────────────────────────────────────────────────────
     if (action === 'update_profile') {
       const { userId, firstName, lastName, email, dob, postcode } = payload;
       if (!userId || isUUID(userId) !== null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid userId.' }) };
+      // Authorise: caller must be signed in as the account being edited.
+      const authUser = await requireAuth(event);
+      if (!authUser) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Please log in again to update your profile.' }) };
+      if (authUser.id !== userId) return { statusCode: 403, headers: HEADERS, body: JSON.stringify({ error: 'You can only edit your own profile.' }) };
       if (!firstName || String(firstName).trim().length < 1 || String(firstName).length > 64)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'First name must be 1–64 characters.' }) };
       if (!lastName || String(lastName).trim().length < 1 || String(lastName).length > 64)
@@ -388,10 +430,22 @@ exports.handler = async (event) => {
 
     // ── CHANGE PASSWORD ──────────────────────────────────────────────────────
     if (action === 'change_password') {
-      const { userId, newPassword } = payload;
+      const { userId, currentPassword, newPassword } = payload;
       if (!userId || isUUID(userId) !== null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid userId.' }) };
       if (!newPassword || String(newPassword).length < 8 || String(newPassword).length > 128)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+      if (!currentPassword || !String(currentPassword).trim())
+        return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Current password is required.' }) };
+
+      // Prove ownership of the account before changing its password. Without this,
+      // any caller could reset any user's password by supplying their user ID.
+      const { data: acct, error: acctErr } = await supabase.from('users').select('phone').eq('id', userId).maybeSingle();
+      if (acctErr || !acct) return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'User not found.' }) };
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+        email:    `${acct.phone}@puntingclub.app`,
+        password: String(currentPassword),
+      });
+      if (verifyErr) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Current password is incorrect.' }) };
 
       const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password: newPassword });
       if (pwErr) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: pwErr.message }) };

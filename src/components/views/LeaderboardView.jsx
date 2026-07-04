@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Trophy, Users, ChevronLeft, CheckCircle, Crown, ChevronDown } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Trophy, Users, ChevronLeft, Clock, Crown, ChevronDown } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
@@ -10,6 +10,40 @@ const parseCurrency = (s) => {
   if (typeof s === 'number') return s;
   return parseFloat(String(s).replace(/[^0-9.\-]/g, '')) || 0;
 };
+
+// Live "bets close in …" countdown to the given cutoff Date.
+const Countdown = ({ to }) => {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const ms = to.getTime() - now;
+  if (ms <= 0) return null;
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const parts = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return (
+    <span className="inline-flex items-center gap-1 text-brand-700 font-semibold">
+      <Clock className="w-3 h-3" /> Closes in {parts}
+    </span>
+  );
+};
+
+// One shimmering placeholder row for the initial leaderboard load.
+const SkeletonRow = () => (
+  <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 animate-pulse">
+    <div className="flex items-center gap-2.5">
+      <div className="w-8 h-8 rounded-lg bg-gray-200 flex-shrink-0" />
+      <div className="flex-1 space-y-1.5">
+        <div className="h-3 bg-gray-200 rounded w-32" />
+        <div className="h-2.5 bg-gray-100 rounded w-20" />
+      </div>
+      <div className="h-4 bg-gray-200 rounded w-16" />
+    </div>
+  </div>
+);
 
 const LeaderboardView = () => {
   const {
@@ -24,6 +58,19 @@ const LeaderboardView = () => {
 
   const [leaderboardView, setLeaderboardView] = useState('current');
   const [selectedTeamIdx, setSelectedTeamIdx] = useState(null);
+  // Show shimmer rows until the first data arrives (or a short grace period lapses).
+  const [showSkeleton, setShowSkeleton] = useState(enrichedLeaderboardTeams.length === 0);
+  useEffect(() => {
+    if (enrichedLeaderboardTeams.length) { setShowSkeleton(false); return; }
+    const t = setTimeout(() => setShowSkeleton(false), 1500);
+    return () => clearTimeout(t);
+  }, [enrichedLeaderboardTeams.length]);
+
+  // Toggle a team row open, usable from click or keyboard.
+  const toggleRow = (idx) => setSelectedTeamIdx(prev => (prev === idx ? null : idx));
+  const rowKeyDown = (e, idx) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRow(idx); }
+  };
 
   const leaderTotal = useMemo(() => {
     if (!enrichedLeaderboardTeams.length) return 0;
@@ -70,15 +117,15 @@ const LeaderboardView = () => {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
           <div>
             <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-            <p className="text-slate-500 text-sm">
-              {weekLabel} · Closes Wed 12:00 AEST ({cutoffLabel})
+            <p className="text-slate-500 text-sm flex items-center gap-1.5 flex-wrap">
+              {weekLabel} · <Countdown to={nextWedCutoff} />
+              <span className="text-slate-400">(Wed 12:00 AEST, {cutoffLabel})</span>
             </p>
-            {lastChecked && <p className="text-slate-400 text-xs mt-0.5">Last checked: {lastChecked.toLocaleTimeString()}</p>}
-            {resultLog.slice(0, 2).map((l, i) => (
-              <p key={i} className="text-green-600 text-xs mt-0.5 flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-green-600 inline mr-1" />{l.time} — {l.message}
+            {lastChecked && (
+              <p className="text-slate-400 text-xs mt-0.5" title={resultLog.slice(0, 3).map(l => `${l.time} — ${l.message}`).join('\n')}>
+                Results last checked {lastChecked.toLocaleTimeString()}
               </p>
-            ))}
+            )}
           </div>
           {isLoggedIn && (
             <div className="flex gap-2 flex-wrap">
@@ -133,7 +180,10 @@ const LeaderboardView = () => {
 
         {/* ── TEAM ROWS ── */}
         <div className="space-y-1.5">
-          {enrichedLeaderboardTeams.length === 0 && (
+          {enrichedLeaderboardTeams.length === 0 && showSkeleton && (
+            <>{[0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}</>
+          )}
+          {enrichedLeaderboardTeams.length === 0 && !showSkeleton && (
             <div className="text-center py-16">
               <Trophy className="w-16 h-16 text-brand-700/30 mb-4 mx-auto" />
               <p className="text-slate-500 font-semibold text-lg">No teams yet</p>
@@ -155,8 +205,11 @@ const LeaderboardView = () => {
 
                 {/* ── MOBILE CARD (shown below md) ── */}
                 <div
-                  className="md:hidden cursor-pointer active:bg-gray-100/60 transition-colors"
-                  onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}
+                  className="md:hidden cursor-pointer active:bg-gray-100/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                  role="button" tabIndex={0} aria-expanded={isOpen}
+                  aria-label={`${team.team}, rank ${team.rank}, ${team.total}. Tap to ${isOpen ? 'collapse' : 'expand'} details`}
+                  onClick={() => toggleRow(idx)}
+                  onKeyDown={(e) => rowKeyDown(e, idx)}
                 >
                   {/* Top row: rank, name, total */}
                   <div className="flex items-center gap-2.5 px-3 pt-3 pb-1">
@@ -180,7 +233,7 @@ const LeaderboardView = () => {
                     {behind > 0 && (
                       <>
                         <span className="text-slate-300 text-xs">·</span>
-                        <span className="text-red-400 text-xs font-semibold">
+                        <span className="text-slate-500 text-xs font-semibold">
                           ${behind.toFixed(2)} behind
                         </span>
                       </>
@@ -200,8 +253,11 @@ const LeaderboardView = () => {
 
                 {/* ── DESKTOP ROW (shown at md+) ── */}
                 <div
-                  className="hidden md:grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors"
-                  onClick={() => setSelectedTeamIdx(isOpen ? null : idx)}
+                  className="hidden md:grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded-lg"
+                  role="button" tabIndex={0} aria-expanded={isOpen}
+                  aria-label={`${team.team}, rank ${team.rank}, ${team.total}. Activate to ${isOpen ? 'collapse' : 'expand'} details`}
+                  onClick={() => toggleRow(idx)}
+                  onKeyDown={(e) => rowKeyDown(e, idx)}
                 >
                   <div className="col-span-1">
                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
@@ -218,7 +274,7 @@ const LeaderboardView = () => {
                   </div>
                   <div className="col-span-1 text-right">
                     {behind > 0
-                      ? <span className="text-red-400 text-xs font-semibold">${behind.toFixed(2)}</span>
+                      ? <span className="text-slate-500 text-xs font-semibold">${behind.toFixed(2)}</span>
                       : <span className="text-green-600 text-xs font-bold">{team.rank === 1 ? 'Leader' : '—'}</span>
                     }
                   </div>

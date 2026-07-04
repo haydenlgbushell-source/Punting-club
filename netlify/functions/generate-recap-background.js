@@ -50,6 +50,21 @@ function formatCents(cents) {
   return '$' + (cents / 100).toLocaleString('en-AU', { minimumFractionDigits: 2 });
 }
 
+// The recap HTML is model-generated from a prompt that embeds user-controlled
+// team names, and the frontend renders it via dangerouslySetInnerHTML. Strip the
+// obvious script-injection vectors before persisting so a crafted team name can't
+// become stored XSS.
+function sanitizeRecapHTML(html) {
+  return String(html || '')
+    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '')
+    .replace(/<\s*iframe[\s\S]*?<\s*\/\s*iframe\s*>/gi, '')
+    .replace(/<\s*(script|iframe|object|embed|link|meta|style|base)\b[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2/gi, '$1="#"');
+}
+
 async function generateRecapHTML(apiKey, comp, weekNumber, weekData, seasonStandings) {
   const prompt = `You are the Punting Club weekly match reporter. Write a punchy, pub-friendly weekly recap.
 
@@ -237,7 +252,7 @@ exports.handler = async (event) => {
 
       let html;
       try {
-        html = await generateRecapHTML(apiKey, comp, recapWeek, weekData, seasonStandings);
+        html = sanitizeRecapHTML(await generateRecapHTML(apiKey, comp, recapWeek, weekData, seasonStandings));
       } catch (e) {
         console.error(`[generate-recap] Claude error for ${comp.name}:`, e.message);
         continue;

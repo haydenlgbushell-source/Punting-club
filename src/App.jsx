@@ -5,6 +5,7 @@ import Badge from './components/Badge.jsx';
 import LegDot from './components/LegDot.jsx';
 import PermissionBadge from './components/PermissionBadge.jsx';
 import BetSlipCard from './components/BetSlipCard.jsx';
+import PasswordInput, { PasswordStrength } from './components/PasswordInput.jsx';
 import SupportChat from './components/SupportChat.jsx';
 import FaqView from './components/views/FaqView.jsx';
 import CompetitionView from './components/views/CompetitionView.jsx';
@@ -153,7 +154,7 @@ export default function PuntingClub() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [profileSuccess, setProfileSuccess] = useState(null);
-  const [pwForm, setPwForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
   // Bet Analyzer
   const [showBetAnalyzer, setShowBetAnalyzer] = useState(false);
@@ -178,9 +179,13 @@ export default function PuntingClub() {
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
+  const dismissToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
   const showToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, message, type }]);
+    // Cap at the 3 most recent so bursts don't stack off-screen
+    setToasts(prev => [...prev.slice(-2), { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3800);
   }, []);
 
@@ -218,7 +223,7 @@ export default function PuntingClub() {
       setLoginPhone(''); setLoginPassword('');
       if (myTeam?.id) setActiveNav('team');
       // Persist session so refresh doesn't log out
-      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok', allTeamIds: teams.filter(t => t.myRole !== 'pending').map(t => t.id) })); } catch(e) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: result.session?.access_token || 'ok', refreshToken: result.session?.refresh_token || null, allTeamIds: teams.filter(t => t.myRole !== 'pending').map(t => t.id) })); } catch(e) {}
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
@@ -256,7 +261,7 @@ export default function PuntingClub() {
     setProfileTab('details');
     setProfileError(null);
     setProfileSuccess(null);
-    setPwForm({ newPassword: '', confirmPassword: '' });
+    setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setShowProfileModal(true);
   };
 
@@ -302,14 +307,15 @@ export default function PuntingClub() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (!pwForm.currentPassword) { setProfileError('Please enter your current password.'); return; }
     if (!pwForm.newPassword || pwForm.newPassword.length < 8) { setProfileError('Password must be at least 8 characters.'); return; }
     if (pwForm.newPassword !== pwForm.confirmPassword) { setProfileError('Passwords do not match.'); return; }
     setProfileSaving(true);
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      await apiChangePassword(currentUser.id, pwForm.newPassword);
-      setPwForm({ newPassword: '', confirmPassword: '' });
+      await apiChangePassword(currentUser.id, pwForm.currentPassword, pwForm.newPassword);
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setProfileSuccess('Password changed successfully!');
       showToast('Password changed!', 'success');
     } catch (err) {
@@ -420,7 +426,7 @@ export default function PuntingClub() {
     setPhoneError('');
     if (!formData.password)          { setApiError('Please enter a password.'); return; }
     if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
-    if (formData.password.length < 6) { setApiError('Password must be at least 6 characters.'); return; }
+    if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
     if (signupMode === 'create' && !formData.teamName?.trim()) { setApiError('Please enter a team name.'); return; }
     if (signupMode === 'join'   && !formData.teamCode?.trim()) { setApiError('Please enter a team code.'); return; }
 
@@ -458,7 +464,7 @@ export default function PuntingClub() {
         setIsLoggedIn(true);
         setActiveNav('team');
         // Persist session
-        try { localStorage.setItem('pc_session', JSON.stringify({ user: { ...user, first_name: formData.firstName.trim(), last_name: formData.lastName.trim() }, teamId: team.id, teamCode, teamName, role: 'captain', competitionCode: formData.competitionCode || null, token: result.session?.access_token || 'ok' })); } catch(e) {}
+        try { localStorage.setItem('pc_session', JSON.stringify({ user: { ...user, first_name: formData.firstName.trim(), last_name: formData.lastName.trim() }, teamId: team.id, teamCode, teamName, role: 'captain', competitionCode: formData.competitionCode || null, token: result.session?.access_token || 'ok', refreshToken: result.session?.refresh_token || null })); } catch(e) {}
         // Add captain to teamMembers immediately
         const captainPhone = validatePhone(formData.phone).normalised || formData.phone.trim();
         setTeamMembers([{
@@ -497,7 +503,7 @@ export default function PuntingClub() {
         setCurrentTeamId(result.team.id);
         setIsLoggedIn(true);
         setActiveNav('team');
-        try { localStorage.setItem('pc_session', JSON.stringify({ user: result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', competitionCode: null, token: result.session?.access_token || 'ok' })); } catch(e) {}
+        try { localStorage.setItem('pc_session', JSON.stringify({ user: result.user, teamId: result.team.id, teamCode: result.team.team_code, teamName: result.team.team_name, role: 'pending', competitionCode: null, token: result.session?.access_token || 'ok', refreshToken: result.session?.refresh_token || null })); } catch(e) {}
         showToast(`Request sent to join "${result.team.team_name}" — waiting for captain approval.`, 'info');
       }
 
@@ -696,7 +702,7 @@ export default function PuntingClub() {
             // Restore finalised state from live team data
             if (myTeam?.finalised) { setTeamFinalised(true); setDepositPerMember(myTeam.deposit_per_member || null); }
             else { setTeamFinalised(false); setDepositPerMember(null); }
-            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', refreshToken: sess.refreshToken || null, allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
           }).catch(() => {
             // Server unreachable — keep cached session, data will load via normal effects
           });
@@ -1038,7 +1044,7 @@ export default function PuntingClub() {
   // ── ADMIN MEMBER APPROVE / DECLINE ────────────────────────────────────────
   const adminApproveMember = async (teamId, userId, teamName, memberName) => {
     try {
-      await apiApproveMember(teamId, userId);
+      await apiApproveMember(teamId, userId, adminToken);
       setAdminTeams(prev => prev.map(t => t.id === teamId ? {
         ...t,
         memberList: t.memberList.map(m => m.userId === userId ? { ...m, role: 'member', canBet: true } : m),
@@ -1050,7 +1056,7 @@ export default function PuntingClub() {
 
   const adminDeclineMember = async (teamId, userId, teamName, memberName) => {
     try {
-      await apiRejectMember(teamId, userId);
+      await apiRejectMember(teamId, userId, adminToken);
       setAdminTeams(prev => prev.map(t => t.id === teamId ? {
         ...t,
         memberList: t.memberList.filter(m => m.userId !== userId),
@@ -1208,7 +1214,7 @@ export default function PuntingClub() {
 
   const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB — Claude's per-image limit
-  const MAX_IMAGES = 2;
+  const MAX_IMAGES = 5;
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
@@ -1257,7 +1263,7 @@ export default function PuntingClub() {
     try {
       const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1024, messages:[{ role:'user', content:[
         { type:'text', text:`Extract this bet slip into JSON only — no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/return: include $ sign; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
-        ...uploadedImages.slice(0, 2).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
+        ...uploadedImages.slice(0, MAX_IMAGES).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
       if (!res.ok || data.error || data.type === 'error') {
@@ -3051,7 +3057,7 @@ export default function PuntingClub() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Password</label>
-              <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Your password" />
+              <PasswordInput required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} autoComplete="current-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Your password" />
             </div>
             <button type="submit" disabled={apiLoading} className="w-full bg-gold-500 hover:bg-gold-400 text-brand-950 font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Log In'}</button>
             <div className="text-center">
@@ -3423,11 +3429,12 @@ export default function PuntingClub() {
             <div className="border-t border-white/5 pt-3 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-brand-300 mb-1">Password *</label>
-                <input type="password" required minLength={6} value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Min 6 characters" />
+                <PasswordInput required minLength={8} value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} autoComplete="new-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Min 8 characters" />
+                <PasswordStrength value={formData.password} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-brand-300 mb-1">Confirm Password *</label>
-                <input type="password" required minLength={6} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-brand-500/50'}`} placeholder="Re-enter password" />
+                <PasswordInput required minLength={8} value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} autoComplete="new-password" className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-gray-600 ${formData.confirmPassword ? (formData.password === formData.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-brand-500/50'}`} placeholder="Re-enter password" />
                 {formData.confirmPassword && (
                   formData.password === formData.confirmPassword
                     ? <p className="text-green-400 text-xs mt-1">✓ Passwords match</p>
@@ -3615,7 +3622,7 @@ export default function PuntingClub() {
                 <div className="border-2 border-dashed border-brand-200 rounded-xl p-8 text-center hover:bg-brand-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
-                  <p className="text-gray-600 text-xs mt-1">PNG, JPG up to 10MB · $50 weekly max enforced</p>
+                  <p className="text-gray-600 text-xs mt-1">PNG, JPG · up to {MAX_IMAGES} images, 5MB each · $50 weekly max enforced</p>
                 </div>
                 {uploadedImages.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
@@ -3690,7 +3697,7 @@ export default function PuntingClub() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Password</label>
-              <input type="password" required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
+              <PasswordInput required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} autoComplete="current-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
               <Shield className="w-4 h-4"/>Login to Admin Panel
@@ -3897,6 +3904,9 @@ export default function PuntingClub() {
                 {t.type === 'success' ? '✓' : t.type === 'error' ? '✗' : t.type === 'warning' ? '⚠' : 'ℹ'}
               </span>
               <span className="flex-1 leading-snug">{t.message}</span>
+              <button onClick={() => dismissToast(t.id)} aria-label="Dismiss notification" className="flex-shrink-0 -mr-1 -mt-0.5 p-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           ))}
         </div>
@@ -3996,19 +4006,32 @@ export default function PuntingClub() {
             {profileTab === 'password' && (
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-brand-300 mb-1">New Password *</label>
-                  <input
-                    type="password" required minLength={8} value={pwForm.newPassword}
-                    onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))}
+                  <label className="block text-xs font-semibold text-brand-300 mb-1">Current Password *</label>
+                  <PasswordInput
+                    required value={pwForm.currentPassword}
+                    onChange={e => setPwForm(p => ({ ...p, currentPassword: e.target.value }))}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600"
-                    placeholder="Min 8 characters"
+                    placeholder="Enter your current password"
+                    autoComplete="current-password"
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-brand-300 mb-1">New Password *</label>
+                  <PasswordInput
+                    required minLength={8} value={pwForm.newPassword}
+                    onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))}
+                    autoComplete="new-password"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600"
+                    placeholder="Min 8 characters"
+                  />
+                  <PasswordStrength value={pwForm.newPassword} />
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-brand-300 mb-1">Confirm New Password *</label>
-                  <input
-                    type="password" required minLength={8} value={pwForm.confirmPassword}
+                  <PasswordInput
+                    required minLength={8} value={pwForm.confirmPassword}
                     onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                    autoComplete="new-password"
                     className={`w-full bg-white/5 border rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none placeholder-gray-600 ${pwForm.confirmPassword ? (pwForm.newPassword === pwForm.confirmPassword ? 'border-green-500/50 focus:border-green-500' : 'border-red-500/50 focus:border-red-500') : 'border-white/10 focus:border-brand-500/50'}`}
                     placeholder="Re-enter new password"
                   />

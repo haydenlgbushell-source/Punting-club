@@ -73,7 +73,7 @@ const HomeView = ({
               onClick={() => {
                 setRequestCompStep(1);
                 setRequestCompForm({
-                  contactName: isLoggedIn ? `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() : '',
+                  contactName: isLoggedIn ? `${currentUser?.firstName || currentUser?.first_name || ''} ${currentUser?.lastName || currentUser?.last_name || ''}`.trim() : '',
                   contactPhone: isLoggedIn ? (currentUser?.phone || '') : '',
                   contactEmail: isLoggedIn ? (currentUser?.email || '') : '',
                   pubName: '', compName: '', estimatedTeams: '',
@@ -119,17 +119,22 @@ const HomeView = ({
         </div>
       </section>
 
-      {/* Latest Match Report */}
-      {activeCompetitions.length > 0 && (
-        <section className="pb-8 px-4 sm:px-6">
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-xl font-black text-slate-900 mb-4">Latest Match Report</h2>
-            {activeCompetitions.map(comp => (
-              <WeeklyRecapCard key={comp.id} competitionId={comp.id} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Latest Match Report — show a single recap: the user's competition if
+          logged in, otherwise the most recent active competition. */}
+      {(() => {
+        const featuredComp =
+          (isLoggedIn && activeCompetitions.find(c => c.code === currentUser?.competitionCode)) ||
+          activeCompetitions[0];
+        if (!featuredComp) return null;
+        return (
+          <section className="pb-8 px-4 sm:px-6">
+            <div className="max-w-5xl mx-auto">
+              <h2 className="text-xl font-black text-slate-900 mb-4">Latest Match Report</h2>
+              <WeeklyRecapCard key={featuredComp.id} competitionId={featuredComp.id} />
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Feature cards */}
       <section className="pb-20 px-4 sm:px-6">
@@ -144,7 +149,10 @@ const HomeView = ({
               <div
                 key={i}
                 onClick={f.nav ? () => navigateTo(f.nav) : undefined}
-                className={`bg-white border border-gray-200 border-t-2 border-t-brand-500 rounded-xl p-5 hover:border-gray-300 hover:bg-gray-100/60 transition-all duration-200 group ${f.nav ? 'cursor-pointer' : ''}`}
+                role={f.nav ? 'button' : undefined}
+                tabIndex={f.nav ? 0 : undefined}
+                onKeyDown={f.nav ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo(f.nav); } } : undefined}
+                className={`bg-white border border-gray-200 border-t-2 border-t-brand-500 rounded-xl p-5 hover:border-gray-300 hover:bg-gray-100/60 transition-all duration-200 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${f.nav ? 'cursor-pointer' : ''}`}
               >
                 <div className="w-10 h-10 bg-gray-100 border border-gray-300 rounded-lg flex items-center justify-center text-brand-600 mb-4 group-hover:scale-105 transition-transform duration-200">
                   {f.icon}
