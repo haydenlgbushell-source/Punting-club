@@ -1214,7 +1214,7 @@ export default function PuntingClub() {
 
   const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB — Claude's per-image limit
-  const MAX_IMAGES = 2;
+  const MAX_IMAGES = 5;
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
@@ -1263,7 +1263,7 @@ export default function PuntingClub() {
     try {
       const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1024, messages:[{ role:'user', content:[
         { type:'text', text:`Extract this bet slip into JSON only — no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/return: include $ sign; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
-        ...uploadedImages.slice(0, 2).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
+        ...uploadedImages.slice(0, MAX_IMAGES).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
       if (!res.ok || data.error || data.type === 'error') {
@@ -3622,7 +3622,7 @@ export default function PuntingClub() {
                 <div className="border-2 border-dashed border-brand-200 rounded-xl p-8 text-center hover:bg-brand-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
-                  <p className="text-gray-600 text-xs mt-1">PNG, JPG up to 10MB · $50 weekly max enforced</p>
+                  <p className="text-gray-600 text-xs mt-1">PNG, JPG · up to {MAX_IMAGES} images, 5MB each · $50 weekly max enforced</p>
                 </div>
                 {uploadedImages.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">

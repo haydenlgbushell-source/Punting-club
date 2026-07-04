@@ -18,7 +18,7 @@ const ALLOWED_IMAGE_MEDIA_TYPES = new Set([
 
 // 5 MB in base64 ≈ 6.8 MB of chars; add a small buffer
 const MAX_IMAGE_B64_CHARS = 7 * 1024 * 1024;
-const MAX_IMAGES_PER_REQUEST = 2;
+const MAX_IMAGES_PER_REQUEST = 5;
 
 exports.handler = async (event) => {
   const HEADERS = corsHeaders(event);
