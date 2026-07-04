@@ -1261,8 +1261,13 @@ export default function PuntingClub() {
     if (!uploadedImages.length) { showToast('Please upload at least one bet slip image.', 'warning'); return; }
     setAnalyzing(true);
     try {
-      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1024, messages:[{ role:'user', content:[
-        { type:'text', text:`Extract this bet slip into JSON only — no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/return: include $ sign; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
+      const imgCount = Math.min(uploadedImages.length, MAX_IMAGES);
+      // Scale the output budget with the number of slips so a multi-image bet
+      // (many legs) isn't truncated mid-JSON — the old fixed 1024 cut off large
+      // multis and surfaced as a bogus "couldn't read the image" error.
+      const maxTokens = Math.min(2048 + imgCount * 1024, 8192);
+      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages:[{ role:'user', content:[
+        { type:'text', text:`You are given ${imgCount} bet slip image${imgCount > 1 ? 's' : ''}. They are parts of ONE bet — combine EVERY leg from ALL images into a single JSON bet. Return JSON only, no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- Include one leg object for EVERY selection across all images; number legNumber sequentially from 1.\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/combinedOdds/estimatedReturn: the overall bet totals (usually the "Potential"/payout figure). Include $ on money; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
         ...uploadedImages.slice(0, MAX_IMAGES).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
       ]}] }) });
       const data = await res.json();
@@ -1271,9 +1276,17 @@ export default function PuntingClub() {
         showToast(`Analysis failed: ${errMsg}`, 'error');
         return;
       }
-      if (data.content?.[0]?.text) {
-        const parsed = parseAnalysisJSON(data.content[0].text);
-        if (!parsed) { showToast('Could not read bet slip. Try a clearer image.', 'error'); return; }
+      const responseText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+      if (responseText) {
+        const parsed = parseAnalysisJSON(responseText);
+        if (!parsed) {
+          console.error('[analyze] unparseable response (stop_reason=' + data.stop_reason + '):', responseText);
+          const msg = data.stop_reason === 'max_tokens'
+            ? 'That bet slip has a lot of legs — try uploading fewer images at once.'
+            : 'Couldn’t read the bet slip automatically. Try a tighter crop or fewer images.';
+          showToast(msg, 'error');
+          return;
+        }
         // Validate stake doesn't exceed weekly budget
         const stakeNum = parseFloat((parsed.stake || '0').replace(/[^0-9.]/g,''));
         if (stakeNum > WEEK_BUDGET) { showToast(`Stake $${stakeNum} exceeds the $${WEEK_BUDGET}/week limit.`, 'warning'); return; }
@@ -1317,7 +1330,9 @@ export default function PuntingClub() {
           teamId:          team.id,
           submittedBy:     currentUser.id,
           weekNumber:      currentWeekNum + 1,
-          betType:         newBet.type || 'Multi',
+          // Backend enum is lowercase multi|single; the AI returns "Multi"/"Single"
+          // (and occasionally variants like "Same Game Multi"). Normalise here.
+          betType:         /single/i.test(newBet.type || '') ? 'single' : 'multi',
           stake:           Math.round(parseFloat((newBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
           combinedOdds:    newBet.combinedOdds,
           estimatedReturn: Math.round(parseFloat((newBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),

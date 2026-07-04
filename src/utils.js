@@ -14,8 +14,18 @@ export const genCode = (len = 6) => {
 };
 
 export const parseAnalysisJSON = (text) => {
-  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
-  catch { return null; }
+  if (!text) return null;
+  const cleaned = String(text).replace(/```json|```/g, '').trim();
+  // Fast path: the response is pure JSON.
+  try { return JSON.parse(cleaned); } catch { /* fall through */ }
+  // Fallback: pull out the outermost { … } object even if the model wrapped it
+  // in explanatory prose. Guards against parse failures from stray leading text.
+  const first = cleaned.indexOf('{');
+  const last  = cleaned.lastIndexOf('}');
+  if (first !== -1 && last > first) {
+    try { return JSON.parse(cleaned.slice(first, last + 1)); } catch { /* give up */ }
+  }
+  return null;
 };
 
 // Validate and normalise Australian mobile numbers
