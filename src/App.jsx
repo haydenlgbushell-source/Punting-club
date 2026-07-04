@@ -1330,7 +1330,9 @@ export default function PuntingClub() {
           teamId:          team.id,
           submittedBy:     currentUser.id,
           weekNumber:      currentWeekNum + 1,
-          betType:         newBet.type || 'Multi',
+          // Backend enum is lowercase multi|single; the AI returns "Multi"/"Single"
+          // (and occasionally variants like "Same Game Multi"). Normalise here.
+          betType:         /single/i.test(newBet.type || '') ? 'single' : 'multi',
           stake:           Math.round(parseFloat((newBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
           combinedOdds:    newBet.combinedOdds,
           estimatedReturn: Math.round(parseFloat((newBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),

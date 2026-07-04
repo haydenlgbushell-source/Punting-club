@@ -602,7 +602,9 @@ exports.handler = async (event) => {
 
         const stakeErr = isPositiveInt(stake, { max: 1_000_000, label: 'Stake' });
         if (stakeErr) return error(stakeErr);
-        const betTypeErr = isEnum(betType, ['multi', 'single']);
+        // Normalise casing/variants (e.g. "Multi", "Same Game Multi") to the enum.
+        const normBetType = /single/i.test(String(betType || '')) ? 'single' : 'multi';
+        const betTypeErr = isEnum(normBetType, ['multi', 'single']);
         if (betTypeErr) return error(`Invalid bet type. ${betTypeErr}`);
         if (!Array.isArray(legs) || legs.length === 0) return error('Bet must include at least one leg.');
         if (legs.length > 20) return error('Bet cannot have more than 20 legs.');
@@ -621,7 +623,7 @@ exports.handler = async (event) => {
         const { data: bet, error: betError } = await supabase.from('bets').insert({
           team_id:          teamId,
           week_number:      weekNumber,
-          bet_type:         betType,
+          bet_type:         normBetType,
           stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, ''))),
           combined_odds:    parseFloat(combinedOdds) || null,
           estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, ''))),
