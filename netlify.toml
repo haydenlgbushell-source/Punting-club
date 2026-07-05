@@ -12,13 +12,23 @@
 [functions."check-results"]
   timeout = 26
 
+# Long-running background workers (15-min budget). NOT scheduled directly —
+# Netlify treats scheduled and background functions as mutually exclusive, so a
+# schedule on a "-background" function does not fire reliably. They are triggered
+# by the lightweight scheduled functions below (and by the frontend/admin).
 [functions."check-results-background"]
-  schedule = "0 */3 * * *"
   timeout = 900
 
 [functions."generate-recap-background"]
-  schedule = "0 4 * * 3"
   timeout = 900
+
+# Scheduled triggers (short-lived). These fire on cron and immediately invoke the
+# background workers above.
+[functions."check-results-scheduled"]
+  schedule = "0 */3 * * *"
+
+[functions."generate-recap-scheduled"]
+  schedule = "0 4 * * 3"
 
 [[redirects]]
   from = "/api/auth"
