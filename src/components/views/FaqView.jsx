@@ -45,7 +45,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
           category: 'Results & Scoring',
           icon: <Trophy className="w-4 h-4 text-brand-600" />,
           items: [
-            { q: 'How are results updated?', a: 'Our AI checks bet results automatically every 3 hours once the first leg of a bet has started. You can also trigger a manual check by clicking "Check Results" on the Leaderboard page.' },
+            { q: 'How are results updated?', a: 'Our AI checks bet results automatically every 3 hours once the first leg of a bet has started, and your leaderboard refreshes with the latest results each time you open it. Manual result checks are handled by the competition admins.' },
             { q: 'What do the leg colours mean?', a: 'Green = Won, Red = Lost, Orange = In Progress (live), Yellow = Partial (some legs settled). The overall bet result is shown in the header of each bet slip card.' },
             { q: 'How is the leaderboard scored?', a: 'Teams are ranked by total winnings across all settled bets for the current week (weekly view) or across the entire season (season view). Highest total winnings wins.' },
             { q: 'What happens if a bet result looks wrong?', a: 'Contact your competition admin or reach out via the pub. Admins have tools to manually correct individual bet leg results if there is a discrepancy.' },
