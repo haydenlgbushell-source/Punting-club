@@ -851,8 +851,11 @@ export default function PuntingClub() {
     }
   }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Smart auto-check: fire every 3 hours from the first event's start time
+  // Smart auto-check: fire every 3 hours from the first event's start time.
+  // Admin-only — regular users must never trigger a settlement run from their
+  // browser. The scheduled server function handles automatic checks for everyone.
   useEffect(() => {
+    if (!isAdminLoggedIn) return;
     if (!leaderboardTeams.length) return;
 
     // Only schedule the timer when there are actually pending/in-progress bets
@@ -908,22 +911,24 @@ export default function PuntingClub() {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
+  }, [isAdminLoggedIn, leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
 
   // Trigger a result check using client-side Claude+web-search, then persist
   // any changes to the DB. The scheduled background function runs the same
   // logic server-side every 3 hours as a backup.
   const checkResultsNow = useCallback(async () => {
+    if (!isAdminLoggedIn) return; // admin-only — users cannot trigger a results check
     if (!leaderboardTeams.length) {
       showToast('No leaderboard data to check', 'info');
       return;
     }
     await reviewBetResults(leaderboardTeams);
-  }, [leaderboardTeams, reviewBetResults, showToast]);
+  }, [isAdminLoggedIn, leaderboardTeams, reviewBetResults, showToast]);
 
   // Per-bet result check — calls the synchronous /api/check-results function
   // with a specific betId. One bet fits comfortably within the 26s Netlify timeout.
   const checkSingleBet = useCallback(async (betId) => {
+    if (!isAdminLoggedIn) return; // admin-only — users cannot trigger a results check
     if (!betId || checkingBetId) return;
     setCheckingBetId(betId);
     showToast('Checking result — searching live sports data…', 'info');
@@ -948,7 +953,7 @@ export default function PuntingClub() {
       console.error('[check-results]', err.message);
     }
     setCheckingBetId(null);
-  }, [checkingBetId, refreshLeaderboard, showToast]);
+  }, [isAdminLoggedIn, checkingBetId, refreshLeaderboard, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
