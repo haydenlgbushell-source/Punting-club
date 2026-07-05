@@ -974,18 +974,24 @@ exports.handler = async (event) => {
       case 'trigger_results_check': {
         const { adminRole } = payload;
         if (!adminRole) return error('Admin access required', 403);
-        // Fire the long-running background settlement worker (returns 202 quickly).
         const bgUrl = process.env.URL
           ? `${process.env.URL}/.netlify/functions/check-results-background`
           : null;
         if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
-        fetch(bgUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-        }).catch(e => console.error('[trigger_results_check] trigger error:', e.message));
-        await addAudit(adminRole, 'Results Check Triggered', 'All pending bets', 'Admin manually started a scores/results update');
-        return json({ success: true, message: 'Results check started' });
+        // Await the invocation. Background functions return 202 immediately, so this
+        // is fast — but awaiting is essential: a fire-and-forget fetch can be dropped
+        // when the serverless runtime freezes on return, so the worker never runs.
+        let bgStatus = null, bgErr = null;
+        try {
+          const res = await fetch(bgUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          bgStatus = res.status;
+        } catch (e) {
+          bgErr = e.message;
+        }
+        await addAudit(adminRole, 'Results Check Triggered', 'All pending bets',
+          bgErr ? `Background trigger failed: ${bgErr}` : `Background settler invoked (HTTP ${bgStatus})`);
+        if (bgErr) return error('Could not start results check: ' + bgErr, 502);
+        return json({ success: true, message: `Results check started (HTTP ${bgStatus})`, bgStatus });
       }
 
       case 'generate_recap': {
