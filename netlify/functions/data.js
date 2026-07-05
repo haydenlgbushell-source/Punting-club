@@ -52,6 +52,7 @@ exports.handler = async (event) => {
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
       'delete_team',
       'generate_recap',
+      'trigger_results_check',
     ]);
     if (ADMIN_ACTIONS.has(action)) {
       try {
@@ -968,6 +969,23 @@ exports.handler = async (event) => {
           .order('week_number', { ascending: false });
         if (e) return error(e.message);
         return json(data || []);
+      }
+
+      case 'trigger_results_check': {
+        const { adminRole } = payload;
+        if (!adminRole) return error('Admin access required', 403);
+        // Fire the long-running background settlement worker (returns 202 quickly).
+        const bgUrl = process.env.URL
+          ? `${process.env.URL}/.netlify/functions/check-results-background`
+          : null;
+        if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
+        fetch(bgUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        }).catch(e => console.error('[trigger_results_check] trigger error:', e.message));
+        await addAudit(adminRole, 'Results Check Triggered', 'All pending bets', 'Admin manually started a scores/results update');
+        return json({ success: true, message: 'Results check started' });
       }
 
       case 'generate_recap': {
