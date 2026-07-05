@@ -115,7 +115,7 @@ async function settleLegs(apiKey, summary, legs) {
       tool_choice: { type: 'tool', name: 'record_settlements' },
       messages: [{
         role:    'user',
-        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle: scorer in list→won, not in list→lost, winner bet→won/lost, no result→pending.`,
+        content: `Summary:\n${summary}\n\nLegs:\n${legList}\n\nSettle each leg using ONLY the summary above. Rules: mark "won" or "lost" only if the match has FINISHED and the result is clearly stated; if it is still in progress use "in_progress"; if it has not started or the summary has no result for it use "pending". For "to score"/scorer markets: "won" only if the player is explicitly named as a scorer, "lost" only if the match finished and they are not named. For winner/head-to-head markets settle by the stated final result. Never guess or infer beyond the summary.`,
       }],
     }),
   });
@@ -204,11 +204,11 @@ exports.handler = async (event) => {
         return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
       }).join('\n');
 
-      const searchPrompt = `Today is ${todayStr} AEST. Search for the final result of each match below. For each: report the score and full try/goal scorer list.
+      const searchPrompt = `Today is ${todayStr} AEST. Search the web for the MOST RECENT, FINAL result of each match below, using up-to-date sources. For each match report: whether it has FINISHED or is still in progress, the final (or current) score, and the full list of try/goal scorers.
 
 ${legsToSearch}
 
-Report results for every match — do not skip any.`;
+Report on every match — do not skip any. If you cannot find a result, say so explicitly rather than guessing.`;
 
       console.log(`[check-results-bg] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
       let summary;
