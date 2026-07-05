@@ -117,6 +117,7 @@ export const apiGetWeeklyRecap  = (competitionId, weekNumber) => call('data', { 
 export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get_latest_recap', competitionId });
 export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
 export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
+export const apiTriggerResultsCheck = (adminToken) => call('data', { action: 'trigger_results_check', adminToken });
 
 // ── CLAUDE AI ────────────────────────────────────────────────
 export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {

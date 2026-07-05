@@ -26,7 +26,7 @@ import {
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
   apiUpdateProfile, apiChangePassword,
-  apiGenerateRecap,
+  apiGenerateRecap, apiTriggerResultsCheck,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
@@ -144,6 +144,7 @@ export default function PuntingClub() {
   const [editCompForm, setEditCompForm] = useState({});        // edit form values
   const [adminLoadError, setAdminLoadError] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [triggeringResults, setTriggeringResults] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
 
@@ -1122,6 +1123,21 @@ export default function PuntingClub() {
     }));
     addAuditEntry(adminUser?.role, 'Leg Override', `${b?.team} — Leg ${leg?.leg_number}`, `${leg?.selection} → ${status}${resultNote ? ': ' + resultNote : ''}`);
     try { await apiUpdateBetLeg(legId, status, resultNote, adminToken); } catch(err) { console.error(err); }
+  };
+
+  // Trigger a full server-side scores/results update (fires the background settler)
+  const triggerResultsCheck = async () => {
+    if (triggeringResults) return;
+    setTriggeringResults(true);
+    try {
+      await apiTriggerResultsCheck(adminToken);
+      addAuditEntry(adminUser?.role, 'Results Check Triggered', 'All pending bets', 'Manual scores update started');
+      showToast('Scores update started — results settle in the background and refresh shortly.', 'success');
+    } catch (err) {
+      showToast(`Failed to start scores update: ${err.message}`, 'error');
+    } finally {
+      setTriggeringResults(false);
+    }
   };
 
   // ── ADMIN COMPETITION ACTIONS ─────────────────────────────────────────────
@@ -2474,9 +2490,23 @@ export default function PuntingClub() {
                 {/* ── BETS ────────────────────────────────────────────────── */}
                 {adminTab === 'bets' && (
                   <div className="space-y-4">
-                    <div>
-                      <h2 className="text-xl font-black">Bet Management</h2>
-                      <p className="text-gray-500 text-sm">Week 3 · {adminBets.filter(b=>b.flagged).length} flagged · {adminBets.filter(b=>!b.valid).length} invalid submission</p>
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <h2 className="text-xl font-black">Bet Management</h2>
+                        <p className="text-gray-500 text-sm">{adminBets.filter(b=>b.flagged).length} flagged · {adminBets.filter(b=>!b.valid).length} invalid submission</p>
+                      </div>
+                      {canAdmin('bets') && (
+                        <button
+                          onClick={triggerResultsCheck}
+                          disabled={triggeringResults}
+                          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-colors"
+                          title="Search live sports data and settle all pending bet legs"
+                        >
+                          {triggeringResults
+                            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Updating…</>
+                            : <><RefreshCw className="w-3.5 h-3.5" /> Update Scores</>}
+                        </button>
+                      )}
                     </div>
 
                     {/* AI confidence legend */}
