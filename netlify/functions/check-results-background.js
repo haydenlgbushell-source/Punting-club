@@ -27,8 +27,8 @@ async function searchForResults(apiKey, searchPrompt) {
       headers: SEARCH_HEADERS,
       body: JSON.stringify({
         model:      'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        tools:      [{ type: 'web_search_20250305', name: 'web_search' }],
+        max_tokens: 2048,
+        tools:      [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
         messages,
       }),
     });
@@ -153,123 +153,133 @@ exports.handler = async (event) => {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    // Efficiency tuning:
+    //  1) Deduplicate matches across ALL bets — a game many teams bet on is
+    //     searched ONCE, not once per bet (the main cost saving).
+    //  2) Only check matches that have FINISHED (kicked off > FINISHED_AFTER_MS
+    //     ago) so we don't repeatedly pay to search still-in-progress games.
+    const FINISHED_AFTER_MS = 3 * 60 * 60 * 1000; // treat a match as settle-able 3h after kickoff
+    const EVENTS_PER_SEARCH = 5;                  // unique matches per search call (keeps each search focused)
+    const SLEEP_BETWEEN_SEARCHES_MS = 20000;      // pause between search calls to respect rate limits
+
     const now = new Date();
     const aestDate = new Date(now.getTime() + 10 * 60 * 60 * 1000);
     const pad = n => String(n).padStart(2, '0');
     const todayStr = `${aestDate.getUTCFullYear()}-${pad(aestDate.getUTCMonth()+1)}-${pad(aestDate.getUTCDate())}`;
-    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
+    // Fetch only bets that still have work to do (or a single bet by id).
     let betsQuery = supabase.from('bets').select('id, overall_status, team_id, bet_legs(*)');
     if (betId) {
       betsQuery = betsQuery.eq('id', betId);
     } else {
       betsQuery = betsQuery
-        .or(`overall_status.in.(${[...UNSETTLED, 'partial'].join(',')}),submitted_at.gte.${fourteenDaysAgo}`)
+        .in('overall_status', [...UNSETTLED, 'partial'])
         .order('submitted_at', { ascending: false });
     }
     const { data: bets, error: betsErr } = await betsQuery;
-
     if (betsErr) { console.error('[check-results-bg] DB error:', betsErr.message); return; }
-    if (!bets?.length) { console.log('[check-results-bg] No bets found'); return; }
+    if (!bets?.length) { console.log('[check-results-bg] No unsettled bets'); return; }
 
-    console.log(`[check-results-bg] ${bets.length} bet(s) to check`);
-    let totalLegsUpdated = 0, totalBetsUpdated = 0, betIndex = 0;
+    // A leg is eligible once its match has finished. Manual single-bet checks
+    // (betId) skip the finished buffer so an admin can settle immediately.
+    const legReady = (l) => {
+      if (!l.event_date) return true; // no date (e.g. outrights) — always eligible
+      const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
+      const start = new Date(`${l.event_date}T${t}:00+10:00`);
+      if (isNaN(start.getTime())) return true;
+      const cutoff = betId ? now.getTime() : now.getTime() - FINISHED_AFTER_MS;
+      return start.getTime() <= cutoff;
+    };
 
+    // eventKey → [{bet, leg}] for every unsettled leg on a finished match.
+    const eventRefs = new Map();
+    const betMeta   = new Map(); // betId → {bet, allLegs}
     for (const bet of bets) {
-      const unsettledLegs = (bet.bet_legs || []).filter(l => UNSETTLED.includes(l.status));
-      if (!unsettledLegs.length) { console.log(`[check-results-bg] Bet ${bet.id} all settled`); continue; }
-
-      // 65s between bets — web search burns ~25k of the 30k/min Sonnet token budget.
-      // Need ~60s for the bucket to refill before the next Sonnet search call.
-      if (betIndex > 0) {
-        console.log('[check-results-bg] Waiting 65s for rate limit to replenish...');
-        await new Promise(r => setTimeout(r, 65000));
+      const allLegs = bet.bet_legs || [];
+      const readyLegs = allLegs.filter(l => UNSETTLED.includes(l.status) && legReady(l));
+      if (!readyLegs.length) continue;
+      betMeta.set(bet.id, { bet, allLegs });
+      for (const leg of readyLegs) {
+        const eventKey = `${(leg.event || '').trim().toLowerCase()}|||${leg.event_date || ''}`;
+        if (!eventRefs.has(eventKey)) eventRefs.set(eventKey, []);
+        eventRefs.get(eventKey).push({ bet, leg });
       }
-      betIndex++;
+    }
+    if (eventRefs.size === 0) { console.log('[check-results-bg] No finished unsettled matches to check'); return; }
 
-      if (!betId) {
-        const hasStarted = unsettledLegs.some(l => {
-          if (!l.event_date) return true;
-          const t = l.start_time ? l.start_time.substring(0, 5) : '00:00';
-          const start = new Date(`${l.event_date}T${t}:00+10:00`);
-          return !isNaN(start.getTime()) && start.getTime() <= now.getTime();
-        });
-        if (!hasStarted) { console.log(`[check-results-bg] Bet ${bet.id} not started`); continue; }
+    const uniqueEntries = [...eventRefs.entries()];
+    console.log(`[check-results-bg] ${uniqueEntries.length} unique match(es) across ${betMeta.size} bet(s) (deduped)`);
+
+    let totalLegsUpdated = 0, totalBetsUpdated = 0;
+    const settlementByKey = new Map();
+
+    // Search + settle the unique matches in small chunks (one web search per match).
+    for (let i = 0; i < uniqueEntries.length; i += EVENTS_PER_SEARCH) {
+      const chunk = uniqueEntries.slice(i, i + EVENTS_PER_SEARCH);
+      if (i > 0) {
+        console.log(`[check-results-bg] Waiting ${SLEEP_BETWEEN_SEARCHES_MS / 1000}s (rate limit)...`);
+        await new Promise(r => setTimeout(r, SLEEP_BETWEEN_SEARCHES_MS));
       }
-
-      const legs = bet.bet_legs || [];
-      // Only search for unsettled legs — already won/lost legs don't need re-searching
-      const legsToSearch = unsettledLegs.map(l => {
-        const d = l.event_date ? ` on ${l.event_date}` : '';
-        return `Leg ${l.leg_number}: "${l.selection}" | ${l.event} | ${l.market}${d}`;
+      const searchLegsText = chunk.map(([, refs], idx) => {
+        const { leg } = refs[0];
+        const d = leg.event_date ? ` on ${leg.event_date}` : '';
+        return `Leg ${idx + 1}: "${leg.selection}" | ${leg.event} | ${leg.market}${d}`;
       }).join('\n');
 
-      const searchPrompt = `Today is ${todayStr} AEST. Search the web for the MOST RECENT, FINAL result of each match below, using up-to-date sources. For each match report: whether it has FINISHED or is still in progress, the final (or current) score, and the full list of try/goal scorers.
+      const searchPrompt = `Today is ${todayStr} AEST. Search the web for the MOST RECENT, FINAL result of each match below, using up-to-date sources. For each match report: whether it has FINISHED or is still in progress, the final (or current) score, and the full list of try/goal scorers.\n\n${searchLegsText}\n\nReport on every match — do not skip any. If you cannot find a result, say so explicitly rather than guessing.`;
 
-${legsToSearch}
-
-Report on every match — do not skip any. If you cannot find a result, say so explicitly rather than guessing.`;
-
-      console.log(`[check-results-bg] Step 1 — searching for bet ${bet.id} (${legs.length} legs)...`);
+      console.log(`[check-results-bg] Search chunk ${Math.floor(i / EVENTS_PER_SEARCH) + 1} (${chunk.length} match(es))...`);
       let summary;
-      try {
-        summary = await searchForResults(apiKey, searchPrompt);
-      } catch (e) {
-        console.error(`[check-results-bg] Search error bet ${bet.id}:`, e.message);
-        continue;
-      }
-      if (!summary) { console.warn(`[check-results-bg] No search summary for bet ${bet.id}`); continue; }
+      try { summary = await searchForResults(apiKey, searchPrompt); }
+      catch (e) { console.error('[check-results-bg] Search error:', e.message); continue; }
+      if (!summary) { console.warn('[check-results-bg] No summary for chunk'); continue; }
 
-      console.log(`[check-results-bg] Step 2 — settling bet ${bet.id}...`);
+      const repLegs = chunk.map(([, refs], idx) => ({ ...refs[0].leg, leg_number: idx + 1 }));
       let updates;
-      try {
-        updates = await settleLegs(apiKey, summary, unsettledLegs);
-      } catch (e) {
-        console.error(`[check-results-bg] Settle error bet ${bet.id}:`, e.message);
-        continue;
-      }
-      if (!updates?.length) { console.warn(`[check-results-bg] No settlements for bet ${bet.id}`); continue; }
+      try { updates = await settleLegs(apiKey, summary, repLegs); }
+      catch (e) { console.error('[check-results-bg] Settle error:', e.message); continue; }
+      if (!updates?.length) { console.warn('[check-results-bg] No settlements for chunk'); continue; }
 
-      for (const u of updates) {
-        const legNum  = u.legNumber ?? u.leg_number;
-        const origLeg = legs.find(l => Number(l.leg_number) === Number(legNum));
-        if (!origLeg) { console.warn(`[check-results-bg] No leg ${legNum}`); continue; }
-        if (!UNSETTLED.includes(origLeg.status)) { console.log(`[check-results-bg] Leg ${legNum} already settled as "${origLeg.status}", skipping`); continue; }
-        if (origLeg.status === u.status) { console.log(`[check-results-bg] Leg ${legNum} already "${u.status}"`); continue; }
+      chunk.forEach(([key], idx) => {
+        const s = updates.find(u => Number(u.legNumber ?? u.leg_number) === idx + 1);
+        if (s) settlementByKey.set(key, s);
+      });
+    }
 
-        console.log(`[check-results-bg] Updating leg ${legNum}: "${origLeg.status}" → "${u.status}"`);
-        const { error: legErr } = await supabase
-          .from('bet_legs')
-          .update({ status: u.status, result_note: u.result || '', updated_at: now.toISOString() })
-          .eq('id', origLeg.id);
-
-        if (legErr) {
-          console.error(`[check-results-bg] DB error leg ${legNum}:`, legErr.message);
-        } else {
+    // Apply each match's settlement to EVERY leg that shares it, across all bets.
+    const touchedBetIds = new Set();
+    for (const [eventKey, refs] of eventRefs.entries()) {
+      const settlement = settlementByKey.get(eventKey);
+      if (!settlement) continue;
+      for (const { bet, leg } of refs) {
+        if (!UNSETTLED.includes(leg.status) || leg.status === settlement.status) continue;
+        const { error: legErr } = await supabase.from('bet_legs')
+          .update({ status: settlement.status, result_note: settlement.result || '', updated_at: now.toISOString() })
+          .eq('id', leg.id);
+        if (!legErr) {
           totalLegsUpdated++;
-          console.log(`[check-results-bg] ✓ Leg ${legNum} → "${u.status}": ${u.result}`);
+          touchedBetIds.add(bet.id);
+          leg.status = settlement.status; // mutate in-memory so the overall calc below sees it
+          console.log(`[check-results-bg] ✓ Leg ${leg.leg_number} (${leg.event}) → "${settlement.status}"`);
+        } else {
+          console.error(`[check-results-bg] DB error leg ${leg.leg_number}:`, legErr.message);
         }
       }
+    }
 
-      const updatedLegs = legs.map(l => {
-        const u = updates.find(x => Number(x.legNumber ?? x.leg_number) === Number(l.leg_number));
-        return u ? { ...l, status: u.status } : l;
-      });
-      const settled    = ['won','lost','void'];
-      const allDone    = updatedLegs.every(l => settled.includes(l.status));
-      const allWon     = updatedLegs.every(l => l.status === 'won');
-      const anyLost    = updatedLegs.some(l  => l.status === 'lost');
-      const anyLive    = updatedLegs.some(l  => l.status === 'in_progress');
+    // Recompute overall status for each affected bet.
+    const settled = ['won', 'lost', 'void'];
+    for (const bid of touchedBetIds) {
+      const { bet, allLegs } = betMeta.get(bid);
+      const allDone = allLegs.every(l => settled.includes(l.status));
+      const allWon  = allLegs.every(l => l.status === 'won');
+      const anyLost = allLegs.some(l  => l.status === 'lost');
+      const anyLive = allLegs.some(l  => l.status === 'in_progress');
       const newOverall = allDone ? (allWon ? 'won' : anyLost ? 'lost' : 'partial') : anyLive ? 'in_progress' : 'pending';
-
       if (newOverall !== bet.overall_status) {
         const { error: betErr } = await supabase.from('bets').update({ overall_status: newOverall }).eq('id', bet.id);
-        if (betErr) {
-          console.error(`[check-results-bg] DB error bet ${bet.id}:`, betErr.message);
-        } else {
-          totalBetsUpdated++;
-          console.log(`[check-results-bg] ✓ Bet ${bet.id} overall → "${newOverall}"`);
-        }
+        if (!betErr) { totalBetsUpdated++; console.log(`[check-results-bg] ✓ Bet ${bet.id} overall → "${newOverall}"`); }
+        else console.error(`[check-results-bg] DB error bet ${bet.id}:`, betErr.message);
       }
     }
 
