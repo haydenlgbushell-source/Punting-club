@@ -57,11 +57,20 @@ exports.handler = async (event) => {
     if (ADMIN_ACTIONS.has(action)) {
       try {
         const claims = verifyAdminToken(payload.adminToken);
-        payload.adminRole = claims.role; // verified server-side role overrides any client value
+        payload.adminRole  = claims.role; // verified server-side role overrides any client value
+        payload.adminVenue = claims.venue || ''; // venue-host scoping (pub_admin only)
       } catch (err) {
         return error(err.message, err.status || 401);
       }
     }
+
+    // Venue hosts (pub_admin) only see their own venue's data. Scoping applies
+    // when ADMIN_PUB_VENUE is configured; an unscoped legacy account behaves as before.
+    const venueScoped = payload.adminRole === 'pub_admin' && !!payload.adminVenue;
+    const venueCompetitionIds = async () => {
+      const { data } = await supabase.from('competitions').select('id').ilike('pub', `%${payload.adminVenue}%`);
+      return (data || []).map(c => c.id);
+    };
 
     switch (action) {
 
@@ -82,10 +91,12 @@ exports.handler = async (event) => {
       }
 
       case 'get_all_competitions': {
-        const { data, error: e } = await supabase
+        let query = supabase
           .from('competitions')
           .select('*, teams(id, team_name, team_code, status)')
           .order('created_at', { ascending: false });
+        if (venueScoped) query = query.ilike('pub', `%${payload.adminVenue}%`);
+        const { data, error: e } = await query;
         if (e) return error(e.message);
         const enriched = (data || []).map(c => ({ ...c, team_count: c.teams?.length || 0 }));
         return json(enriched);
@@ -161,10 +172,12 @@ exports.handler = async (event) => {
       case 'get_competition_requests': {
         const { adminRole } = payload;
         if (!adminRole) return error('Admin access required', 403);
-        const { data, error: e } = await supabase
+        let query = supabase
           .from('competition_requests')
           .select('*')
           .order('created_at', { ascending: false });
+        if (venueScoped) query = query.ilike('pub_name', `%${payload.adminVenue}%`);
+        const { data, error: e } = await query;
         if (e) return error(e.message);
         return json(data || []);
       }
@@ -174,14 +187,67 @@ exports.handler = async (event) => {
         if (!adminRole) return error('Admin access required', 403);
         const reqStatusErr = isEnum(reqStatus, ['requested', 'approved', 'declined']);
         if (reqStatusErr) return error(`Invalid request status. ${reqStatusErr}`);
-        const { data, error: e } = await supabase
+
+        const { data: reqRow, error: fetchErr } = await supabase
+          .from('competition_requests').select('*').eq('id', id).single();
+        if (fetchErr) return error(fetchErr.message);
+
+        // Approval scaffolds the competition immediately so the venue gets a
+        // join code the moment their request is accepted — no manual re-entry.
+        let competition = null;
+        if (reqStatus === 'approved' && !reqRow.competition_id) {
+          const code  = genCode(6);
+          const weeks = (reqRow.preferred_start_date && reqRow.preferred_end_date)
+            ? Math.max(1, Math.round((new Date(reqRow.preferred_end_date) - new Date(reqRow.preferred_start_date)) / (7 * 86400000)))
+            : 8;
+          const insertRow = {
+            code,
+            name:       reqRow.comp_name || `${reqRow.pub_name} Competition`,
+            pub:        reqRow.pub_name,
+            status:     adminRole === 'owner' ? 'active' : 'pending',
+            weeks,
+            buy_in:     reqRow.buy_in || 1000,
+            max_teams:  reqRow.estimated_teams || 20,
+            start_date: reqRow.preferred_start_date || null,
+            end_date:   reqRow.preferred_end_date || null,
+            jackpot:    0,
+            is_private: !!reqRow.is_private,
+          };
+          let { data: comp, error: compErr } = await supabase.from('competitions').insert(insertRow).select().single();
+          if (compErr && compErr.message && compErr.message.includes('is_private')) {
+            const { is_private: _drop, ...rowWithout } = insertRow;
+            const res2 = await supabase.from('competitions').insert(rowWithout).select().single();
+            if (res2.error) return error(res2.error.message);
+            comp = res2.data;
+          } else if (compErr) {
+            return error(compErr.message);
+          }
+          competition = comp;
+        }
+
+        const updates = { status: reqStatus };
+        if (competition) { updates.competition_id = competition.id; updates.competition_code = competition.code; }
+        let { data, error: e } = await supabase
           .from('competition_requests')
-          .update({ status: reqStatus })
+          .update(updates)
           .eq('id', id)
           .select().single();
-        if (e) return error(e.message);
-        await addAudit(adminRole, `Competition Request ${reqStatus}`, data.comp_name, `Contact: ${data.contact_name}`);
-        return json(data);
+        if (e && competition && /competition_(id|code)/.test(e.message || '')) {
+          // Link columns not migrated yet — still record the status change.
+          const res2 = await supabase.from('competition_requests').update({ status: reqStatus }).eq('id', id).select().single();
+          if (res2.error) return error(res2.error.message);
+          data = res2.data;
+        } else if (e) {
+          return error(e.message);
+        }
+
+        await addAudit(
+          adminRole,
+          `Competition Request ${reqStatus}`,
+          data.comp_name,
+          competition ? `Competition ${competition.code} auto-created for ${data.contact_name}` : `Contact: ${data.contact_name}`
+        );
+        return json({ ...data, competition });
       }
 
       case 'get_competition_by_code': {
@@ -306,10 +372,16 @@ exports.handler = async (event) => {
 
       case 'get_all_teams': {
         // Get teams with competition info
-        const { data: teams, error: e1 } = await supabase
+        let teamsQuery = supabase
           .from('teams')
           .select('*, competitions(id, name, code)')
           .order('created_at', { ascending: false });
+        if (venueScoped) {
+          const compIds = await venueCompetitionIds();
+          if (compIds.length === 0) return json([]);
+          teamsQuery = teamsQuery.in('competition_id', compIds);
+        }
+        const { data: teams, error: e1 } = await teamsQuery;
         if (e1) return error(e1.message);
         if (!teams || teams.length === 0) return json([]);
 
@@ -668,6 +740,14 @@ exports.handler = async (event) => {
         const { weekNumber } = payload;
         let query = supabase.from('bets').select(`*, bet_legs(*), teams(team_name)`).order('submitted_at', { ascending: false });
         if (weekNumber) query = query.eq('week_number', weekNumber);
+        if (venueScoped) {
+          const compIds = await venueCompetitionIds();
+          if (compIds.length === 0) return json([]);
+          const { data: venueTeams } = await supabase.from('teams').select('id').in('competition_id', compIds);
+          const teamIds = (venueTeams || []).map(t => t.id);
+          if (teamIds.length === 0) return json([]);
+          query = query.in('team_id', teamIds);
+        }
         const { data, error: e } = await query;
         if (e) return error(e.message);
         return json(data);
@@ -799,6 +879,9 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'get_all_users': {
+        // Venue hosts never see the global user register — their panel has no
+        // Users tab and personal data belongs to platform staff only.
+        if (payload.adminRole === 'pub_admin') return json([]);
         const { data: users, error: e } = await supabase
           .from('users')
           .select('*')
@@ -873,6 +956,8 @@ exports.handler = async (event) => {
 
       case 'get_audit_log': {
         const { limit = 100 } = payload;
+        // Platform audit trail is staff-only; venue hosts have no Audit tab.
+        if (payload.adminRole === 'pub_admin') return json([]);
         const { data, error: e } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(limit);
         if (e) return error(e.message);
         return json(data);

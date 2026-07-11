@@ -363,7 +363,9 @@ exports.handler = async (event) => {
       const ADMIN_ACCOUNTS = {
         'admin': { pw: process.env.ADMIN_PW_OWNER, role: 'owner',    name: 'Owner Admin' },
         'cm':    { pw: process.env.ADMIN_PW_CM,    role: 'campaign',  name: 'Campaign Manager' },
-        'pub':   { pw: process.env.ADMIN_PW_PUB,   role: 'pub_admin', name: 'Pub Admin (RSL)' },
+        // Venue host account. ADMIN_PUB_VENUE scopes what this login sees
+        // server-side: only competitions whose pub name matches, plus their teams.
+        'pub':   { pw: process.env.ADMIN_PW_PUB,   role: 'pub_admin', name: process.env.ADMIN_PUB_NAME || 'Venue Host', venue: process.env.ADMIN_PUB_VENUE || '' },
       };
 
       const cleanId = String(id || '').trim();
@@ -379,11 +381,11 @@ exports.handler = async (event) => {
       }
 
       const exp          = Date.now() + 8 * 60 * 60 * 1000; // 8 hours
-      const tokenPayload = Buffer.from(JSON.stringify({ id: cleanId, role: acct.role, name: acct.name, exp })).toString('base64');
+      const tokenPayload = Buffer.from(JSON.stringify({ id: cleanId, role: acct.role, name: acct.name, venue: acct.venue || '', exp })).toString('base64');
       const sig          = createHmac('sha256', secret).update(tokenPayload).digest('hex');
       const token        = `${tokenPayload}.${sig}`;
 
-      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ token, role: acct.role, name: acct.name }) };
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ token, role: acct.role, name: acct.name, venue: acct.venue || '' }) };
     }
 
     // ── REFRESH SESSION ──────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Trophy, Users, ChevronLeft, Clock, Crown, ChevronDown } from 'lucide-react';
+import { Trophy, Users, ChevronLeft, Clock, Crown, ChevronDown, Tv, X } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
@@ -58,6 +58,14 @@ const LeaderboardView = () => {
 
   const [leaderboardView, setLeaderboardView] = useState('current');
   const [selectedTeamIdx, setSelectedTeamIdx] = useState(null);
+  // Full-screen "TV mode" for venue screens — big type, no chrome.
+  const [tvMode, setTvMode] = useState(false);
+  useEffect(() => {
+    if (!tvMode) return;
+    const onKey = (e) => { if (e.key === 'Escape') setTvMode(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tvMode]);
   // Show shimmer rows until the first data arrives (or a short grace period lapses).
   const [showSkeleton, setShowSkeleton] = useState(enrichedLeaderboardTeams.length === 0);
   useEffect(() => {
@@ -106,6 +114,70 @@ const LeaderboardView = () => {
 
   return (
     <section className="pt-28 pb-16 px-0 sm:px-0">
+      {/* ── TV MODE — full-screen leaderboard for the venue's big screens ── */}
+      {tvMode && (
+        <div className="fixed inset-0 z-[95] bg-brand-950 text-white flex flex-col overflow-hidden">
+          <div className="flex items-start justify-between px-8 sm:px-14 pt-8 pb-5">
+            <div>
+              <p className="text-gold-400 text-sm sm:text-base font-bold tracking-[0.25em] uppercase mb-1.5">Punting Club{comp?.pub ? ` · ${comp.pub}` : ''}</p>
+              <h1 className="text-3xl sm:text-5xl font-black leading-tight">{comp?.name || 'Live Leaderboard'}</h1>
+              <p className="text-brand-200/70 text-base sm:text-xl mt-1.5">{weekLabel} · <Countdown to={nextWedCutoff} /></p>
+            </div>
+            <button
+              onClick={() => setTvMode(false)}
+              className="text-brand-200/50 hover:text-white border border-white/10 hover:border-white/30 rounded-xl p-3 transition-colors"
+              aria-label="Exit TV mode"
+              title="Exit TV mode (Esc)"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-8 sm:px-14 pb-10">
+            {enrichedLeaderboardTeams.length === 0 ? (
+              <div className="text-center py-24">
+                <Trophy className="w-20 h-20 text-white/10 mb-5 mx-auto" />
+                <p className="text-brand-200/60 text-2xl font-semibold">Teams appear here once they register</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {enrichedLeaderboardTeams.slice(0, 10).map((team) => {
+                  const teamTotal = parseCurrency(team.total);
+                  const behind = leaderTotal - teamTotal;
+                  return (
+                    <div key={team.rank} className={`flex items-center gap-4 sm:gap-6 rounded-2xl px-4 sm:px-7 py-3.5 sm:py-5 ${team.rank === 1 ? 'bg-gold-500/15 border border-gold-500/40' : 'bg-white/[0.04] border border-white/[0.07]'}`}>
+                      <div className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-xl sm:text-2xl flex-shrink-0`}>
+                        {team.rank}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black text-xl sm:text-3xl truncate flex items-center gap-2.5">
+                          {team.team}
+                          {team.rank === 1 && <Crown className="w-5 h-5 sm:w-7 sm:h-7 text-gold-400 flex-shrink-0" />}
+                        </p>
+                        <div className="hidden sm:flex items-center gap-1.5 mt-1.5">
+                          {(team.weekHistory || []).map((result, wi) => {
+                            const cls = result === 'W' ? 'bg-green-400' : result === 'L' ? 'bg-red-400' : result === 'P' ? 'bg-gold-400' : 'bg-white/15';
+                            return <span key={wi} title={`Week ${wi + 1}`} className={`w-3 h-3 rounded-full ${cls}`} />;
+                          })}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`font-black text-2xl sm:text-4xl leading-none ${team.rank === 1 ? 'text-gold-400' : 'text-white'}`}>{team.total}</p>
+                        {behind > 0 && <p className="text-brand-200/50 text-xs sm:text-base mt-1">${behind.toFixed(2)} behind</p>}
+                        {behind === 0 && team.rank === 1 && <p className="text-gold-400/80 text-xs sm:text-base mt-1 font-bold uppercase tracking-wider">Leader</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="px-8 sm:px-14 py-4 border-t border-white/[0.06] flex items-center justify-between text-brand-200/40 text-xs sm:text-sm">
+            <span>Scan the venue QR poster to join the competition</span>
+            <span>18+ · Gamble responsibly</span>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-5xl mx-auto px-2 sm:px-6">
         {navHistory.length > 0 && (
           <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-brand-700 text-sm font-semibold mb-4 px-2 transition-colors group">
@@ -127,13 +199,20 @@ const LeaderboardView = () => {
               </p>
             )}
           </div>
-          {isLoggedIn && (
-            <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setTvMode(true)}
+              className="border border-gray-300 bg-white hover:border-brand-300 text-slate-500 hover:text-brand-700 px-4 py-2 rounded-lg font-bold text-xs transition-colors flex items-center gap-1.5"
+              title="Full-screen leaderboard for venue screens"
+            >
+              <Tv className="w-3.5 h-3.5" /> TV Mode
+            </button>
+            {isLoggedIn && (
               <button onClick={() => setShowBetAnalyzer(true)} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2 rounded-lg font-bold text-xs transition-colors">
                 Submit Bet
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Competition switcher */}

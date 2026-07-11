@@ -8,8 +8,7 @@ const HomeView = ({
   setJoinTeamCode, setJoinTeamError, setJoinTeamSuccess,
   setTeamModalTab, setPrivateCompLookup, setPrivateCompLookupError,
   setShowCreateTeamModal,
-  setRequestCompStep, setRequestCompForm, setRequestCompSuccess,
-  setRequestCompError, setShowRequestCompModal,
+  openRequestCompModal,
 }) => {
   const { isLoggedIn, currentUser, viewedRole, navigateTo, setShowSignupModal, setSignupMode, activeCompetitions } = useApp();
 
@@ -70,23 +69,10 @@ const HomeView = ({
           {/* Secondary CTAs */}
           <div className="flex flex-row flex-wrap justify-center gap-2.5 mb-12">
             <button
-              onClick={() => {
-                setRequestCompStep(1);
-                setRequestCompForm({
-                  contactName: isLoggedIn ? `${currentUser?.firstName || currentUser?.first_name || ''} ${currentUser?.lastName || currentUser?.last_name || ''}`.trim() : '',
-                  contactPhone: isLoggedIn ? (currentUser?.phone || '') : '',
-                  contactEmail: isLoggedIn ? (currentUser?.email || '') : '',
-                  pubName: '', compName: '', estimatedTeams: '',
-                  preferredStartDate: '', preferredEndDate: '',
-                  buyIn: '', isPrivate: false, notes: '',
-                });
-                setRequestCompSuccess(false);
-                setRequestCompError(null);
-                setShowRequestCompModal(true);
-              }}
+              onClick={() => navigateTo('venues')}
               className="border border-gray-300 hover:border-brand-200 bg-white hover:bg-brand-500/5 text-slate-500 hover:text-brand-700 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Run a competition at your pub/club
+              <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Host a competition — free for venues
             </button>
             <a
               href="https://wa.me/61419163012"
@@ -135,6 +121,32 @@ const HomeView = ({
           </section>
         );
       })()}
+
+      {/* Venue banner */}
+      <section className="pb-8 px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-brand-950 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                <Building2 className="w-5 h-5 text-gold-400" />
+              </div>
+              <div>
+                <h3 className="text-white font-black text-lg leading-tight mb-1">Run a pub or club?</h3>
+                <p className="text-brand-100/60 text-sm leading-relaxed max-w-lg">
+                  Host your own season-long competition — free for venues, fully automated,
+                  with a QR poster for the bar and a live leaderboard for your screens.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigateTo('venues')}
+              className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 hover:scale-[1.02] flex items-center gap-2 flex-shrink-0 cursor-pointer"
+            >
+              For Venues <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* Feature cards */}
       <section className="pb-20 px-4 sm:px-6">

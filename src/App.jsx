@@ -10,10 +10,12 @@ import SupportChat from './components/SupportChat.jsx';
 import FaqView from './components/views/FaqView.jsx';
 import CompetitionView from './components/views/CompetitionView.jsx';
 import HomeView from './components/views/HomeView.jsx';
+import VenuesView from './components/views/VenuesView.jsx';
 import LeaderboardView from './components/views/LeaderboardView.jsx';
 import WeeklySummaryView from './components/views/WeeklySummaryView.jsx';
 import MyTeamView from './components/views/MyTeamView.jsx';
 import { AppContext } from './context/AppContext.jsx';
+import QRCode from 'qrcode';
 import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, WEEK_BUDGET } from './utils.js';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
@@ -28,7 +30,7 @@ import {
   apiUpdateProfile, apiChangePassword,
   apiGenerateRecap, apiTriggerResultsCheck,
 } from './api.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle, Printer, SkipForward, Trash2 } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function PuntingClub() {
@@ -63,6 +65,11 @@ export default function PuntingClub() {
 
   // Active competitions from Supabase (for signup dropdown)
   const [activeCompetitions, setActiveCompetitions] = useState([]);
+  const [compsFetched, setCompsFetched] = useState(false);
+  // ?join=CODE deep link (QR posters / share links) — consumed once comps load
+  const [pendingJoinCode, setPendingJoinCode] = useState(() => {
+    try { return (new URLSearchParams(window.location.search).get('join') || '').trim().toUpperCase() || null; } catch(_) { return null; }
+  });
   const [currentTeamId, setCurrentTeamId] = useState(null);
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', phone: '', dob: '', postcode: '',
@@ -95,10 +102,11 @@ export default function PuntingClub() {
   // Competition request (public home page)
   const [showRequestCompModal, setShowRequestCompModal] = useState(false);
   const [requestCompStep, setRequestCompStep] = useState(1);
+  const [requestCompRef, setRequestCompRef] = useState(null); // reference code shown on success
   const [requestCompForm, setRequestCompForm] = useState({
     contactName: '', contactPhone: '', contactEmail: '',
     pubName: '', compName: '', estimatedTeams: '',
-    preferredStartDate: '', preferredEndDate: '',
+    preferredStartDate: '', preferredEndDate: '', seasonWeeks: '',
     buyIn: '', isPrivate: false, notes: '',
   });
   const [requestCompLoading, setRequestCompLoading] = useState(false);
@@ -346,6 +354,93 @@ export default function PuntingClub() {
     if (key === activeNav) return;
     setNavHistory(prev => [...prev, activeNav]);
     setActiveNav(key);
+  };
+
+  // Download a CSV string as a file (admin exports).
+  const downloadCsv = (filename, csv) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Build the public join URL for a competition (used by QR posters + share).
+  const competitionJoinUrl = (code) => `${window.location.origin}/?join=${code}`;
+
+  // Generate and open a printable A4 QR poster for a competition — the
+  // in-venue marketing kit a pub sticks on the bar.
+  const openCompetitionPoster = async (comp) => {
+    try {
+      const joinUrl = competitionJoinUrl(comp.code);
+      const qr = await QRCode.toDataURL(joinUrl, { width: 560, margin: 1, color: { dark: '#0B2419', light: '#FFFFFF' } });
+      const buyIn = comp.buy_in ? `$${Number(comp.buy_in).toLocaleString()}` : (comp.buyIn || '');
+      const w = window.open('', '_blank');
+      if (!w) { showToast('Allow pop-ups to open the poster.', 'warning'); return; }
+      w.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>${comp.name} — Join Poster</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Inter', system-ui, sans-serif; background:#f1f5f9; display:flex; flex-direction:column; align-items:center; padding:24px; }
+  .poster { width:210mm; min-height:280mm; background:#0B2419; color:#fff; border-radius:16px; padding:56px 48px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+  .badge { border:1px solid rgba(251,191,36,.4); color:#FBBF24; border-radius:999px; padding:6px 18px; font-size:13px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; margin-bottom:28px; }
+  .venue { font-size:20px; font-weight:700; color:#BBDAC7; margin-bottom:10px; }
+  h1 { font-size:44px; font-weight:900; line-height:1.1; margin-bottom:18px; }
+  .tag { font-size:16px; color:#8FBFA3; margin-bottom:36px; }
+  .qrbox { background:#fff; border-radius:20px; padding:22px; margin-bottom:18px; }
+  .qrbox img { display:block; width:300px; height:300px; }
+  .scan { font-size:18px; font-weight:800; color:#FBBF24; margin-bottom:6px; }
+  .code { font-family:monospace; font-size:30px; font-weight:900; letter-spacing:.35em; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15); border-radius:12px; padding:10px 26px; margin:10px 0 30px; }
+  .details { display:flex; gap:36px; justify-content:center; margin-bottom:auto; }
+  .details div { font-size:14px; color:#BBDAC7; }
+  .details strong { display:block; font-size:22px; color:#fff; }
+  .footer { font-size:11px; color:#5F9D7B; margin-top:36px; }
+  .no-print { margin:20px; }
+  .no-print button { background:#1F4F38; color:#fff; border:0; border-radius:10px; padding:12px 28px; font-size:15px; font-weight:700; cursor:pointer; }
+  @media print { body { background:#fff; padding:0; } .no-print { display:none; } .poster { border-radius:0; width:100%; min-height:100vh; } }
+</style></head><body>
+  <div class="poster">
+    <div class="badge">Punting Club</div>
+    <div class="venue">${comp.pub || ''}</div>
+    <h1>${comp.name}</h1>
+    <div class="tag">Form a team. Bet weekly. Win the jackpot.</div>
+    <div class="scan">Scan to join</div>
+    <div class="qrbox"><img src="${qr}" alt="Join QR code"></div>
+    <div>or sign up with code</div>
+    <div class="code">${comp.code}</div>
+    <div class="details">
+      ${buyIn ? `<div><strong>${buyIn}</strong>buy-in per team</div>` : ''}
+      ${comp.weeks ? `<div><strong>${comp.weeks} weeks</strong>season length</div>` : ''}
+      <div><strong>Any sport</strong>any bookmaker</div>
+    </div>
+    <div class="footer">Must be 18+. Please gamble responsibly. Punting Club never holds or handles wagers.</div>
+  </div>
+  <div class="no-print"><button onclick="window.print()">🖨 Print poster</button></div>
+</body></html>`);
+      w.document.close();
+    } catch (err) {
+      showToast(`Could not generate poster: ${err.message}`, 'error');
+    }
+  };
+
+  // Open the venue "Request a Competition" modal with a fresh form,
+  // prefilled with contact details when the user is logged in.
+  const openRequestCompModal = () => {
+    setRequestCompStep(1);
+    setRequestCompForm({
+      contactName: isLoggedIn ? `${currentUser?.firstName || currentUser?.first_name || ''} ${currentUser?.lastName || currentUser?.last_name || ''}`.trim() : '',
+      contactPhone: isLoggedIn ? (currentUser?.phone || '') : '',
+      contactEmail: isLoggedIn ? (currentUser?.email || '') : '',
+      pubName: '', compName: '', estimatedTeams: '',
+      preferredStartDate: '', preferredEndDate: '', seasonWeeks: '',
+      buyIn: '', isPrivate: false, notes: '',
+    });
+    setRequestCompSuccess(false);
+    setRequestCompError(null);
+    setRequestCompRef(null);
+    setShowRequestCompModal(true);
   };
 
   // Go back to the previous page in history
@@ -666,8 +761,8 @@ export default function PuntingClub() {
   useEffect(() => {
     // Load active competitions for signup dropdown
     apiGetActiveCompetitions()
-      .then(data => setActiveCompetitions(data || []))
-      .catch(err => console.error('Failed to load competitions:', err));
+      .then(data => { setActiveCompetitions(data || []); setCompsFetched(true); })
+      .catch(err => { console.error('Failed to load competitions:', err); setCompsFetched(true); });
 
     // Restore session from localStorage so refresh doesn't log out
     try {
@@ -714,6 +809,47 @@ export default function PuntingClub() {
       }
     } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }
   }, []);
+
+  // ── JOIN-LINK DEEP LINK (?join=CODE — from QR posters and share links) ────
+  // Once competitions have been fetched, a ?join= code opens the right modal
+  // with the competition preselected: signup for visitors, new-team for members.
+  useEffect(() => {
+    if (!pendingJoinCode || !compsFetched) return;
+    const code = pendingJoinCode;
+    setPendingJoinCode(null);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('join');
+      window.history.replaceState({}, '', url.toString());
+    } catch(_) {}
+
+    const publicComp = activeCompetitions.find(c => c.code === code && !c.is_private);
+    // Codes not in the public list may be private — resolve them server-side.
+    const lookupCode = async (applyComp) => {
+      try {
+        const comp = await apiGetCompetitionByCode(code);
+        setPrivateCompLookup(comp.is_private ? comp : null);
+        applyComp(comp);
+      } catch(_) {
+        setPrivateCompLookupError('Competition code not found — check the code and try again.');
+      }
+    };
+
+    setPrivateCompLookup(null);
+    setPrivateCompLookupError(null);
+    if (isLoggedIn) {
+      setCreateTeamForm({ teamName: '', competitionCode: publicComp ? code : '', privateCompCode: publicComp ? '' : code, buyInMode: 'split' });
+      setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null);
+      setTeamModalTab('create');
+      setShowCreateTeamModal(true);
+      if (!publicComp) lookupCode(comp => setCreateTeamForm(p => ({ ...p, competitionCode: comp.code })));
+    } else {
+      setSignupMode('create');
+      setFormData(p => ({ ...p, competitionCode: publicComp ? code : '', privateCompCode: publicComp ? '' : code }));
+      setShowSignupModal(true);
+      if (!publicComp) lookupCode(comp => setFormData(p => ({ ...p, competitionCode: comp.code })));
+    }
+  }, [pendingJoinCode, compsFetched, activeCompetitions, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Admin data loader (reusable) ────────────────────────────────────────
   const mapTeam = (t) => {
@@ -993,7 +1129,7 @@ export default function PuntingClub() {
     e.preventDefault();
     try {
       const result = await apiAdminLogin(adminLoginId.trim(), adminLoginPw);
-      const a = { role: result.role, name: result.name, id: adminLoginId.trim() };
+      const a = { role: result.role, name: result.name, id: adminLoginId.trim(), venue: result.venue || '' };
       setAdminToken(result.token);
       setAdminUser(a);
       setIsAdminLoggedIn(true);
@@ -1682,6 +1818,7 @@ export default function PuntingClub() {
                 ['leaderboard', 'Leaderboard', <Trophy className="w-3.5 h-3.5" />],
                 ['weekly',      'Summary',     <BarChart3 className="w-3.5 h-3.5" />],
                 ['team',        'My Team',     <Users className="w-3.5 h-3.5" />],
+                ['venues',      'For Venues',  <Building2 className="w-3.5 h-3.5" />],
                 ['faq',         'FAQ',         <HelpCircle className="w-3.5 h-3.5" />],
               ].map(([key, label, icon]) => (
                 <button
@@ -1817,6 +1954,7 @@ export default function PuntingClub() {
                   ['leaderboard', 'Leaderboard', <Trophy className="w-4 h-4 flex-shrink-0" />],
                   ['weekly',      'Summary',     <BarChart3 className="w-4 h-4 flex-shrink-0" />],
                   ['team',        'My Team',     <Users className="w-4 h-4 flex-shrink-0" />],
+                  ['venues',      'For Venues',  <Building2 className="w-4 h-4 flex-shrink-0" />],
                   ['faq',         'FAQ',         <HelpCircle className="w-4 h-4 flex-shrink-0" />],
                 ].map(([key, label, icon]) => (
                   <button
@@ -1904,12 +2042,15 @@ export default function PuntingClub() {
           setPrivateCompLookup={setPrivateCompLookup}
           setPrivateCompLookupError={setPrivateCompLookupError}
           setShowCreateTeamModal={setShowCreateTeamModal}
-          setRequestCompStep={setRequestCompStep}
-          setRequestCompForm={setRequestCompForm}
-          setRequestCompSuccess={setRequestCompSuccess}
-          setRequestCompError={setRequestCompError}
-          setShowRequestCompModal={setShowRequestCompModal}
+          openRequestCompModal={openRequestCompModal}
         />
+      )}
+
+      {/* ── FOR VENUES (pubs & clubs landing page) ────────────────────────── */}
+      {activeNav === 'venues' && (
+        <ErrorBoundary variant="section" label="For Venues">
+          <VenuesView openRequestCompModal={openRequestCompModal} />
+        </ErrorBoundary>
       )}
 
       {/* ── COMPETITION / HOW TO PLAY ─────────────────────────────────────── */}
@@ -1967,6 +2108,13 @@ export default function PuntingClub() {
           return <span className={`border text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${m[s] || 'bg-gray-500/20 text-gray-400 border-gray-500/40'}`}>{s}</span>;
         };
 
+        // Venue hosts get a warmer, brand-coloured "Host Dashboard" rather than
+        // the red internal-ops chrome — they're customers, not staff.
+        const isHost = adminUser.role === 'pub_admin';
+        const accent = isHost
+          ? { text:'#FBBF24', textCls:'text-gold-400', bg:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.25)', pillBg:'rgba(251,191,36,0.15)', pillBorder:'1px solid rgba(251,191,36,0.35)', topBorder:'1px solid rgba(251,191,36,0.25)', dotCls:'bg-gold-400' }
+          : { text:'#f87171', textCls:'text-red-400', bg:'rgba(239,68,68,0.12)',  border:'1px solid rgba(239,68,68,0.25)',  pillBg:'rgba(239,68,68,0.15)',  pillBorder:'1px solid rgba(239,68,68,0.35)',  topBorder:'1px solid rgba(239,68,68,0.25)',  dotCls:'bg-red-400' };
+
         const tabs = [
           { id:'dashboard',    label:'Dashboard',    icon:<LayoutDashboard className="w-4 h-4" />, roles:['owner','campaign','pub_admin'] },
           { id:'teams',        label:'Teams',        icon:<Trophy className="w-4 h-4" />,          roles:['owner','campaign','pub_admin'] },
@@ -1977,6 +2125,13 @@ export default function PuntingClub() {
           { id:'audit',        label:'Audit Log',    icon:<Activity className="w-4 h-4" />,        roles:['owner','campaign'] },
         ].filter(t => t.roles.includes(adminUser.role));
 
+        // Venue-relevant stats for the host dashboard (data arrives venue-scoped).
+        const hostActiveComp = adminComps.find(c => c.status === 'active') || adminComps[0];
+        const hostPrizePool  = adminComps.reduce((sum, c) => sum + (Number(c.buy_in) || 0) * ((c.teams || []).length || c.team_count || 0), 0);
+        const hostWeeksLeft  = hostActiveComp?.start_date && hostActiveComp?.weeks
+          ? Math.max(0, hostActiveComp.weeks - calcCurrentWeek(hostActiveComp.start_date) + 1)
+          : null;
+
         const filteredTeams = adminTeams.filter(t => adminSearch === '' || t.name.toLowerCase().includes(adminSearch.toLowerCase()) || t.captain.toLowerCase().includes(adminSearch.toLowerCase()));
         const filteredUsers = adminUsers.filter(u => adminSearch === '' || u.name.toLowerCase().includes(adminSearch.toLowerCase()) || u.phone.includes(adminSearch));
         const filteredBets  = adminBets.filter(b => adminSearch === '' || b.team.toLowerCase().includes(adminSearch.toLowerCase()) || b.id.toLowerCase().includes(adminSearch.toLowerCase()));
@@ -1984,12 +2139,12 @@ export default function PuntingClub() {
         return (
           <section className="text-gray-100" style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
             {/* Admin top bar */}
-            <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:0,zIndex:10}} className="px-6 py-3 flex items-center justify-between">
+            <div style={{backgroundColor:"#0f172a",borderBottom:accent.topBorder,position:"sticky",top:0,zIndex:10}} className="px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2.5">
-                  <Shield className="w-5 h-5 text-red-400" />
-                  <span className="font-black text-red-400 text-base tracking-wide">ADMIN PANEL</span>
-                  <span style={{backgroundColor:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",fontSize:"11px",padding:"2px 10px",borderRadius:"999px",fontWeight:700,textTransform:"capitalize"}}>{adminUser.role}</span>
+                  <Shield className={`w-5 h-5 ${accent.textCls}`} />
+                  <span className={`font-black ${accent.textCls} text-base tracking-wide`}>{isHost ? 'HOST DASHBOARD' : 'ADMIN PANEL'}</span>
+                  <span style={{backgroundColor:accent.pillBg,border:accent.pillBorder,color:accent.text,fontSize:"11px",padding:"2px 10px",borderRadius:"999px",fontWeight:700,textTransform:"capitalize"}}>{isHost ? 'Venue Host' : adminUser.role}</span>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 text-gray-500 text-sm">
                   <span>·</span>
@@ -2073,10 +2228,10 @@ export default function PuntingClub() {
                 </div>
                 <nav className="space-y-0.5 px-2">
                   {tabs.map(t => (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} style={adminTab === t.id ? {backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontWeight:700} : {border:"1px solid transparent",color:"#9ca3af"}} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 transition-all hover:bg-white/5 hover:text-white`}>
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} style={adminTab === t.id ? {backgroundColor:accent.bg,border:accent.border,color:accent.text,fontWeight:700} : {border:"1px solid transparent",color:"#9ca3af"}} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 transition-all hover:bg-white/5 hover:text-white`}>
                       <span className="text-base w-5 text-center flex-shrink-0">{t.icon}</span>
                       <span>{t.label}</span>
-                      {adminTab === t.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0"/>}
+                      {adminTab === t.id && <span className={`ml-auto w-1.5 h-1.5 rounded-full ${accent.dotCls} flex-shrink-0`}/>}
                     </button>
                   ))}
                 </nav>
@@ -2102,25 +2257,27 @@ export default function PuntingClub() {
                 {/* Mobile tab bar */}
                 <div style={{WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}} className="md:hidden flex gap-1 overflow-x-auto pb-2 mb-4">
                   {tabs.map(t => (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${adminTab === t.id ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/5 text-gray-400'}`}>
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${adminTab === t.id ? (isHost ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30') : 'bg-white/5 text-gray-400'}`}>
                       {t.icon} {t.label}
                     </button>
                   ))}
                 </div>
 
-                {/* Global search */}
-                <div className="relative mb-5">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/40" />
-                  {adminSearch && <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white"><X className="w-4 h-4"/></button>}
-                </div>
+                {/* Search — only on tabs whose lists it actually filters */}
+                {['teams','users','bets'].includes(adminTab) && (
+                  <div className="relative mb-5">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                    <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder={adminTab === 'teams' ? 'Search teams or captains…' : adminTab === 'users' ? 'Search users by name or phone…' : 'Search bets by team or ID…'} className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500/40" />
+                    {adminSearch && <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white"><X className="w-4 h-4"/></button>}
+                  </div>
+                )}
 
                 {/* ── DASHBOARD ───────────────────────────────────────────── */}
                 {adminTab === 'dashboard' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-2xl font-black mb-1">Dashboard</h2>
+                        <h2 className="text-2xl font-black mb-1">{isHost ? `${adminUser.venue || adminUser.name} — Host Dashboard` : 'Dashboard'}</h2>
                         <p className="text-gray-500 text-sm">Overview · {(() => { const ac = adminComps.find(c => c.status === 'active') || adminComps[0]; if (!ac?.start_date) return ''; const wk = calcCurrentWeek(ac.start_date); const tot = ac.weeks || '?'; return `Week ${wk} of ${tot} · `; })()}{new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/5 border border-white/8 px-3 py-2 rounded-lg">
@@ -2130,10 +2287,21 @@ export default function PuntingClub() {
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-brand-300" />
-                      <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-brand-300"  />
-                      <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
-                      <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-brand-300"/>
+                      {isHost ? (
+                        <>
+                          <AdminCard title="Teams Registered" value={adminTeams.length} sub={hostActiveComp ? `of ${hostActiveComp.max_teams || hostActiveComp.maxTeams || 20} spots · ${adminTeams.filter(t=>t.status==='pending').length} pending` : `${adminTeams.filter(t=>t.status==='pending').length} pending approval`} icon={<Users className="w-7 h-7"/>} color="text-gold-400" />
+                          <AdminCard title="Bets This Week"   value={adminBets.length} sub={`${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won so far`} icon={<FileText className="w-7 h-7"/>} color="text-green-400" />
+                          <AdminCard title="Prize Pool"       value={`$${hostPrizePool.toLocaleString()}`} sub="funded by team buy-ins" icon={<DollarSign className="w-7 h-7"/>} color="text-gold-400" />
+                          <AdminCard title="Weeks Remaining"  value={hostWeeksLeft ?? '—'} sub={hostActiveComp ? hostActiveComp.name : 'no active competition'} icon={<CalendarRange className="w-7 h-7"/>} color="text-brand-300" />
+                        </>
+                      ) : (
+                        <>
+                          <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-brand-300" />
+                          <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-brand-300"  />
+                          <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
+                          <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-brand-300"/>
+                        </>
+                      )}
                     </div>
 
                     {/* Pending notifications panel on dashboard */}
@@ -2165,8 +2333,8 @@ export default function PuntingClub() {
 
                     {/* Flagged + KYC side by side on desktop */}
                     <div className="grid lg:grid-cols-2 gap-4">
-                    {/* Flagged items */}
-                    {(adminBets.some(b=>b.flagged) || adminTeams.some(t=>t.flagged) || adminUsers.some(u=>u.flagged)) && (
+                    {/* Flagged items — bet/KYC triage is staff tooling, not for venue hosts */}
+                    {!isHost && (adminBets.some(b=>b.flagged) || adminTeams.some(t=>t.flagged) || adminUsers.some(u=>u.flagged)) && (
                       <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-5">
                         <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Flagged Items Requiring Attention</h3>
                         <div className="space-y-2">
@@ -2420,7 +2588,7 @@ export default function PuntingClub() {
                         <p className="text-gray-500 text-sm">{adminUsers.length} users · {adminUsers.filter(u=>u.kyc==='pending').length} awaiting KYC · {adminUsers.filter(u=>!u.active).length} suspended</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { const csv = ['Name,Phone,KYC,Team,DOB,Postcode,Joined',...adminUsers.map(u=>`${u.name},${u.phone},${u.kyc},${u.team},${u.dob},${u.postcode},${u.joinedAt}`)].join('\n'); alert('CSV export ready:\n\n' + csv.substring(0,200) + '...'); addAuditEntry(adminUser.role,'Data Export','Users CSV','GDPR-compliant export'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                        <button onClick={() => { const csv = ['Name,Phone,KYC,Team,DOB,Postcode,Joined',...adminUsers.map(u=>`${u.name},${u.phone},${u.kyc},${u.team},${u.dob},${u.postcode},${u.joinedAt}`)].join('\n'); downloadCsv('punting-club-users.csv', csv); showToast('Users CSV downloaded', 'success'); addAuditEntry(adminUser.role,'Data Export','Users CSV','GDPR-compliant export'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                       </div>
                     </div>
 
@@ -2713,7 +2881,7 @@ export default function PuntingClub() {
                             </div>
                           </div>
                           <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-xs text-gray-400">
-                            <strong className="text-brand-300">Note:</strong> Competition requires approval from Owner Admin before going live. A unique QR code and join link will be auto-generated.
+                            <strong className="text-brand-300">Note:</strong> Competition requires approval from Owner Admin before going live. Once created, use the Join Link and QR Poster buttons to share it with punters.
                           </div>
                           <div className="flex gap-3">
                             <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
@@ -2739,6 +2907,7 @@ export default function PuntingClub() {
                                       {req.status === 'requested' ? '⏳ Pending' : req.status === 'approved' ? '✓ Approved' : '✗ Declined'}
                                     </span>
                                     {req.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
+                                    {req.competition_code && <span className="font-mono text-xs bg-black/40 border border-white/10 text-brand-300 px-2 py-0.5 rounded" title="Join code of the competition created from this request">Code: {req.competition_code}</span>}
                                   </div>
                                   <div className="text-xs text-gray-500 space-y-0.5">
                                     <p className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {req.pub_name}</p>
@@ -2753,9 +2922,14 @@ export default function PuntingClub() {
                                     <button
                                       onClick={async () => {
                                         try {
-                                          await apiUpdateCompetitionRequest(req.id, 'approved', adminToken);
-                                          setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'approved'} : r));
-                                          showToast(`Request from ${req.contact_name} approved`, 'success');
+                                          const result = await apiUpdateCompetitionRequest(req.id, 'approved', adminToken);
+                                          setAdminCompRequests(prev => prev.map(r => r.id === req.id ? {...r, status:'approved', competition_code: result?.competition?.code || r.competition_code} : r));
+                                          if (result?.competition) {
+                                            showToast(`Approved — competition created with join code ${result.competition.code}`, 'success');
+                                            refreshAdminData(adminToken);
+                                          } else {
+                                            showToast(`Request from ${req.contact_name} approved`, 'success');
+                                          }
                                         } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
                                       }}
                                       className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
@@ -2832,20 +3006,9 @@ export default function PuntingClub() {
                                 </div>
                                 {canAdmin('competitions') && (
                                   <div className="flex flex-col gap-1.5 flex-shrink-0">
-                                    {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Approve</button>}
-                                    {c.status === 'active'  && <button onClick={() => updateCompStatus(c.id || c.code, 'closed')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs">Close</button>}
-                                    {c.status === 'active' && c.id && (
-                                      <button
-                                        onClick={() => { if (window.confirm(`Force week rollover for "${c.name}"? This moves current bets to history and starts a new week.`)) advanceWeek(c.id, 'forward'); }}
-                                        className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
-                                      >⏭ Advance Week</button>
-                                    )}
-                                    {c.status === 'active' && c.id && (
-                                      <button
-                                        onClick={() => { if (window.confirm(`Roll back one week for "${c.name}"?`)) advanceWeek(c.id, 'back'); }}
-                                        className="bg-gray-500/10 border border-gray-500/20 text-gray-500 px-2.5 py-1 rounded-lg text-xs"
-                                      >↩ Rollback</button>
-                                    )}
+                                    {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5"><CheckCircle className="w-3 h-3"/> Approve</button>}
+                                    <button onClick={() => { navigator.clipboard?.writeText(competitionJoinUrl(c.code)); showToast('Join link copied to clipboard', 'success'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5"><Share2 className="w-3 h-3"/> Join Link</button>
+                                    <button onClick={() => openCompetitionPoster(c)} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5"><Printer className="w-3 h-3"/> QR Poster</button>
                                     {c.status === 'active' && c.id && (
                                       <button
                                         onClick={async () => {
@@ -2854,11 +3017,26 @@ export default function PuntingClub() {
                                             showToast(`Recap generation started for ${c.name}`, 'success');
                                           } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
                                         }}
-                                        className="bg-purple-500/20 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
-                                      >✨ Generate Recap</button>
+                                        className="bg-purple-500/20 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                                      ><Sparkles className="w-3 h-3"/> Generate Recap</button>
                                     )}
-                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5"><Edit3 className="w-3 h-3"/> Edit</button>
+
+                                    {/* Week controls & irreversible actions, kept apart from everyday buttons */}
+                                    {(c.status === 'active' || adminUser?.role === 'owner') && <div className="border-t border-white/10 my-0.5" />}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={() => { if (window.confirm(`Force week rollover for "${c.name}"? This moves current bets to history and starts a new week.`)) advanceWeek(c.id, 'forward'); }}
+                                        className="bg-white/5 border border-white/10 text-gray-400 hover:text-white px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5"
+                                      ><SkipForward className="w-3 h-3"/> Advance Week</button>
+                                    )}
+                                    {c.status === 'active' && c.id && (
+                                      <button
+                                        onClick={() => { if (window.confirm(`Roll back one week for "${c.name}"?`)) advanceWeek(c.id, 'back'); }}
+                                        className="bg-white/5 border border-white/10 text-gray-500 hover:text-gray-300 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5"
+                                      ><RotateCcw className="w-3 h-3"/> Rollback</button>
+                                    )}
+                                    {c.status === 'active'  && <button onClick={() => { if (window.confirm(`Close "${c.name}"? Teams will no longer be able to bet.`)) updateCompStatus(c.id || c.code, 'closed'); }} className="bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5"><XCircle className="w-3 h-3"/> Close</button>}
                                     {adminUser?.role === 'owner' && (
                                       <button
                                         onClick={() => {
@@ -2868,8 +3046,8 @@ export default function PuntingClub() {
                                             : `Delete "${c.name}"? This cannot be undone.`;
                                           if (window.confirm(msg)) deleteCompetition(c.id, c.name);
                                         }}
-                                        className="bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded-lg text-xs font-semibold"
-                                      >🗑 Delete</button>
+                                        className="bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                                      ><Trash2 className="w-3 h-3"/> Delete</button>
                                     )}
                                   </div>
                                 )}
@@ -2992,8 +3170,8 @@ export default function PuntingClub() {
                       <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>GDPR Data Requests</h3>
                       <p className="text-gray-400 text-sm mb-3">Handle user data deletion and export requests in compliance with Australian Privacy Act 1988 and GDPR.</p>
                       <div className="flex gap-3 flex-wrap">
-                        <button onClick={() => { addAuditEntry('owner','Data Export','All Users','GDPR compliant full export triggered'); alert('Full encrypted data export initiated. Link will be emailed to admin@puntingclub.com'); }} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"><Download className="w-3 h-3"/>Export All User Data</button>
-                        <button onClick={() => { const phone = prompt('Enter user phone number to delete:'); if(phone) { addAuditEntry('owner','Data Deletion',phone,'GDPR erasure request'); alert(`Data deletion request for ${phone} queued. Will be processed within 30 days per GDPR.`); }}} className="bg-red-500/20 border border-red-500/40 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold">Request Data Erasure</button>
+                        <button onClick={() => { addAuditEntry('owner','Data Export','All Users','GDPR compliant full export triggered'); showToast('Full encrypted data export initiated — link will be emailed to admin@puntingclub.com', 'success'); }} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"><Download className="w-3 h-3"/>Export All User Data</button>
+                        <button onClick={() => { const phone = prompt('Enter user phone number to delete:'); if(phone) { addAuditEntry('owner','Data Deletion',phone,'GDPR erasure request'); showToast(`Data deletion request for ${phone} queued — processed within 30 days per GDPR`, 'success'); }}} className="bg-red-500/20 border border-red-500/40 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold">Request Data Erasure</button>
                       </div>
                     </div>
                   </div>
@@ -3007,7 +3185,7 @@ export default function PuntingClub() {
                         <h2 className="text-xl font-black">Audit Log</h2>
                         <p className="text-gray-500 text-sm">{adminAuditLog.length} entries · Full admin action history</p>
                       </div>
-                      <button onClick={() => { const csv = ['Timestamp,Role,Action,Target,Detail',...adminAuditLog.map(e=>`"${e.ts}",${e.adminRole},"${e.action}","${e.target}","${e.detail}"`)].join('\n'); alert('Audit CSV:\n\n' + csv.substring(0,300)+'...'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                      <button onClick={() => { const csv = ['Timestamp,Role,Action,Target,Detail',...adminAuditLog.map(e=>`"${e.ts}",${e.adminRole},"${e.action}","${e.target}","${e.detail}"`)].join('\n'); downloadCsv('punting-club-audit-log.csv', csv); showToast('Audit log CSV downloaded', 'success'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                     </div>
                     <div className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
@@ -3119,62 +3297,78 @@ export default function PuntingClub() {
       )}
 
       {/* REQUEST A COMPETITION MODAL */}
-      {showRequestCompModal && (
-        <Modal title="Request a Competition" onClose={() => setShowRequestCompModal(false)} maxWidth="max-w-lg">
+      {showRequestCompModal && (() => {
+        const inputCls = 'w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-brand-500 placeholder-slate-400';
+        const labelCls = 'block text-xs font-semibold text-slate-700 mb-1';
+        // Keep the preferred end date in sync with a chosen season length.
+        const addWeeks = (dateStr, weeks) => {
+          const d = new Date(dateStr + 'T00:00:00');
+          d.setDate(d.getDate() + weeks * 7);
+          return d.toISOString().slice(0, 10);
+        };
+        return (
+        <Modal title="Host a Competition" onClose={() => setShowRequestCompModal(false)} maxWidth="max-w-lg" variant="light">
           {requestCompSuccess ? (
             <div className="p-6 text-center space-y-4">
               <div className="text-5xl mb-2">🎉</div>
-              <h3 className="text-xl font-black text-white">Request Submitted!</h3>
-              <p className="text-gray-400 text-sm">Your competition request has been sent to our team. We'll be in touch within 1–2 business days.</p>
-              <button onClick={() => setShowRequestCompModal(false)} className="w-full bg-brand-600 text-white font-bold py-3 rounded-xl text-sm mt-2">Done</button>
+              <h3 className="text-xl font-black text-slate-900">Request Submitted!</h3>
+              <p className="text-slate-500 text-sm">Thanks — we'll be in touch within 1–2 business days to get your competition live.</p>
+              {requestCompRef && (
+                <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3">
+                  <p className="text-xs text-slate-500 mb-1">Your reference code</p>
+                  <p className="font-mono font-black text-2xl tracking-widest text-brand-700">{requestCompRef}</p>
+                  <p className="text-xs text-slate-400 mt-1">Quote this if you contact us about your request.</p>
+                </div>
+              )}
+              <button onClick={() => setShowRequestCompModal(false)} className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-3 rounded-xl text-sm mt-2">Done</button>
             </div>
           ) : (
             <div className="p-5 space-y-4">
               {requestCompError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm">✗ {requestCompError}</div>
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-red-600 text-sm">✗ {requestCompError}</div>
               )}
 
               {/* Step indicator */}
               <div className="flex items-center gap-2 mb-2">
                 {[1,2,3].map(s => (
                   <div key={s} className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${requestCompStep >= s ? 'bg-brand-600 border-brand-500 text-white' : 'border-white/20 text-gray-500'}`}>{s}</div>
-                    {s < 3 && <div className={`h-0.5 flex-1 w-8 ${requestCompStep > s ? 'bg-brand-600' : 'bg-white/10'}`} />}
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${requestCompStep >= s ? 'bg-brand-700 border-brand-700 text-white' : 'border-gray-300 text-slate-400'}`}>{s}</div>
+                    {s < 3 && <div className={`h-0.5 flex-1 w-8 ${requestCompStep > s ? 'bg-brand-700' : 'bg-gray-200'}`} />}
                   </div>
                 ))}
-                <span className="text-xs text-gray-500 ml-1">{requestCompStep === 1 ? (isLoggedIn ? 'Venue Details' : 'Your Details') : requestCompStep === 2 ? 'Competition Setup' : 'Preferences'}</span>
+                <span className="text-xs text-slate-500 ml-1">{requestCompStep === 1 ? (isLoggedIn ? 'Venue Details' : 'Your Details') : requestCompStep === 2 ? 'Competition Setup' : 'Visibility & Notes'}</span>
               </div>
 
               {requestCompStep === 1 && (
                 <div className="space-y-3">
                   {isLoggedIn ? (
                     <>
-                      <p className="text-gray-400 text-xs">Which pub or club is hosting this competition?</p>
+                      <p className="text-slate-500 text-xs">Which pub or club is hosting this competition?</p>
                       <div>
-                        <label className="block text-xs font-semibold text-brand-300 mb-1">Pub / Club Name *</label>
-                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                        <label className={labelCls}>Pub / Club Name *</label>
+                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className={inputCls} placeholder="RSL Club Sydney" />
                       </div>
                     </>
                   ) : (
                     <>
-                      <p className="text-gray-400 text-xs">Tell us about yourself and your venue.</p>
+                      <p className="text-slate-500 text-xs">Tell us about yourself and your venue.</p>
                       <div>
-                        <label className="block text-xs font-semibold text-brand-300 mb-1">Your Name *</label>
-                        <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="John Smith" />
+                        <label className={labelCls}>Your Name *</label>
+                        <input type="text" value={requestCompForm.contactName} onChange={e => setRequestCompForm(p => ({...p, contactName: e.target.value}))} className={inputCls} placeholder="John Smith" />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-brand-300 mb-1">Phone *</label>
-                          <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="0412 345 678" />
+                          <label className={labelCls}>Phone *</label>
+                          <input type="tel" value={requestCompForm.contactPhone} onChange={e => setRequestCompForm(p => ({...p, contactPhone: e.target.value}))} className={inputCls} placeholder="0412 345 678" />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-brand-300 mb-1">Email *</label>
-                          <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="john@rsl.com.au" />
+                          <label className={labelCls}>Email *</label>
+                          <input type="email" value={requestCompForm.contactEmail} onChange={e => setRequestCompForm(p => ({...p, contactEmail: e.target.value}))} className={inputCls} placeholder="john@rsl.com.au" />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-brand-300 mb-1">Pub / Club Name *</label>
-                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="RSL Club Sydney" />
+                        <label className={labelCls}>Pub / Club Name *</label>
+                        <input type="text" value={requestCompForm.pubName} onChange={e => setRequestCompForm(p => ({...p, pubName: e.target.value}))} className={inputCls} placeholder="RSL Club Sydney" />
                       </div>
                     </>
                   )}
@@ -3189,46 +3383,75 @@ export default function PuntingClub() {
                       }
                       setRequestCompError(null); setRequestCompStep(2);
                     }}
-                    className="w-full bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm"
+                    className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm"
                   >Next →</button>
                 </div>
               )}
 
               {requestCompStep === 2 && (
                 <div className="space-y-3">
-                  <p className="text-gray-400 text-xs">Tell us about the competition you have in mind.</p>
+                  <p className="text-slate-500 text-xs">Tell us about the competition you have in mind.</p>
                   <div>
-                    <label className="block text-xs font-semibold text-brand-300 mb-1">Competition Name *</label>
-                    <input type="text" value={requestCompForm.compName} onChange={e => setRequestCompForm(p => ({...p, compName: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="RSL Summer Cup 2026" />
+                    <label className={labelCls}>Competition Name *</label>
+                    <input type="text" value={requestCompForm.compName} onChange={e => setRequestCompForm(p => ({...p, compName: e.target.value}))} className={inputCls} placeholder="RSL Summer Cup 2026" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Season Length</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[8, 16, 32].map(w => (
+                        <button key={w} type="button"
+                          onClick={() => setRequestCompForm(p => ({
+                            ...p,
+                            seasonWeeks: w,
+                            preferredEndDate: p.preferredStartDate ? addWeeks(p.preferredStartDate, w) : p.preferredEndDate,
+                          }))}
+                          className={`py-2 rounded-lg border text-xs font-bold transition-all ${requestCompForm.seasonWeeks === w ? 'border-brand-500 bg-brand-500/10 text-brand-700' : 'border-gray-300 text-slate-500 hover:border-brand-300'}`}
+                        >{w} weeks</button>
+                      ))}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-brand-300 mb-1">Preferred Start Date</label>
-                      <input type="date" value={requestCompForm.preferredStartDate} onChange={e => setRequestCompForm(p => ({...p, preferredStartDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                      <label className={labelCls}>Preferred Start Date</label>
+                      <input type="date" value={requestCompForm.preferredStartDate} onChange={e => setRequestCompForm(p => ({
+                        ...p,
+                        preferredStartDate: e.target.value,
+                        preferredEndDate: (e.target.value && p.seasonWeeks) ? addWeeks(e.target.value, p.seasonWeeks) : p.preferredEndDate,
+                      }))} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-brand-300 mb-1">Preferred End Date</label>
-                      <input type="date" value={requestCompForm.preferredEndDate} onChange={e => setRequestCompForm(p => ({...p, preferredEndDate: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                      <label className={labelCls}>Preferred End Date</label>
+                      <input type="date" value={requestCompForm.preferredEndDate} onChange={e => setRequestCompForm(p => ({...p, preferredEndDate: e.target.value, seasonWeeks: ''}))} className={inputCls} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-brand-300 mb-1">Estimated Teams</label>
-                      <input type="number" min="2" max="200" value={requestCompForm.estimatedTeams} onChange={e => setRequestCompForm(p => ({...p, estimatedTeams: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="10" />
+                      <label className={labelCls}>Estimated Teams</label>
+                      <input type="number" min="2" max="200" value={requestCompForm.estimatedTeams} onChange={e => setRequestCompForm(p => ({...p, estimatedTeams: e.target.value}))} className={inputCls} placeholder="10" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-brand-300 mb-1">Buy-In Amount</label>
-                      <input type="text" value={requestCompForm.buyIn} onChange={e => setRequestCompForm(p => ({...p, buyIn: e.target.value}))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="$1,000" />
+                      <label className={labelCls}>Buy-In per Team</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                        <input type="number" min="0" step="50" value={requestCompForm.buyIn} onChange={e => setRequestCompForm(p => ({...p, buyIn: e.target.value}))} className={`${inputCls} pl-7`} placeholder="1,000" />
+                      </div>
+                      <div className="flex gap-1.5 mt-1.5">
+                        {[500, 1000, 2000].map(v => (
+                          <button key={v} type="button" onClick={() => setRequestCompForm(p => ({...p, buyIn: String(v)}))}
+                            className={`px-2 py-0.5 rounded-md border text-xs font-semibold transition-all ${String(requestCompForm.buyIn) === String(v) ? 'border-brand-500 bg-brand-500/10 text-brand-700' : 'border-gray-300 text-slate-400 hover:border-brand-300'}`}
+                          >${v.toLocaleString()}</button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => { setRequestCompError(null); setRequestCompStep(1); }} className="flex-1 border border-white/10 text-gray-400 py-2.5 rounded-xl text-sm">← Back</button>
+                    <button onClick={() => { setRequestCompError(null); setRequestCompStep(1); }} className="flex-1 border border-gray-300 text-slate-500 hover:text-slate-700 py-2.5 rounded-xl text-sm">← Back</button>
                     <button
                       onClick={() => {
                         if (!requestCompForm.compName.trim()) { setRequestCompError('Please enter a competition name.'); return; }
                         setRequestCompError(null); setRequestCompStep(3);
                       }}
-                      className="flex-1 bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm"
+                      className="flex-1 bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm"
                     >Next →</button>
                   </div>
                 </div>
@@ -3236,48 +3459,49 @@ export default function PuntingClub() {
 
               {requestCompStep === 3 && (
                 <div className="space-y-3">
-                  <p className="text-gray-400 text-xs">Final details about your competition setup.</p>
+                  <p className="text-slate-500 text-xs">Choose who can find your competition, and add anything else we should know.</p>
 
                   <div>
-                    <label className="block text-xs font-semibold text-brand-300 mb-2">Competition Type</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Visibility</label>
                     <div className="grid grid-cols-2 gap-2">
-                      {[['public', '🌐 Public', 'Anyone can see and join the competition'], ['private', '🔒 Private', 'Only accessible via a secret code you share']].map(([v, label, desc]) => (
+                      {[['public', '🌐 Public', 'Anyone can see and join the competition'], ['private', '🔒 Private', 'Only joinable via a secret code you share']].map(([v, label, desc]) => (
                         <button key={v} type="button"
                           onClick={() => setRequestCompForm(p => ({...p, isPrivate: v === 'private'}))}
-                          className={`p-3 rounded-lg border text-left text-xs transition-all ${(v === 'private') === requestCompForm.isPrivate ? 'border-brand-500 bg-brand-500/15 text-brand-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                          className={`p-3 rounded-lg border text-left text-xs transition-all ${(v === 'private') === requestCompForm.isPrivate ? 'border-brand-500 bg-brand-500/10 text-brand-700' : 'border-gray-300 text-slate-500 hover:border-brand-300'}`}
                         >
                           <div className="font-bold mb-0.5">{label}</div>
-                          <div className="text-gray-500">{desc}</div>
+                          <div className="text-slate-400">{desc}</div>
                         </button>
                       ))}
                     </div>
                     {requestCompForm.isPrivate && (
-                      <p className="text-xs text-brand-300 mt-2 bg-brand-500/10 border border-brand-500/20 rounded-lg p-2">
-                        🔑 A private access code will be generated when the competition is approved. Team captains use this code to register.
+                      <p className="text-xs text-brand-700 mt-2 bg-brand-500/10 border border-brand-500/20 rounded-lg p-2">
+                        🔑 A private access code is generated the moment your competition is approved. Team captains use this code to register.
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-brand-300 mb-1">Additional Notes</label>
+                    <label className={labelCls}>Additional Notes</label>
                     <textarea
                       value={requestCompForm.notes}
                       onChange={e => setRequestCompForm(p => ({...p, notes: e.target.value}))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600 resize-none"
+                      className={`${inputCls} resize-none`}
                       rows={3}
                       placeholder="Any other details, special requirements, or questions..."
                     />
                   </div>
 
                   <div className="flex gap-2">
-                    <button onClick={() => { setRequestCompError(null); setRequestCompStep(2); }} className="flex-1 border border-white/10 text-gray-400 py-2.5 rounded-xl text-sm">← Back</button>
+                    <button onClick={() => { setRequestCompError(null); setRequestCompStep(2); }} className="flex-1 border border-gray-300 text-slate-500 hover:text-slate-700 py-2.5 rounded-xl text-sm">← Back</button>
                     <button
                       disabled={requestCompLoading}
                       onClick={async () => {
                         setRequestCompLoading(true);
                         setRequestCompError(null);
                         try {
-                          await apiRequestCompetition(requestCompForm);
+                          const saved = await apiRequestCompetition(requestCompForm);
+                          setRequestCompRef(saved?.request_code || null);
                           setRequestCompSuccess(true);
                         } catch (err) {
                           setRequestCompError(err.message || 'Failed to submit request. Please try again.');
@@ -3295,7 +3519,8 @@ export default function PuntingClub() {
             </div>
           )}
         </Modal>
-      )}
+        );
+      })()}
 
       {/* SIGNUP */}
       {showSignupModal && (
@@ -3735,22 +3960,22 @@ export default function PuntingClub() {
 
       {/* ── ADMIN LOGIN MODAL ─────────────────────────────────────────────── */}
       {showAdminLogin && (
-        <Modal title="Admin Access" onClose={() => { setShowAdminLogin(false); setAdminLoginId(''); setAdminLoginPw(''); }}>
+        <Modal title="Host & Admin Login" onClose={() => { setShowAdminLogin(false); setAdminLoginId(''); setAdminLoginPw(''); }}>
           <form onSubmit={handleAdminLogin} className="p-5 space-y-4">
-            <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-3 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-red-400 flex-shrink-0" />
-              <p className="text-red-300/80 text-xs">Restricted access. All logins are audited.</p>
+            <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-3 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-brand-300 flex-shrink-0" />
+              <p className="text-gray-400 text-xs">For venue hosts and Punting Club staff. All logins are audited.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-brand-300 mb-1.5">Admin ID</label>
-              <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin ID" autoComplete="off" />
+              <label className="block text-xs font-semibold text-brand-300 mb-1.5">Login ID</label>
+              <input type="text" required value={adminLoginId} onChange={e => setAdminLoginId(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Login ID" autoComplete="off" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Password</label>
-              <PasswordInput required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} autoComplete="current-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 placeholder-gray-600" placeholder="Admin password" />
+              <PasswordInput required value={adminLoginPw} onChange={e => setAdminLoginPw(e.target.value)} autoComplete="current-password" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="Password" />
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
-              <Shield className="w-4 h-4"/>Login to Admin Panel
+            <button type="submit" className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
+              <Shield className="w-4 h-4"/>Log In
             </button>
           </form>
         </Modal>

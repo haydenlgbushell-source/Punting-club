@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, ChevronDown, ChevronLeft } from 'lucide-react';
+import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, Building2, ChevronDown, ChevronLeft } from 'lucide-react';
 
 const FaqView = ({ navHistory, goBack, navigateTo }) => (
   <section className="pt-28 pb-16 px-4 sm:px-6">
@@ -68,6 +68,16 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
             { q: 'How does the buy-in work?', a: 'The buy-in amount and structure are set by your competition host. It can be paid entirely by the captain or split equally among all team members. All buy-ins go into the jackpot prize pool.' },
             { q: 'When and how is the prize paid out?', a: 'Prize payout happens at the end of the season. The number of places paid (1st, 2nd, 3rd) depends on the total number of competing teams — your competition host will confirm the split before the season starts.' },
             { q: 'What is the final week boost?', a: 'The final week of every competition has a boosted bet limit, giving every team a chance to close the gap or extend their lead. The exact boosted amount is set by the competition host.' },
+          ],
+        },
+        {
+          category: 'Hosting at Your Venue',
+          icon: <Building2 className="w-4 h-4 text-brand-600" />,
+          items: [
+            { q: 'What does hosting cost my pub or club?', a: 'Nothing — hosting is free for venues. The prize pool is funded by team buy-ins, and the payout structure is agreed with you before the season starts.' },
+            { q: 'What does my staff need to do?', a: 'Almost nothing. Put up the QR poster so punters can join, and optionally show the live leaderboard on one of your screens. Bets, results and rankings are handled automatically.' },
+            { q: 'Is this compliant for a licensed venue?', a: 'Punting Club never takes or pays out wagers. Players bet with their own licensed bookmakers and upload their bet slips. All players are verified 18+ and weekly bet limits keep stakes controlled.' },
+            { q: 'How do I get a competition started?', a: 'Head to the For Venues page and submit the request form — it takes about two minutes. We confirm within 1–2 business days, and once approved your competition is created instantly with its join code.' },
           ],
         },
         {
