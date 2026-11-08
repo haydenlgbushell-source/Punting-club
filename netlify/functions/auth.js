@@ -19,6 +19,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// A fresh, throwaway client for signing a member in (or up) with a password.
+// signInWithPassword / signUp store the member's session on the client they're
+// called on, and supabase-js then sends that member's token on every later
+// query from the same client instead of the service-role key. Done on the
+// shared `supabase` client above, that made every query after a login run as
+// the member, which Row Level Security now blocks (login said "User profile
+// not found"), and on a warm function it leaked one member's session into the
+// next person's request. Never call these on the shared client.
+const sessionClient = () => createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+);
+
 // Normalise Australian mobile numbers to 04XXXXXXXX format
 const normalisePhone = (raw) => {
   const digits = (raw || '').replace(/\D/g, '');
@@ -258,7 +272,7 @@ exports.handler = async (event) => {
       if (existing) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number already registered.' }) };
 
       // Create Supabase auth user using phone-derived email (consistent with login)
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await sessionClient().auth.signUp({
         email:    authEmail,
         password,
       });
@@ -267,7 +281,7 @@ exports.handler = async (event) => {
         // Orphaned auth user: Supabase Auth has the account but the users table doesn't.
         // This happens when a previous signup partially failed. Try signing in with the
         // same credentials to recover the auth user ID and complete the registration.
-        const { data: recoveredSession, error: recoveryErr } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+        const { data: recoveredSession, error: recoveryErr } = await sessionClient().auth.signInWithPassword({ email: authEmail, password });
         if (recoveryErr || !recoveredSession?.user) {
           return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'This mobile number has a partial registration on file. Please contact support or try a different number.' }) };
         }
@@ -302,7 +316,7 @@ exports.handler = async (event) => {
       // Sign in to get a session token so frontend can persist the session
       let sessionData = null;
       try {
-        const { data: sd, error: signInErr } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+        const { data: sd, error: signInErr } = await sessionClient().auth.signInWithPassword({ email: authEmail, password });
         if (!signInErr) sessionData = sd;
       } catch(e) {}
 
@@ -390,7 +404,7 @@ exports.handler = async (event) => {
       const authEmail  = `${cleanPhone}@puntingclub.app`;
 
       // Step 1: Supabase auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+      const { data: authData, error: authError } = await sessionClient().auth.signInWithPassword({ email: authEmail, password });
       if (authError) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password. If you signed up with Google or Apple, use that button instead.' }) };
       if (!authData) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'Auth returned null' }) };
 
@@ -529,7 +543,7 @@ exports.handler = async (event) => {
       // any caller could reset any user's password by supplying their user ID.
       const { data: acct, error: acctErr } = await supabase.from('users').select('phone').eq('id', userId).maybeSingle();
       if (acctErr || !acct) return { statusCode: 404, headers: HEADERS, body: JSON.stringify({ error: 'User not found.' }) };
-      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      const { error: verifyErr } = await sessionClient().auth.signInWithPassword({
         email:    `${acct.phone}@puntingclub.app`,
         password: String(currentPassword),
       });
