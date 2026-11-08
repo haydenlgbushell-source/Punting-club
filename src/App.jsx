@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import Modal from './components/Modal.jsx';
+import MobileTabBar from './components/MobileTabBar.jsx';
 import Badge from './components/Badge.jsx';
 import LegDot from './components/LegDot.jsx';
 import PermissionBadge from './components/PermissionBadge.jsx';
@@ -40,6 +41,7 @@ export default function PuntingClub() {
   const [activeNav, setActiveNav] = useState('home');
   const [navHistory, setNavHistory] = useState([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showAccountSheet, setShowAccountSheet] = useState(false);
 
   // Auth
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -1636,74 +1638,25 @@ export default function PuntingClub() {
 
   return (
     <AppContext.Provider value={appContextValue}>
-    <div className="min-h-screen bg-stone-50 text-slate-900 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#F4F6F4] text-slate-900 font-sans overflow-x-hidden pb-20 md:pb-0">
 
-      {/* ── CAPTAIN JOIN REQUEST NOTIFICATION POPUP ─────────────────────── */}
-      {showJoinRequestNotif && joinRequestNotifs.length > 0 && (
-        <div className="fixed inset-0 bg-brand-950/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-brand-500/60 rounded-2xl w-full max-w-sm shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-300">
-              <div className="w-10 h-10 bg-brand-500/15 border border-brand-500/40 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Users className="w-5 h-5 text-brand-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="font-black text-slate-900 text-base leading-tight">
-                  New Join Request{joinRequestNotifs.length > 1 ? 's' : ''}
-                </h2>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  {joinRequestNotifs.length === 1
-                    ? 'Someone wants to join your team'
-                    : `${joinRequestNotifs.length} people want to join your team`}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowJoinRequestNotif(false)}
-                className="text-slate-500 hover:text-slate-900 transition-colors flex-shrink-0"
-                title="Dismiss (review later in My Team)"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Member list */}
-            <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
-              {joinRequestNotifs.map(member => (
-                <div key={member.user_id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-300">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500/30 to-brand-600/30 border border-brand-200 flex items-center justify-center font-black text-brand-600 text-sm flex-shrink-0">
-                    {(member.name || '?')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 text-sm truncate">{member.name || 'Unknown'}</p>
-                    <p className="text-slate-500 text-xs truncate">{member.phone || 'No phone'}</p>
-                  </div>
-                  <div className="flex gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => approveMember(member.user_id)}
-                      className="bg-green-500/20 hover:bg-green-500/35 border border-green-500/40 text-green-700 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-                    >
-                      ✓ Approve
-                    </button>
-                    <button
-                      onClick={() => rejectMember(member.user_id)}
-                      className="bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 text-red-700 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-                    >
-                      ✕ Decline
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div className="px-4 pb-4">
-              <button
-                onClick={() => { setShowJoinRequestNotif(false); navigateTo('team'); }}
-                className="w-full border border-gray-300 hover:border-gray-400 text-slate-600 hover:text-slate-900 py-2 rounded-xl text-xs font-semibold transition-all"
-              >
-                View My Team →
-              </button>
-            </div>
+      {/* ── CAPTAIN JOIN REQUEST BANNER (non-blocking) ───────────────────── */}
+      {showJoinRequestNotif && joinRequestNotifs.length > 0 && activeNav !== 'team' && (
+        <div className="fixed top-16 inset-x-0 z-40 px-3 pt-2 pointer-events-none">
+          <div role="status" className="pointer-events-auto max-w-xl mx-auto bg-amber-50 border border-amber-300 text-amber-900 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-lg">
+            <Users className="w-4 h-4 flex-shrink-0" />
+            <p className="flex-1 min-w-0 text-sm truncate">
+              {joinRequestNotifs.length === 1
+                ? <><strong>{joinRequestNotifs[0].name || 'Someone'}</strong> wants to join your team</>
+                : <><strong>{joinRequestNotifs.length} people</strong> want to join your team</>}
+            </p>
+            <button
+              onClick={() => { setShowJoinRequestNotif(false); navigateTo('team'); }}
+              className="text-sm font-bold whitespace-nowrap hover:underline"
+            >Review</button>
+            <button onClick={() => setShowJoinRequestNotif(false)} aria-label="Dismiss" className="p-1 -mr-1 opacity-70 hover:opacity-100">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -1843,18 +1796,29 @@ export default function PuntingClub() {
               )}
             </div>
 
-            {/* Mobile Hamburger */}
-            <button
+            {/* Mobile: avatar opens the account sheet when logged in */}
+            {isLoggedIn && (
+              <button
+                onClick={() => setShowAccountSheet(true)}
+                className="md:hidden w-9 h-9 rounded-full bg-gold-500 text-brand-950 text-sm font-black flex items-center justify-center"
+                aria-label="Account and teams"
+              >
+                {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
+              </button>
+            )}
+
+            {/* Mobile Hamburger (visitors) */}
+            {!isLoggedIn && <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden text-gray-400 hover:text-brand-300 p-2 rounded-lg hover:bg-white/5 transition-all duration-200"
               aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+            </button>}
           </div>
 
           {/* Mobile Menu */}
-          {mobileMenuOpen && (
+          {mobileMenuOpen && !isLoggedIn && (
             <div className="md:hidden border-t border-white/[0.06] bg-brand-950 pb-4">
               {/* Nav Links */}
               <div className="pt-2 space-y-0.5">
@@ -1929,6 +1893,7 @@ export default function PuntingClub() {
                   </>
                 ) : (
                   <>
+                    <button onClick={() => { window.dispatchEvent(new Event('pc:open-support')); setMobileMenuOpen(false); }} className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5">Help chat</button>
                     <button onClick={() => { setShowLoginModal(true); setMobileMenuOpen(false); }} className="w-full border border-white/10 text-gray-300 hover:text-white hover:border-white/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all">Login</button>
                     <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); setMobileMenuOpen(false); }} className="w-full bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-gold-500/20">Sign Up</button>
                   </>
@@ -4250,6 +4215,78 @@ export default function PuntingClub() {
       )}
 
       {/* ── SUPPORT CHAT ──────────────────────────────────────────────────────── */}
+      {/* ── ACCOUNT SHEET (phones) ───────────────────────────────────────── */}
+      {showAccountSheet && isLoggedIn && (
+        <Modal title="Your account" onClose={() => setShowAccountSheet(false)}>
+          <div className="p-5 space-y-4">
+            <button
+              onClick={() => { setShowAccountSheet(false); handleOpenProfile(); }}
+              className="w-full flex items-center gap-3 text-left"
+            >
+              <span className="w-11 h-11 rounded-full bg-gold-500 text-brand-950 font-black flex items-center justify-center">{currentUser?.firstName?.[0]?.toUpperCase() || '?'}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-bold text-slate-900 truncate">{[currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ')}</span>
+                <span className="block text-xs text-slate-500">Edit profile and password</span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            </button>
+
+            {allUserTeams.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Your teams</p>
+                <div className="space-y-2">
+                  {allUserTeams.map(t => {
+                    const isActive = viewedMyTeam?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => { switchActiveTeam(t); setShowAccountSheet(false); navigateTo('team'); }}
+                        className={`w-full grid grid-cols-[0.5rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 rounded-xl border text-left ${isActive ? 'border-gold-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}
+                      >
+                        <span className={`w-2 h-8 rounded-full ${isActive ? 'bg-gold-500' : 'bg-gray-200'}`} />
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-sm text-slate-900 truncate">{t.team_name}</span>
+                          <span className="block text-xs text-slate-500 truncate">{t.compName}</span>
+                        </span>
+                        {isActive ? <CheckCircle className="w-4 h-4 text-gold-600" /> : <span />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="divide-y divide-gray-100 border-t border-gray-100">
+              {viewedRole === 'captain' && (
+                <button onClick={() => { setShowAccountSheet(false); setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setPrivateCompLookup(null); setPrivateCompLookupError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setShowCreateTeamModal(true); }} className="w-full flex items-center justify-between py-3 text-sm font-semibold text-slate-800">
+                  Enter another competition <ChevronRight className="w-4 h-4 text-slate-400" />
+                </button>
+              )}
+              <button onClick={() => { setShowAccountSheet(false); navigateTo('competition'); }} className="w-full flex items-center justify-between py-3 text-sm font-semibold text-slate-800">
+                Rules <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+              <button onClick={() => { setShowAccountSheet(false); navigateTo('faq'); }} className="w-full flex items-center justify-between py-3 text-sm font-semibold text-slate-800">
+                FAQ <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+              <button onClick={() => { setShowAccountSheet(false); window.dispatchEvent(new Event('pc:open-support')); }} className="w-full flex items-center justify-between py-3 text-sm font-semibold text-slate-800">
+                Help chat <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+              <button onClick={() => { setShowAccountSheet(false); handleLogout(); }} className="w-full flex items-center gap-2 py-3 text-sm font-semibold text-red-700">
+                <LogOut className="w-4 h-4" /> Log out
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── BOTTOM TAB BAR (phones) ──────────────────────────────────────── */}
+      <MobileTabBar
+        activeNav={activeNav}
+        onNavigate={navigateTo}
+        onBet={() => isLoggedIn ? setShowBetAnalyzer(true) : (setSignupMode('create'), setShowSignupModal(true))}
+        teamBadge={viewedRole === 'captain' ? pendingMembers.length : 0}
+      />
+
       <SupportChat />
     </div>
     </AppContext.Provider>
