@@ -3930,8 +3930,9 @@ export default function PuntingClub() {
       )}
 
       {/* ── TOAST NOTIFICATIONS ───────────────────────────────────────────── */}
-      {toasts.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex flex-col-reverse gap-2 items-center w-full max-w-sm px-4 pointer-events-none">
+      {/* Always mounted so screen readers announce new toasts (live region). */}
+      {(
+        <div role="status" aria-live="polite" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex flex-col-reverse gap-2 items-center w-full max-w-sm px-4 pointer-events-none">
           {toasts.map(t => (
             <div key={t.id} className={`pointer-events-auto w-full flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold bc-toast
               ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :
