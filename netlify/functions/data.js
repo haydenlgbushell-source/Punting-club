@@ -385,13 +385,15 @@ exports.handler = async (event) => {
       }
 
       case 'finalise_team': {
-        const { teamId, depositPerMember } = payload;
+        const { teamId, depositPerMember, reopen } = payload;
         const actor = await getAuthUser(event);
         if (!actor) return error('Please log in again.', 401);
-        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can finalise the team.', 403);
+        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can finalise or re-open the team.', 403);
+        const perMember = parseInt(depositPerMember, 10);
+        if (!reopen && (!perMember || perMember <= 0 || perMember > 1_000_000)) return error('Invalid deposit amount.');
         const { data, error: e } = await supabase
           .from('teams')
-          .update({ finalised: true, deposit_per_member: depositPerMember })
+          .update(reopen ? { finalised: false, deposit_per_member: null } : { finalised: true, deposit_per_member: perMember })
           .eq('id', teamId).select().single();
         if (e) return error(e.message);
         return json(data);
@@ -482,11 +484,20 @@ exports.handler = async (event) => {
         if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can set the betting order.', 403);
         if (!Array.isArray(orderedUserIds)) return error('orderedUserIds must be an array.');
         if (orderedUserIds.length > 50) return error('Betting order cannot exceed 50 members.');
+        const { data: memberRows } = await supabase.from('team_members').select('user_id, role').eq('team_id', teamId);
+        const memberIds = new Set((memberRows || []).filter(m => m.role !== 'pending').map(m => m.user_id));
+        const ids = [...new Set(orderedUserIds)].filter(id => memberIds.has(id));
+        if (!ids.length) return error('None of those people are members of this team.');
         await supabase.from('betting_order').delete().eq('team_id', teamId);
-        const rows = orderedUserIds.map((userId, i) => ({ team_id: teamId, user_id: userId, position: i + 1 }));
+        const rows = ids.map((userId, i) => ({ team_id: teamId, user_id: userId, position: i + 1 }));
         const { error: e } = await supabase.from('betting_order').insert(rows);
         if (e) return error(e.message);
-        return json({ success: true });
+        // Mirror the position onto team_members so get_team_members returns the
+        // saved rotation order (that's what the app loads).
+        for (const [i, userId] of ids.entries()) {
+          await supabase.from('team_members').update({ betting_order: i + 1 }).eq('team_id', teamId).eq('user_id', userId);
+        }
+        return json({ success: true, saved: ids.length });
       }
 
       case 'create_additional_team': {

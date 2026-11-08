@@ -19,7 +19,7 @@ import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiDeleteTeam, apiFinaliseTeam,
-  apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
+  apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder, apiReopenTeam,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiDeleteUser, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
@@ -85,7 +85,14 @@ export default function PuntingClub() {
   // My Team
   const [pendingMembers, setPendingMembers] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [bettingOrder, setBettingOrder] = useState([]);
+  const [bettingOrder, setBettingOrder] = useState([]); // [{ user_id, name }] in rotation order
+  // Rotation from team members: active members who can bet, in the captain's saved
+  // order (team_members.betting_order), then anyone new at the end.
+  const orderFromMembers = (members) => (members || [])
+    .filter(m => m.role !== 'pending' && m.role !== 'view-only' && (m.can_bet || m.canBet) && m.user_id)
+    .map((m, i) => ({ user_id: m.user_id, name: m.name || 'Member', pos: m.betting_order ?? 1e6 + i }))
+    .sort((a, b) => a.pos - b.pos)
+    .map(({ user_id, name }) => ({ user_id, name }));
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [teamFinalised, setTeamFinalised] = useState(false);
@@ -229,7 +236,7 @@ export default function PuntingClub() {
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
-          const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+          const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet, betting_order: m.betting_order ?? null }));
           // Always ensure the logged-in user appears in the list
           const selfInList = mapped.some(m => m.user_id === user.id);
           if (!selfInList) {
@@ -237,7 +244,7 @@ export default function PuntingClub() {
           }
           setTeamMembers(mapped);
           const approved = mapped.filter(m => m.role !== 'pending');
-          if (approved.length > 0) setBettingOrder(approved.filter(m => m.can_bet || m.canBet).map(m => m.name));
+          if (approved.length > 0) setBettingOrder(orderFromMembers(mapped));
         } catch(e) { 
           // Fallback: at minimum show the logged-in user
           setTeamMembers([{ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone }]);
@@ -536,10 +543,9 @@ export default function PuntingClub() {
       dismissJoinNotif(userId);
       // Reload members from DB and rebuild betting order
       const members = await apiGetTeamMembers(currentTeamId);
-      const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+      const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet, betting_order: m.betting_order ?? null }));
       setTeamMembers(mapped);
-      const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
-      if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
+      setBettingOrder(orderFromMembers(mapped));
       showToast('Member approved!', 'success');
     } catch (err) { showToast(`Failed to approve member: ${err.message}`, 'error'); }
   };
@@ -553,10 +559,21 @@ export default function PuntingClub() {
   };
 
   const updateMemberRole = async (userId, role) => {
+    const before = teamMembers;
+    const next = teamMembers.map(m => m.user_id === userId ? { ...m, role, can_bet: role !== 'view-only', canBet: role !== 'view-only' } : m);
+    setTeamMembers(next);
+    setBettingOrder(prev => {
+      const fresh = orderFromMembers(next);
+      // keep the existing order, drop anyone who can no longer bet, append newcomers
+      const kept = prev.filter(p => fresh.some(f => f.user_id === p.user_id));
+      return [...kept, ...fresh.filter(f => !kept.some(k => k.user_id === f.user_id))];
+    });
     try {
-      setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role, can_bet: role !== 'view-only', canBet: role !== 'view-only' } : m));
       await apiUpdateMember(currentTeamId, userId, { role, can_bet: role !== 'view-only' });
-    } catch (err) { showToast(`Failed to update role: ${err.message}`, 'error'); }
+    } catch (err) {
+      setTeamMembers(before);
+      showToast(`Failed to update role: ${err.message}`, 'error');
+    }
   };
 
   const toggleCanBet = async (userId) => {
@@ -569,11 +586,15 @@ export default function PuntingClub() {
   };
 
   const toggleDepositPaid = async (userId) => {
-    const member = teamMembers.find(m => (m.user_id || m.phone) === userId);
-    const newVal = !(member?.deposit_paid ?? member?.depositPaid);
-    setTeamMembers(prev => prev.map(m => (m.user_id || m.phone) === userId ? { ...m, deposit_paid: newVal, depositPaid: newVal } : m));
+    const member = teamMembers.find(m => m.user_id === userId);
+    if (!member) return;
+    const newVal = !(member.deposit_paid ?? member.depositPaid);
+    setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, deposit_paid: newVal, depositPaid: newVal } : m));
     try { await apiUpdateMember(currentTeamId, userId, { deposit_paid: newVal }); }
-    catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
+    catch (err) {
+      setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, deposit_paid: !newVal, depositPaid: !newVal } : m));
+      showToast(`Failed to update deposit: ${err.message}`, 'error');
+    }
   };
 
   // Next Wednesday 12:00 midday cutoff (Sydney time, daylight-saving aware)
@@ -821,30 +842,48 @@ export default function PuntingClub() {
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
   // ── TEAM FINALISATION ─────────────────────────────────────────────────────
+  // Competition of the team being viewed (falls back to the user's primary one).
+  const teamCompetition = () =>
+    activeCompetitions.find(c => c.id && c.id === viewedMyTeam?.competition_id) ||
+    activeCompetitions.find(c => c.code === currentUser?.competitionCode) || null;
+  // Buy-in is stored in whole dollars on the competition.
+  const teamBuyIn = () => {
+    const comp = teamCompetition();
+    return comp ? (parseInt(String(comp.buy_in ?? '').replace(/[^0-9]/g, ''), 10) || 1000) : 1000;
+  };
+  // Members who share the buy-in: everyone approved (pending requests don't pay).
+  const activeMembers = () => teamMembers.filter(m => m.role !== 'pending');
+
   const finaliseTeam = async () => {
-    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
-    const totalBuyIn = comp
-      ? parseInt((comp.buy_in || comp.buyIn || '1000').toString().replace(/[^0-9]/g, '')) || 1000
-      : 1000;
-    const allMembers = teamMembers.length || 1;
-    const perMember  = Math.ceil(totalBuyIn / allMembers);
+    const teamId = currentTeamId || currentUser?.teamId;
+    if (!teamId) { showToast('No team selected.', 'warning'); return; }
+    const perMember = Math.ceil(teamBuyIn() / Math.max(1, activeMembers().length));
+    try {
+      await apiFinaliseTeam(teamId, perMember);
+    } catch (err) {
+      showToast(`Could not finalise the team: ${err.message}`, 'error');
+      return;
+    }
     setDepositPerMember(perMember);
     setTeamFinalised(true);
     setShowFinaliseModal(false);
-    // Persist to localStorage so refresh restores state before verify_session returns
     try {
       const saved = localStorage.getItem('pc_session');
       if (saved) { const s = JSON.parse(saved); localStorage.setItem('pc_session', JSON.stringify({ ...s, teamFinalised: true, depositPerMember: perMember })); }
     } catch(_) {}
-    try {
-      if (currentUser?.teamId) await apiFinaliseTeam(currentUser.teamId, perMember);
-    } catch (err) { console.error('Finalise save failed (local state still updated):', err); }
+    showToast('Team finalised — deposits are now due.', 'success');
   };
 
-  const unfinaliseTeam = () => {
+  const unfinaliseTeam = async () => {
+    const teamId = currentTeamId || currentUser?.teamId;
+    try {
+      if (teamId) await apiReopenTeam(teamId);
+    } catch (err) {
+      showToast(`Could not re-open the team: ${err.message}`, 'error');
+      return;
+    }
     setTeamFinalised(false);
     setDepositPerMember(null);
-    // Clear from localStorage too
     try {
       const saved = localStorage.getItem('pc_session');
       if (saved) { const s = JSON.parse(saved); localStorage.setItem('pc_session', JSON.stringify({ ...s, teamFinalised: false, depositPerMember: null })); }
@@ -1341,7 +1380,8 @@ export default function PuntingClub() {
     return teamsInViewedComp[0] || null;
   })();
   const myTeamName = (isLoggedIn && viewedMyTeam?.team_name) || currentUser?.teamName || '';
-  const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
+  // Match by id first (names can repeat across competitions); never fall back to another team.
+  const myTeamData = (viewedMyTeam?.id && leaderboardTeams.find(t => t.id === viewedMyTeam.id)) || (myTeamName && leaderboardTeams.find(t => t.team === myTeamName)) || null;
   // Role the current user holds in the actively viewed team — syncs automatically when teamMembers loads
   const viewedRole = (() => {
     if (!currentUser?.id || teamMembers.length === 0) return currentUser?.role || 'member';
@@ -1370,7 +1410,7 @@ export default function PuntingClub() {
     return calcCurrentWeek(comp.start_date) - 1; // 0-indexed for betting order rotation
   })();
   const currentWeekBettorIdx = currentWeekNum;
-  const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)];
+  const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)]?.name || null;
   const shareableLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://puntingclub.com'}?join=${currentUser?.teamCode || 'XXXXXX'}`;
 
   // Load team data when user logs in
@@ -1390,8 +1430,7 @@ export default function PuntingClub() {
         const pending = mapped.filter(m => m.role === 'pending');
         setPendingMembers(pending);
         // Populate betting order from active members who can bet (excludes pending + view-only)
-        const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
-        if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
+        setBettingOrder(orderFromMembers(mapped));
         // Show join-request popup for captains if there are already pending members
         if (currentUser?.role === 'captain' && pending.length > 0) {
           setJoinRequestNotifs(pending.map(m => ({ user_id: m.user_id, name: m.name, phone: m.phone })));
@@ -3421,12 +3460,12 @@ export default function PuntingClub() {
       {showOrderModal && (
         <Modal title="Betting Order" onClose={() => setShowOrderModal(false)}>
           <div className="p-5 space-y-4">
-            <p className="text-gray-400 text-sm">Set the rotation order for who places the bet each week. Drag to reorder (use the buttons below).</p>
+            <p className="text-gray-400 text-sm">Set the rotation order for who places the bet each week. Use the arrows to reorder.</p>
             <div className="space-y-2">
-              {bettingOrder.map((name, i) => (
-                <div key={name} className="flex items-center gap-3 bg-black/30 border border-white/8 rounded-lg px-3 py-2.5">
+              {bettingOrder.map((entry, i) => (
+                <div key={entry.user_id} className="flex items-center gap-3 bg-black/30 border border-white/8 rounded-lg px-3 py-2.5">
                   <span className="text-brand-300 font-bold text-sm w-6">{i+1}.</span>
-                  <span className="flex-1 text-sm font-semibold">{name}</span>
+                  <span className="flex-1 text-sm font-semibold">{entry.name}</span>
                   <div className="flex gap-1">
                     <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i > 0) [a[i-1],a[i]] = [a[i],a[i-1]]; return a; })} disabled={i === 0} className="text-gray-500 hover:text-brand-300 disabled:opacity-20 px-1.5 py-1 text-xs">↑</button>
                     <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i < a.length-1) [a[i],a[i+1]] = [a[i+1],a[i]]; return a; })} disabled={i === bettingOrder.length-1} className="text-gray-500 hover:text-brand-300 disabled:opacity-20 px-1.5 py-1 text-xs">↓</button>
@@ -3437,7 +3476,7 @@ export default function PuntingClub() {
             <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-xs text-gray-400">
               <strong className="text-brand-300">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
             </div>
-            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm">Save Order</button>
+            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder.map(e => e.user_id)); showToast('Betting order saved!', 'success'); setShowOrderModal(false); } catch(e) { showToast(`Could not save the betting order: ${e.message}`, 'error'); } }} className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm">Save Order</button>
           </div>
         </Modal>
       )}
@@ -3484,10 +3523,9 @@ export default function PuntingClub() {
             <div className="bg-green-950/20 border border-green-500/30 rounded-xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Deposit Calculation Preview</p>
               {(() => {
-                const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
-                const totalBuyIn = comp ? parseInt((comp.buyIn || '$1,000').replace(/[^0-9]/g, '')) || 1000 : 1000;
-                const confirmedMembers = teamMembers.filter(m => m.depositPaid).length;
-                const allMembers = teamMembers.length;
+                const totalBuyIn = teamBuyIn();
+                const confirmedMembers = activeMembers().filter(m => m.depositPaid).length;
+                const allMembers = Math.max(1, activeMembers().length);
                 const perMemberAll = Math.ceil(totalBuyIn / allMembers);
                 const perMemberConfirmed = confirmedMembers > 0 ? Math.ceil(totalBuyIn / confirmedMembers) : totalBuyIn;
                 return (

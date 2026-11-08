@@ -93,6 +93,7 @@ export const apiGetAllTeams   = (adminToken)    => call('data', { action: 'get_a
 export const apiUpdateTeam    = (teamId, updates, adminToken) => call('data', { action: 'update_team', teamId, updates, adminToken });
 export const apiDeleteTeam    = (teamId, adminToken)          => call('data', { action: 'delete_team', id: teamId, adminToken });
 export const apiFinaliseTeam  = (teamId, depositPerMember) => call('data', { action: 'finalise_team', teamId, depositPerMember });
+export const apiReopenTeam    = (teamId) => call('data', { action: 'finalise_team', teamId, reopen: true });
 
 // ── TEAM MEMBERS ─────────────────────────────────────────────
 export const apiGetTeamMembers    = (teamId)            => call('data', { action: 'get_team_members', teamId });
