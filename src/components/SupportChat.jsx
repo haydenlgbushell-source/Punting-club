@@ -59,6 +59,13 @@ const QUICK_ACTIONS = [
 const SupportChat = () => {
   const { isLoggedIn, currentUser, viewedRole, myTeamName, currentWeekNum, activeCompetitions } = useApp();
   const [open, setOpen] = useState(false);
+
+  // Other parts of the app (e.g. the phone account sheet) can open the chat.
+  useEffect(() => {
+    const openChat = () => setOpen(true);
+    window.addEventListener('pc:open-support', openChat);
+    return () => window.removeEventListener('pc:open-support', openChat);
+  }, []);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -141,7 +148,7 @@ const SupportChat = () => {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-brand-700 hover:bg-brand-600 text-white shadow-xl shadow-brand-900/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+          className="hidden fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-brand-700 hover:bg-brand-600 text-white shadow-xl shadow-brand-900/30 md:flex items-center justify-center transition-all hover:scale-105 active:scale-95"
           aria-label="Open support chat"
         >
           <MessageCircle className="w-6 h-6" />
@@ -150,7 +157,7 @@ const SupportChat = () => {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-50 w-[360px] max-w-[calc(100vw-2.5rem)] h-[520px] max-h-[calc(100vh-6rem)] bg-white border border-gray-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed z-[60] inset-x-2 top-20 bottom-2 md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:h-[520px] md:max-h-[calc(100vh-6rem)] bg-white border border-gray-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-brand-700 to-brand-600 px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2.5">

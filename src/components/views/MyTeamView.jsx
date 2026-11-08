@@ -5,6 +5,7 @@ import BetSlipCard from '../BetSlipCard.jsx';
 import PermissionBadge from '../PermissionBadge.jsx';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { formatAuDate } from '../../lib/auTime.js';
 
 const MyTeamView = ({
   teamFinalised, depositPerMember,
@@ -24,6 +25,7 @@ const MyTeamView = ({
   } = useApp();
 
   const [expandedPastBet, setExpandedPastBet] = useState(null);
+  const [openMember, setOpenMember] = useState(null); // member whose captain actions are showing
 
   return (
     <section className="pt-28 pb-16 px-4 sm:px-6">
@@ -86,9 +88,6 @@ const MyTeamView = ({
             {!teamFinalised && (
               <button onClick={() => setShowInviteModal(true)} className="bg-brand-500/10 border border-brand-200 hover:bg-brand-500/20 text-brand-600 px-3 py-2 rounded-lg text-xs font-semibold">Invite Member</button>
             )}
-            {viewedRole === 'captain' && teamFinalised && (
-              <button onClick={unfinaliseTeam} className="bg-gray-100 border border-gray-300 text-slate-500 px-3 py-2 rounded-lg text-xs font-semibold">Re-open Team</button>
-            )}
           </div>
         </div>
 
@@ -103,12 +102,12 @@ const MyTeamView = ({
           </div>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {[['Members', teamMembers.length, 'text-slate-900'], ['Total Won', myTeamData?.total || '$0', 'text-green-600'], ['Position', myTeamData?.rank ? `#${myTeamData.rank}` : '—', 'text-brand-600']].map(([l, v, c]) => (
-            <div key={l} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-              <p className="text-slate-500 text-xs mb-1">{l}</p>
-              <p className={`text-xl font-black ${c}`}>{v}</p>
+        {/* Season summary */}
+        <div className="grid grid-cols-3 gap-2 bg-brand-900 text-white rounded-2xl px-4 py-4 mb-4">
+          {[['Position', `#${myTeamData?.rank || 1}`], ['Total won', myTeamData?.total || '$0'], ['Members', teamMembers.length]].map(([l, v]) => (
+            <div key={l} className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wider font-bold text-brand-200">{l}</p>
+              <p className="font-display text-2xl sm:text-3xl font-extrabold leading-tight tabular-nums truncate">{v}</p>
             </div>
           ))}
         </div>
@@ -130,7 +129,7 @@ const MyTeamView = ({
         {/* Betting order tracker */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-brand-600 flex items-center gap-1.5"><Target className="w-4 h-4" /> Betting Order</h3>
+            <h3 className="font-bold text-slate-900 flex items-center gap-1.5"><Target className="w-4 h-4 text-brand-600" /> Betting order</h3>
             {viewedRole === 'captain' && <button onClick={() => setShowOrderModal(true)} className="text-slate-500 hover:text-brand-700 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>}
           </div>
           <div className="space-y-2">
@@ -160,7 +159,7 @@ const MyTeamView = ({
             const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
             return (
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-brand-600 flex items-center gap-1.5"><BarChart3 className="w-4 h-4" /> This Week's Bets</h3>
+                <h3 className="font-bold text-slate-900 flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-brand-600" /> This week's bet</h3>
                 {thisWeekBets.length > 0 && (
                   <button onClick={() => setShowBetAnalyzer(true)} className="text-xs font-semibold text-brand-600 hover:text-brand-700 border border-brand-200 hover:bg-brand-500/10 px-2.5 py-1.5 rounded-lg transition-all">+ Add Bet</button>
                 )}
@@ -195,65 +194,67 @@ const MyTeamView = ({
           })()}
         </div>
 
-        {/* Previous weeks bet history */}
+        {/* Previous weeks bet history — one line per bet, tap to see the legs */}
         {(() => {
           const pastBets = (myTeamData?.bets || [])
             .filter(b => b.weekNumber < currentWeekNum + 1 && b.weekNumber > 0)
             .sort((a, b) => b.weekNumber - a.weekNumber);
           if (!pastBets.length) return null;
           return (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
-              <h3 className="font-bold text-brand-600 mb-4 flex items-center gap-1.5"><History className="w-4 h-4" /> Previous Weeks</h3>
-              <div className="space-y-3">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 mb-5">
+              <h3 className="font-bold text-slate-900 mb-1 flex items-center gap-1.5"><History className="w-4 h-4 text-brand-600" /> Bet history</h3>
+              <ul className="divide-y divide-gray-100">
                 {pastBets.map((bet, i) => {
-                  const legs = bet.legs || [];
-                  const status = betStatus(legs, bet.overallStatus);
-                  const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'void' ? 'text-brand-600 bg-brand-500/15 border-brand-500/40' : 'text-slate-500 bg-gray-100 border-gray-300';
-                  const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'void' ? 'REFUNDED' : status === 'in_progress' ? 'LIVE' : 'PENDING';
-                  const isExpanded = expandedPastBet === (bet.id || i);
+                  const status = betStatus(bet.legs, bet.overallStatus);
+                  const key = bet.id || i;
+                  const isExpanded = expandedPastBet === key;
+                  const date = bet.submittedAtIso ? formatAuDate(bet.submittedAtIso) : '';
+                  const result = status === 'won'
+                    ? { amount: `+${bet.actualReturn || bet.estimatedReturn}`, label: 'Won', cls: 'text-green-700' }
+                    : status === 'lost'
+                    ? { amount: `−${bet.stake}`, label: 'Lost', cls: 'text-red-700' }
+                    : status === 'void'
+                    ? { amount: bet.stake, label: 'Refunded', cls: 'text-slate-500' }
+                    : { amount: bet.stake, label: status === 'in_progress' ? 'Live' : 'Pending', cls: 'text-slate-500' };
                   return (
-                    <div key={bet.id || i} className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-                      <div
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-100/60 transition-colors"
-                        onClick={() => setExpandedPastBet(isExpanded ? null : (bet.id || i))}
+                    <li key={key}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedPastBet(isExpanded ? null : key)}
+                        aria-expanded={isExpanded}
+                        className="w-full grid grid-cols-[2.25rem_minmax(0,1fr)_auto_1rem] items-center gap-3 py-3 text-left"
                       >
-                        <div className="w-9 h-9 rounded-lg bg-brand-50 border border-brand-200 flex items-center justify-center flex-shrink-0">
-                          <span className="text-brand-600 font-black text-xs">W{bet.weekNumber}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-slate-900 text-sm font-semibold">{bet.type || 'Multi'}</span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded border ${resultCls}`}>{resultLabel}</span>
-                            {bet.submittedBy && (
-                              <span className="text-xs text-slate-500 bg-gray-100 border border-gray-300 rounded px-2 py-0.5 inline-flex items-center gap-1"><User className="w-3 h-3" /> {bet.submittedBy}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5">
-                            <span className="text-slate-500 text-xs">Stake: <span className="text-slate-700">{bet.stake}</span></span>
-                            {(status === 'won' || status === 'void') && <span className="text-green-400 text-xs font-semibold">{status === 'void' ? 'Refund' : 'Return'}: {bet.actualReturn || bet.estimatedReturn}{bet.returnReduced ? ' (void leg)' : ''}</span>}
-                            <span className="text-slate-400 text-xs">{bet.submittedAt}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); shareBet(bet); }}
-                            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand-700 border border-gray-300 hover:border-brand-200 bg-gray-100 hover:bg-brand-500/8 px-3 py-1.5 rounded-lg transition-all"
-                            title="Share this bet"
-                          >
-                            <Share2 className="w-3 h-3" /> Share
-                          </button>
-                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        </div>
-                      </div>
+                        <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-slate-900 font-black text-xs">W{bet.weekNumber}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-slate-900 truncate">{bet.type || 'Multi'}{bet.submittedBy ? ` · ${bet.submittedBy}` : ''}</span>
+                          <span className="block text-xs text-slate-500 truncate">{[date, `${bet.stake} stake`].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        <span className={`text-right tabular-nums ${result.cls}`}>
+                          <span className="block text-sm font-extrabold">{result.amount}</span>
+                          <span className="block text-[10px] font-bold uppercase tracking-wide">{result.label}</span>
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
                       {isExpanded && (
-                        <div className="border-t border-gray-200">
-                          <BetSlipCard bet={bet} compact onCheckBet={null} />
+                        <div className="pb-3">
+                          <div className="border border-gray-200 rounded-xl overflow-hidden">
+                            <BetSlipCard bet={bet} compact onCheckBet={null} />
+                          </div>
+                          <div className="flex justify-end mt-2">
+                            <button
+                              type="button"
+                              onClick={() => shareBet(bet)}
+                              className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-brand-700 border border-gray-300 px-3 py-1.5 rounded-lg"
+                            >
+                              <Share2 className="w-3 h-3" /> Share bet
+                            </button>
+                          </div>
                         </div>
                       )}
-                    </div>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             </div>
           );
         })()}
@@ -280,72 +281,96 @@ const MyTeamView = ({
         )}
 
         {/* Team members */}
-        <div className={`border rounded-xl p-5 ${teamFinalised ? 'bg-green-50 border-green-500/20' : 'bg-white border-gray-200'}`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              {teamFinalised && <CheckCircle className="w-4 h-4 text-green-400" />}
-              <h3 className={`font-bold flex items-center gap-1.5 ${teamFinalised ? 'text-green-400' : 'text-brand-600'}`}><Users className="w-4 h-4" /> Team Members</h3>
-              {teamFinalised && depositPerMember && (
-                <span className="text-xs bg-green-500/15 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full font-semibold">${depositPerMember.toLocaleString()} / member</span>
+        {(() => {
+          const paidCount = teamMembers.filter(m => m.depositPaid).length;
+          const owingCount = teamMembers.length - paidCount;
+          const showMoney = teamFinalised && depositPerMember;
+          return (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-bold text-slate-900 flex items-center gap-1.5"><Users className="w-4 h-4 text-brand-600" /> Members</h3>
+                <div className="flex items-center gap-2">
+                  {showMoney && <span className="text-xs text-slate-500 whitespace-nowrap">${depositPerMember.toLocaleString('en-AU')} each</span>}
+                  {teamFinalised && viewedRole === 'captain' && (
+                    <button type="button" onClick={unfinaliseTeam} className="text-slate-500 hover:text-slate-700 text-xs border border-gray-300 px-2 py-1 rounded-lg whitespace-nowrap">Re-open</button>
+                  )}
+                </div>
+              </div>
+
+              {showMoney && teamMembers.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600">{paidCount} of {teamMembers.length} paid · ${(paidCount * depositPerMember).toLocaleString('en-AU')} collected</span>
+                    {owingCount === 0
+                      ? <span className="text-green-700 font-bold flex items-center gap-1"><Sparkles className="w-3 h-3" /> All paid</span>
+                      : <span className="text-red-700 font-bold whitespace-nowrap">${(owingCount * depositPerMember).toLocaleString('en-AU')} owing</span>}
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-100 mt-1.5 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={teamMembers.length} aria-valuenow={paidCount} aria-label="Members paid">
+                    <div className="h-full bg-gold-500 rounded-full" style={{ width: `${(paidCount / teamMembers.length) * 100}%` }} />
+                  </div>
+                </div>
               )}
+
+              <ul className="divide-y divide-gray-100 mt-2">
+                {teamMembers.map(m => {
+                  const id = m.user_id || m.phone;
+                  const canManage = viewedRole === 'captain' && m.role !== 'captain';
+                  const isOpen = openMember === id;
+                  const initials = (m.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                  return (
+                    <li key={id} className="py-3">
+                      <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3">
+                        <span className="w-9 h-9 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center font-bold text-xs">{initials}</span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-slate-900 flex items-center gap-1.5">
+                            <span className="truncate">{m.name}</span>
+                            {m.role === 'captain' && <Crown className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" aria-label="Captain" />}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <PermissionBadge role={m.role} />
+                            {m.depositPaid
+                              ? <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">Paid</span>
+                              : <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700">{showMoney ? `$${depositPerMember.toLocaleString('en-AU')} owing` : 'Not paid'}</span>}
+                          </div>
+                        </div>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => setOpenMember(isOpen ? null : id)}
+                            aria-expanded={isOpen}
+                            aria-label={`Manage ${m.name}`}
+                            className="w-9 h-9 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 font-black tracking-widest"
+                          >⋯</button>
+                        ) : <span />}
+                      </div>
+                      {canManage && isOpen && (
+                        <div className="mt-3 ml-12 flex flex-wrap items-center gap-2">
+                          <label className="text-xs text-slate-500" htmlFor={`role-${id}`}>Role</label>
+                          <select
+                            id={`role-${id}`}
+                            value={m.role}
+                            onChange={e => updateMemberRole(m.user_id, e.target.value)}
+                            className="bg-white border border-gray-300 text-slate-700 text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand-500"
+                          >
+                            <option value="member">Member (can bet)</option>
+                            <option value="view-only">View only</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => toggleDepositPaid(m.user_id)}
+                            className={`text-sm font-semibold px-3 py-1.5 rounded-lg border ${m.depositPaid ? 'border-gray-300 text-slate-600 hover:bg-gray-50' : 'border-green-600 bg-green-600 text-white hover:bg-green-700'}`}
+                          >
+                            {m.depositPaid ? 'Mark as not paid' : 'Mark as paid'}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
-            {teamFinalised && viewedRole === 'captain' && (
-              <button onClick={unfinaliseTeam} className="text-slate-400 hover:text-slate-500 text-xs border border-gray-300 px-2 py-1 rounded-lg">Re-open</button>
-            )}
-          </div>
-          <div className="space-y-2">
-            {teamMembers.map(m => (
-              <div key={m.user_id || m.phone} className={`rounded-xl px-3 py-3 flex items-start gap-3 ${teamFinalised ? (m.depositPaid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200') : 'bg-gray-50'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${teamFinalised ? (m.depositPaid ? 'bg-green-500 text-black' : 'bg-red-500/20 border border-red-500/40 text-red-400') : 'bg-brand-500/20 border border-brand-200 text-brand-600'}`}>
-                  {teamFinalised ? (m.depositPaid ? '✓' : '!') : (m.name || '?').charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-semibold text-sm truncate">{m.name}</p>
-                    {m.role === 'captain' && <Crown className="w-3.5 h-3.5 text-brand-600 flex-shrink-0" />}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <PermissionBadge role={m.role} />
-                    {teamFinalised && depositPerMember ? (
-                      m.depositPaid
-                        ? <span className="text-green-400 text-xs font-bold flex items-center gap-0.5"><CheckCircle className="w-3 h-3" />${depositPerMember.toLocaleString()} paid</span>
-                        : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3" />Unpaid — ${depositPerMember.toLocaleString()} owing</span>
-                    ) : (
-                      m.depositPaid
-                        ? <span className="text-green-400 text-xs flex items-center gap-0.5"><CheckCircle className="w-3 h-3" />Deposit paid</span>
-                        : <span className="text-red-400 text-xs flex items-center gap-0.5"><AlertCircle className="w-3 h-3" />Deposit pending</span>
-                    )}
-                    {m.canBet && m.role !== 'view-only' && <span className="text-brand-600 text-xs">Can bet</span>}
-                  </div>
-                </div>
-                {viewedRole === 'captain' && m.role !== 'captain' && (
-                  <div className="flex gap-1 flex-shrink-0">
-                    <select value={m.role} onChange={e => updateMemberRole(m.user_id, e.target.value)} className="bg-gray-50 border border-gray-300 text-slate-700 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-brand-500/50">
-                      <option value="member">Member</option>
-                      <option value="view-only">View Only</option>
-                    </select>
-                    <button onClick={() => toggleDepositPaid(m.user_id)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
-                      {m.depositPaid ? 'Mark Unpaid' : 'Mark Paid'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {/* Payment summary */}
-          {teamFinalised && depositPerMember && teamMembers.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-green-500/15 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-slate-500">{teamMembers.filter(m => m.depositPaid).length} of {teamMembers.length} paid</p>
-                <p className="text-xs text-slate-400 mt-0.5">Collected: <span className="text-green-400 font-bold">${(teamMembers.filter(m => m.depositPaid).length * depositPerMember).toLocaleString()}</span></p>
-              </div>
-              {teamMembers.every(m => m.depositPaid)
-                ? <span className="bg-green-500 text-black text-xs font-black px-3 py-1 rounded-full flex items-center gap-1"><Sparkles className="w-3 h-3" /> All Paid!</span>
-                : <span className="text-xs text-red-400">{teamMembers.filter(m => !m.depositPaid).length} still owing</span>
-              }
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
     </section>
   );

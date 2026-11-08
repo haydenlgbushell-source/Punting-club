@@ -91,3 +91,19 @@ export function ageOn(dobStr, now = new Date(), timeZone = APP_TZ) {
   if (mo < Number(m[2]) || (mo === Number(m[2]) && d < Number(m[3]))) age--;
   return age;
 }
+
+// Short Australian date/time for history lists, e.g. "Fri 30 Oct, 2:00 pm".
+export function formatAuDateTime(value, timeZone = APP_TZ) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-AU', {
+    timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+  }).format(d).replace(/^(\w{3}),/, '$1');
+}
+
+// Short Australian date, e.g. "Fri 30 Oct".
+export function formatAuDate(value, timeZone = APP_TZ) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-AU', { timeZone, weekday: 'short', day: 'numeric', month: 'short' }).format(d).replace(/^(\w{3}),/, '$1');
+}
