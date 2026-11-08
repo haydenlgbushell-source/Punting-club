@@ -40,6 +40,7 @@ const DELAYS = {
 // ── Time helpers (shared with the app; DST-correct) ─────────────────────────
 const { zonedToUtcMs, todayInTz } = require('../../../src/lib/auTime.js');
 const { storedOverallStatus } = require('../../../src/lib/betMath.js');
+const { notifyBetsWon } = require('./push');
 
 function daysApart(a, b) {
   const ta = Date.parse(`${String(a).slice(0, 10)}T00:00:00Z`);
@@ -577,14 +578,16 @@ async function settleRun({ supabase, apiKey, betId = null, log = console.log }) 
     }
   }
 
+  const newlyWon = [];
   for (const bid of touchedBets) {
     const { bet, legs } = betLegs.get(bid);
     const next = overallFromLegs(legs);
     if (next !== bet.overall_status) {
       const { error: e } = await supabase.from('bets').update({ overall_status: next }).eq('id', bid);
-      if (!e) summary.betsUpdated++;
+      if (!e) { summary.betsUpdated++; if (next === 'won') newlyWon.push(bid); }
     }
   }
+  if (newlyWon.length) await notifyBetsWon(supabase, newlyWon, { log: L });
 
   if (flagged.length) {
     await supabase.from('admin_notifications').insert({
