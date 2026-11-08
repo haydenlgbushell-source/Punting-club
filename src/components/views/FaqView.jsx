@@ -1,24 +1,13 @@
 import React from 'react';
 import { CUTOFF_TEXT } from '../../lib/auTime.js';
-import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, ChevronDown, ChevronLeft } from 'lucide-react';
+import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, ChevronDown } from 'lucide-react';
+import { Page, PageHeader, BackButton, Card, btn } from '../ui.jsx';
 
 const FaqView = ({ navHistory, goBack, navigateTo }) => (
-  <section className="pt-28 pb-16 px-4 sm:px-6">
-    <div className="max-w-3xl mx-auto">
-      {navHistory.length > 0 && (
-        <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-brand-700 text-sm font-semibold mb-6 transition-colors group">
-          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
-        </button>
-      )}
+  <Page width="max-w-3xl">
+      {navHistory.length > 0 && <BackButton onClick={goBack} />}
 
-      <div className="mb-10">
-        <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/25 rounded-full px-4 py-1.5 mb-4">
-          <HelpCircle className="w-3.5 h-3.5 text-brand-600" />
-          <span className="text-brand-600 text-xs font-bold tracking-widest uppercase">Help Centre</span>
-        </div>
-        <h1 className="text-4xl font-black mb-2">Frequently Asked Questions</h1>
-        <p className="text-slate-500">Everything you need to know about using Punting Club.</p>
-      </div>
+      <PageHeader eyebrow="Help centre" title="Questions and answers" subtitle="Everything you need to know about using Punting Club." />
 
       {[
         {
@@ -84,15 +73,15 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
       ].map(({ category, icon, items }) => (
         <div key={category} className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-full bg-brand-50 flex items-center justify-center flex-shrink-0">
               {icon}
             </div>
-            <h2 className="text-lg font-black text-slate-900">{category}</h2>
+            <h2 className="text-xl font-bold text-slate-900">{category}</h2>
           </div>
-          <div className="space-y-2">
+          <Card className="divide-y divide-gray-100 overflow-hidden">
             {items.map(({ q, a }) => (
-              <details key={q} className="group bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-100/50 transition-colors">
+              <details key={q} className="group">
+                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50 transition-colors">
                   <span className="text-sm font-semibold text-slate-900">{q}</span>
                   <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0 group-open:rotate-180 transition-transform duration-200" />
                 </summary>
@@ -101,24 +90,19 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
                 </div>
               </details>
             ))}
-          </div>
+          </Card>
         </div>
       ))}
 
-      <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-6 text-center mt-8">
-        <h3 className="font-bold text-lg mb-1 text-slate-900">Still have questions?</h3>
-        <p className="text-slate-500 text-sm mb-4">Use the chat assistant in the bottom-right corner for instant help, or check the full rules.</p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <button
-            onClick={() => navigateTo('competition')}
-            className="bg-brand-700 hover:bg-brand-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
-          >
-            View Full Rules
-          </button>
+      <div className="bg-brand-900 text-white rounded-2xl p-6 text-center mt-8">
+        <h3 className="font-display font-bold text-2xl mb-1">Still have questions?</h3>
+        <p className="text-brand-100 text-sm mb-4">Ask the help chat for an instant answer, or read the full rules.</p>
+        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+          <button onClick={() => window.dispatchEvent(new Event('pc:open-support'))} className={btn.primary}>Open help chat</button>
+          <button onClick={() => navigateTo('competition')} className="inline-flex items-center justify-center border border-white/25 hover:border-white/50 text-white font-semibold rounded-full px-5 py-2.5 text-sm">Read the rules</button>
         </div>
       </div>
-    </div>
-  </section>
+  </Page>
 );
 
 export default FaqView;

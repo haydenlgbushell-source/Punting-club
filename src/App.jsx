@@ -1654,38 +1654,17 @@ export default function PuntingClub() {
     <AppContext.Provider value={appContextValue}>
     <div className="min-h-screen bg-[#F4F6F4] text-slate-900 font-sans overflow-x-hidden pb-20 md:pb-0">
 
-      {/* ── CAPTAIN JOIN REQUEST BANNER (non-blocking) ───────────────────── */}
-      {showJoinRequestNotif && joinRequestNotifs.length > 0 && activeNav !== 'team' && (
-        <div className="fixed top-16 inset-x-0 z-40 px-3 pt-2 pointer-events-none">
-          <div role="status" className="pointer-events-auto max-w-xl mx-auto bg-amber-50 border border-amber-300 text-amber-900 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-lg">
-            <Users className="w-4 h-4 flex-shrink-0" />
-            <p className="flex-1 min-w-0 text-sm truncate">
-              {joinRequestNotifs.length === 1
-                ? <><strong>{joinRequestNotifs[0].name || 'Someone'}</strong> wants to join your team</>
-                : <><strong>{joinRequestNotifs.length} people</strong> want to join your team</>}
-            </p>
-            <button
-              onClick={() => { setShowJoinRequestNotif(false); navigateTo('team'); }}
-              className="text-sm font-bold whitespace-nowrap hover:underline"
-            >Review</button>
-            <button onClick={() => setShowJoinRequestNotif(false)} aria-label="Dismiss" className="p-1 -mr-1 opacity-70 hover:opacity-100">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ── NAV ─────────────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 w-full bg-brand-950/95 backdrop-blur-md border-b border-white/[0.06] z-50">
+      <nav className="sticky top-0 w-full bg-brand-950 border-b border-white/[0.06] z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
 
             {/* Logo */}
             <div className="flex items-center gap-2.5 cursor-pointer group flex-shrink-0" onClick={() => { setActiveNav('home'); setNavHistory([]); }}>
-              <div className="w-8 h-8 rounded-lg bg-brand-500/15 border border-brand-500/25 flex items-center justify-center group-hover:bg-brand-600/25 transition-all duration-200">
-                <Sparkles className="w-4 h-4 text-gold-400" />
+              <div className="w-8 h-8 rounded-lg bg-gold-500 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-brand-950" />
               </div>
-              <span className="text-lg font-black tracking-wide bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 bg-clip-text text-transparent">PUNTING CLUB</span>
+              <span className="font-display text-xl font-bold tracking-wide text-white">PUNTING CLUB</span>
             </div>
 
             {/* Desktop Nav Links */}
@@ -1693,7 +1672,7 @@ export default function PuntingClub() {
               {[
                 ['home',        'Home',        <Home className="w-3.5 h-3.5" />],
                 ['competition', 'Rules',       <BookOpen className="w-3.5 h-3.5" />],
-                ['leaderboard', 'Leaderboard', <Trophy className="w-3.5 h-3.5" />],
+                ['leaderboard', 'Ladder',      <Trophy className="w-3.5 h-3.5" />],
                 ['weekly',      'Summary',     <BarChart3 className="w-3.5 h-3.5" />],
                 ['team',        'My Team',     <Users className="w-3.5 h-3.5" />],
                 ['faq',         'FAQ',         <HelpCircle className="w-3.5 h-3.5" />],
@@ -1701,18 +1680,16 @@ export default function PuntingClub() {
                 <button
                   key={key}
                   onClick={() => navigateTo(key)}
-                  className={`relative px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                    activeNav === key
-                      ? 'text-gold-400 bg-white/5 border border-gold-500/20'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
+                  className={`relative h-16 px-3 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeNav === key ? 'text-white' : 'text-white/60 hover:text-white'
                   }`}
                 >
-                  {icon}{label}
+                  {label}
                   {activeNav === key && (
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-brand-500 rounded-full" />
+                    <span className="absolute bottom-0 left-3 right-3 h-[3px] rounded-t bg-gold-500" />
                   )}
                   {key === 'team' && pendingMembers.length > 0 && viewedRole === 'captain' && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
+                    <span className="min-w-[18px] h-[18px] px-1 bg-gold-500 rounded-full text-brand-950 text-[10px] flex items-center justify-center font-bold leading-none">{pendingMembers.length}</span>
                   )}
                 </button>
               ))}
@@ -1723,7 +1700,7 @@ export default function PuntingClub() {
                   {unreadNotifs > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold">{unreadNotifs}</span>}
                 </button>
               ) : (
-                <button onClick={() => setShowAdminLogin(true)} className="p-2 rounded-lg text-gray-400 hover:text-gray-200 transition-all border border-transparent" title="Admin login">
+                <button onClick={() => setShowAdminLogin(true)} className="p-2 rounded-lg text-white/30 hover:text-white/70 transition-colors" title="Admin login" aria-label="Admin login">
                   <Lock className="w-3 h-3" />
                 </button>
               )}
@@ -1737,28 +1714,28 @@ export default function PuntingClub() {
                   <div className="relative mr-1">
                     <div
                       onClick={() => allUserTeams.length > 1 ? setShowTeamSwitcher(p => !p) : handleOpenProfile()}
-                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:border-brand-200 hover:bg-white/[0.07] transition-all duration-200"
+                      className="flex items-center gap-2.5 pl-1.5 pr-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] cursor-pointer transition-colors"
                       title={allUserTeams.length > 1 ? 'Switch team' : 'Edit profile'}
                     >
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-[11px] font-black flex-shrink-0">
+                      <div className="w-7 h-7 rounded-full bg-gold-500 flex items-center justify-center text-brand-950 text-[11px] font-black flex-shrink-0">
                         {currentUser?.firstName?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div className="leading-tight min-w-0 max-w-[140px]">
-                        <p className="text-brand-300 text-[11px] font-bold leading-tight flex items-center gap-1 truncate">
+                        <p className="text-white text-xs font-semibold leading-tight flex items-center gap-1 truncate">
                           {myTeamName || currentUser?.teamName}
-                          {viewedRole === 'captain' && <Crown className="w-2.5 h-2.5 text-brand-300 flex-shrink-0" />}
+                          {viewedRole === 'captain' && <Crown className="w-3 h-3 text-gold-400 flex-shrink-0" />}
                         </p>
-                        <p className="text-gray-500 text-[11px] leading-tight flex items-center gap-1 truncate">
-                          {currentUser?.firstName} · <PermissionBadge role={viewedRole} />
+                        <p className="text-white/50 text-[11px] leading-tight truncate">
+                          {currentUser?.firstName} · {viewedRole === 'captain' ? 'Captain' : viewedRole === 'viewer' ? 'View only' : 'Member'}
                         </p>
                       </div>
-                      {allUserTeams.length > 1 && <ChevronDown className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform duration-200 ${showTeamSwitcher ? 'rotate-180' : ''}`} />}
+                      {allUserTeams.length > 1 && <ChevronDown className={`w-3 h-3 text-white/50 flex-shrink-0 transition-transform duration-200 ${showTeamSwitcher ? 'rotate-180' : ''}`} />}
                     </div>
                     {/* Team switcher dropdown */}
                     {showTeamSwitcher && allUserTeams.length > 1 && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowTeamSwitcher(false)} />
-                        <div className="absolute top-full right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
+                        <div className="absolute top-full right-0 mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 min-w-[200px] overflow-hidden">
                           <div className="px-3 pt-2.5 pb-1.5">
                             <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-wider">Switch Team</p>
                           </div>
@@ -1788,24 +1765,24 @@ export default function PuntingClub() {
                   {viewedRole === 'captain' && (
                   <button
                     onClick={() => { setCreateTeamForm({ teamName: currentUser?.teamName || '', competitionCode: '', buyInMode: 'split' }); setCreateTeamError(null); setJoinTeamCode(''); setJoinTeamError(null); setJoinTeamSuccess(null); setTeamModalTab('create'); setPrivateCompLookup(null); setPrivateCompLookupError(null); setShowCreateTeamModal(true); }}
-                    className="bg-brand-500/10 hover:bg-brand-500/20 border border-brand-200 hover:border-brand-500/50 text-brand-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap"
+                    className="text-white/80 hover:text-white border border-white/20 hover:border-white/40 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
                   >
-                    + New Competition
+                    + Competition
                   </button>
                   )}
                   <button
                     onClick={handleLogout}
                     title="Logout"
                     aria-label="Logout"
-                    className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:bg-red-500/8 border border-transparent hover:border-red-500/15 flex-shrink-0"
+                    className="flex items-center gap-1.5 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors flex-shrink-0"
                   >
-                    <LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Logout</span>
+                    <LogOut className="w-4 h-4" />
                   </button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => setShowLoginModal(true)} className="text-gray-400 hover:text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:bg-white/5 border border-transparent">Login</button>
-                  <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 shadow-lg shadow-gold-500/20">Sign Up</button>
+                  <button onClick={() => setShowLoginModal(true)} className="text-white/80 hover:text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors">Log in</button>
+                  <button onClick={() => { setSignupMode('create'); setShowSignupModal(true); }} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2 rounded-full text-sm font-bold transition-colors">Sign up</button>
                 </>
               )}
             </div>
@@ -1918,6 +1895,28 @@ export default function PuntingClub() {
         </div>
       </nav>
 
+      {/* ── CAPTAIN JOIN REQUEST BANNER (non-blocking) ───────────────────── */}
+      {showJoinRequestNotif && joinRequestNotifs.length > 0 && activeNav !== 'team' && (
+        <div className="px-3 sm:px-6 pt-3">
+          <div role="status" className="max-w-5xl mx-auto bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-2.5 flex items-center gap-3">
+            <Users className="w-4 h-4 flex-shrink-0" />
+            <p className="flex-1 min-w-0 text-sm truncate">
+              {joinRequestNotifs.length === 1
+                ? <><strong>{joinRequestNotifs[0].name || 'Someone'}</strong> wants to join your team</>
+                : <><strong>{joinRequestNotifs.length} people</strong> want to join your team</>}
+            </p>
+            <button
+              onClick={() => { setShowJoinRequestNotif(false); navigateTo('team'); }}
+              className="text-sm font-bold whitespace-nowrap hover:underline"
+            >Review</button>
+            <button onClick={() => setShowJoinRequestNotif(false)} aria-label="Dismiss" className="p-1 -mr-1 opacity-70 hover:opacity-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+
       {/* ── HOME ──────────────────────────────────────────────────────────── */}
       {activeNav === 'home' && (
         <HomeView
@@ -1972,25 +1971,30 @@ export default function PuntingClub() {
         </ErrorBoundary>
       )}
 
+      {/* ── FAQ ───────────────────────────────────────────────────────────────── */}
+      {activeNav === 'faq' && (
+        <FaqView navHistory={navHistory} goBack={goBack} navigateTo={navigateTo} />
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════
           ADMIN PANEL
       ══════════════════════════════════════════════════════════════════ */}
       {showAdminPanel && isAdminLoggedIn && <ErrorBoundary variant="section" label="Admin Panel">{(() => {
         // ── Admin sub-components (inline) ──────────────────────────────
-        const AdminCard = ({ title, value, sub, icon, color = 'text-brand-300' }) => (
-          <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.10)"}}>
+        const AdminCard = ({ title, value, sub, icon, color = 'text-brand-700' }) => (
+          <div className="rounded-xl p-5 flex items-start gap-4 hover:scale-[1.01] transition-transform" style={{backgroundColor:"#FFFFFF",border:"1px solid #E5E7EB"}}>
             <div className={`${color} flex-shrink-0 mt-0.5`}>{icon}</div>
             <div className="min-w-0 flex-1">
-              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+              <p className="text-slate-600 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
               <p className={`text-3xl font-black ${color} leading-none mb-1`}>{value}</p>
-              {sub && <p className="text-gray-500 text-xs leading-relaxed">{sub}</p>}
+              {sub && <p className="text-slate-500 text-xs leading-relaxed">{sub}</p>}
             </div>
           </div>
         );
 
         const StatusPill = ({ s }) => {
-          const m = { verified:'bg-green-500/20 text-green-400 border-green-500/40', pending:'bg-brand-500/20 text-brand-300 border-brand-500/40', suspended:'bg-red-500/20 text-red-400 border-red-500/40', rejected:'bg-red-500/20 text-red-400 border-red-500/40', active:'bg-green-500/20 text-green-400 border-green-500/40', won:'bg-green-500/20 text-green-400 border-green-500/40', lost:'bg-red-500/20 text-red-400 border-red-500/40' };
-          return <span className={`border text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${m[s] || 'bg-gray-500/20 text-gray-400 border-gray-500/40'}`}>{s}</span>;
+          const m = { verified:'bg-green-500/20 text-green-700 border-green-500/40', pending:'bg-brand-500/20 text-brand-700 border-brand-500/40', suspended:'bg-red-500/20 text-red-700 border-red-500/40', rejected:'bg-red-500/20 text-red-700 border-red-500/40', active:'bg-green-500/20 text-green-700 border-green-500/40', won:'bg-green-500/20 text-green-700 border-green-500/40', lost:'bg-red-500/20 text-red-700 border-red-500/40' };
+          return <span className={`border text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${m[s] || 'bg-gray-500/20 text-slate-600 border-gray-500/40'}`}>{s}</span>;
         };
 
         const tabs = [
@@ -2017,39 +2021,39 @@ export default function PuntingClub() {
         const filteredBets = (betFilters.find(f => f[0] === adminBetFilter) || betFilters[3])[2];
 
         return (
-          <section className="text-gray-100" style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
+          <section className="text-slate-900" style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#F4F6F4",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
             {/* Admin top bar */}
-            <div style={{backgroundColor:"#0f172a",borderBottom:"1px solid rgba(239,68,68,0.25)",position:"sticky",top:0,zIndex:10}} className="px-6 py-3 flex items-center justify-between">
+            <div style={{backgroundColor:"#FFFFFF",borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:10}} className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2.5">
-                  <Shield className="w-5 h-5 text-red-400" />
-                  <span className="font-black text-red-400 text-base tracking-wide">ADMIN PANEL</span>
-                  <span style={{backgroundColor:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",fontSize:"11px",padding:"2px 10px",borderRadius:"999px",fontWeight:700,textTransform:"capitalize"}}>{adminUser.role}</span>
+                  <span className="w-7 h-7 rounded-lg bg-brand-900 flex items-center justify-center"><Shield className="w-4 h-4 text-gold-400" /></span>
+                  <span className="font-display font-bold text-brand-900 text-lg tracking-wide">ADMIN</span>
+                  <span style={{backgroundColor:"#FBF6E6",border:"1px solid #E9B22D",color:"#7A5A06",fontSize:"11px",padding:"2px 10px",borderRadius:"999px",fontWeight:700,textTransform:"capitalize"}}>{adminUser.role}</span>
                 </div>
-                <div className="hidden sm:flex items-center gap-2 text-gray-500 text-sm">
+                <div className="hidden sm:flex items-center gap-2 text-slate-500 text-sm">
                   <span>·</span>
                   <span>{adminUser.name}</span>
                 </div>
                 <button
                   onClick={() => setShowAdminPanel(false)}
-                  style={{backgroundColor:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"#94a3b8",padding:"4px 12px",borderRadius:"8px",fontSize:"12px",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}
+                  style={{backgroundColor:"#FFFFFF",border:"1px solid #D1D5DB",color:"#334155",padding:"4px 12px",borderRadius:"8px",fontSize:"12px",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:"6px",whiteSpace:"nowrap"}}
                   title="Return to user view (stay logged in as admin)"
                 >
-                  ← Back to Site
+                  ← Site
                 </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative" data-notif-panel>
-                  <button onClick={() => setShowNotifPanel(p => !p)} className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                  <button onClick={() => setShowNotifPanel(p => !p)} className="relative p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-gray-50 transition-colors">
                     <Bell className="w-4 h-4" />
                     {unreadNotifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"/>}
                   </button>
                   {showNotifPanel && (
-                    <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,width:'340px',backgroundColor:'#0f172a',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'12px',boxShadow:'0 20px 60px rgba(0,0,0,0.6)',zIndex:100,maxHeight:'480px',display:'flex',flexDirection:'column'}}>
-                      <div style={{padding:'12px 16px',borderBottom:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-                        <span style={{fontWeight:700,fontSize:'13px',color:'#f1f5f9'}}>Notifications {unreadNotifs > 0 && <span style={{backgroundColor:'#ef4444',color:'white',borderRadius:'999px',padding:'1px 7px',fontSize:'11px',marginLeft:'6px'}}>{unreadNotifs}</span>}</span>
+                    <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,width:'340px',backgroundColor:'#FFFFFF',border:'1px solid #E5E7EB',borderRadius:'12px',boxShadow:'0 20px 50px rgba(15,31,23,0.18)',zIndex:100,maxHeight:'480px',display:'flex',flexDirection:'column'}}>
+                      <div style={{padding:'12px 16px',borderBottom:'1px solid #E5E7EB',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+                        <span style={{fontWeight:700,fontSize:'13px',color:'#0f172a'}}>Notifications {unreadNotifs > 0 && <span style={{backgroundColor:'#ef4444',color:'white',borderRadius:'999px',padding:'1px 7px',fontSize:'11px',marginLeft:'6px'}}>{unreadNotifs}</span>}</span>
                         {unreadNotifs > 0 && (
-                          <button onClick={() => { markAllNotifsRead(); }} style={{fontSize:'11px',color:'#60a5fa',background:'none',border:'none',cursor:'pointer',padding:0}}>Mark all read</button>
+                          <button onClick={() => { markAllNotifsRead(); }} style={{fontSize:'11px',color:'#1F4F38',background:'none',border:'none',cursor:'pointer',padding:0}}>Mark all read</button>
                         )}
                       </div>
                       <div style={{overflowY:'auto',flex:1}}>
@@ -2076,9 +2080,9 @@ export default function PuntingClub() {
                             onMouseLeave={e => e.currentTarget.style.backgroundColor= n.read ? 'transparent' : 'rgba(255,255,255,0.03)'}
                           >
                             <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
-                              <span style={{flexShrink:0,marginTop:'1px',display:'flex',alignItems:'center'}}>{n.notifType === 'new_team' ? <Trophy style={{width:15,height:15,color:'#f59e0b'}} /> : n.notifType === 'competition_request' ? <Building2 style={{width:15,height:15,color:'#60a5fa'}} /> : <Bell style={{width:15,height:15,color:'#9ca3af'}} />}</span>
+                              <span style={{flexShrink:0,marginTop:'1px',display:'flex',alignItems:'center'}}>{n.notifType === 'new_team' ? <Trophy style={{width:15,height:15,color:'#f59e0b'}} /> : n.notifType === 'competition_request' ? <Building2 style={{width:15,height:15,color:'#1F4F38'}} /> : <Bell style={{width:15,height:15,color:'#9ca3af'}} />}</span>
                               <div style={{flex:1,minWidth:0}}>
-                                <p style={{fontSize:'12px',fontWeight:n.read ? 500 : 700,color: n.read ? '#9ca3af' : '#f1f5f9',marginBottom:'2px',lineHeight:'1.4'}}>{n.msg}</p>
+                                <p style={{fontSize:'12px',fontWeight:n.read ? 500 : 700,color: n.read ? '#9ca3af' : '#0f172a',marginBottom:'2px',lineHeight:'1.4'}}>{n.msg}</p>
                                 {n.detail && <p style={{fontSize:'11px',color:'#6b7280',lineHeight:'1.4',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{n.detail}</p>}
                                 <p style={{fontSize:'10px',color:'#4b5563',marginTop:'4px'}}>{n.time}</p>
                               </div>
@@ -2090,40 +2094,40 @@ export default function PuntingClub() {
                     </div>
                   )}
                 </div>
-                <div className="hidden sm:block text-gray-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
-                {adminLoading && <span className="text-xs text-brand-300 animate-pulse">Loading...</span>}
-                {adminLoadError && <span className="text-xs text-red-400 max-w-xs truncate" title={adminLoadError}>⚠ {adminLoadError}</span>}
-                <button onClick={() => refreshAdminData(adminToken)} className="text-gray-500 hover:text-gray-300 p-1.5 rounded-lg hover:bg-white/5" title="Refresh data">
+                <div className="hidden sm:block text-slate-700 text-xs">{new Date().toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}</div>
+                {adminLoading && <span className="text-xs text-brand-700 animate-pulse">Loading...</span>}
+                {adminLoadError && <span className="text-xs text-red-700 max-w-xs truncate" title={adminLoadError}>⚠ {adminLoadError}</span>}
+                <button onClick={() => refreshAdminData(adminToken)} className="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-gray-50" title="Refresh data">
                   <RefreshCw className={`w-3.5 h-3.5 ${adminLoading ? 'animate-spin' : ''}`} />
                 </button>
-                <button onClick={handleAdminLogout} style={{backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#f87171",padding:"6px 14px",borderRadius:"8px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>Logout</button>
+                <button onClick={handleAdminLogout} style={{backgroundColor:"#FFFFFF",border:"1px solid #D1D5DB",color:"#B42318",padding:"6px 14px",borderRadius:"8px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>Logout</button>
               </div>
             </div>
 
             <div className="flex">
               {/* Sidebar */}
-              <aside style={{backgroundColor:"#0f172a",borderRight:"1px solid rgba(255,255,255,0.07)",paddingTop:"20px",width:"220px",flexShrink:0,position:"sticky",top:"52px",alignSelf:"flex-start",height:"calc(100vh - 52px)",overflowY:"auto"}} className="hidden md:flex flex-col">
+              <aside style={{backgroundColor:"#FFFFFF",borderRight:"1px solid #E5E7EB",paddingTop:"20px",width:"220px",flexShrink:0,position:"sticky",top:"52px",alignSelf:"flex-start",height:"calc(100vh - 52px)",overflowY:"auto"}} className="hidden md:flex flex-col">
                 <div className="px-3 mb-3">
-                  <p className="text-gray-600 text-xs font-bold uppercase tracking-widest px-1 mb-2">Navigation</p>
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest px-1 mb-2">Navigation</p>
                 </div>
                 <nav className="space-y-0.5 px-2">
                   {tabs.map(t => (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} style={adminTab === t.id ? {backgroundColor:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontWeight:700} : {border:"1px solid transparent",color:"#9ca3af"}} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 transition-all hover:bg-white/5 hover:text-white`}>
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} style={adminTab === t.id ? {backgroundColor:"#DCEDE2",border:"1px solid transparent",color:"#123424",fontWeight:700} : {border:"1px solid transparent",color:"#475569"}} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 transition-all hover:bg-gray-50 hover:text-slate-900`}>
                       <span className="text-base w-5 text-center flex-shrink-0">{t.icon}</span>
                       <span>{t.label}</span>
-                      {adminTab === t.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0"/>}
+                      {adminTab === t.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-gold-500 flex-shrink-0"/>}
                     </button>
                   ))}
                 </nav>
                 {/* Notif list */}
                 {adminNotifs.filter(n => !n.read).length > 0 && (
                   <div className="mt-6 px-2">
-                    <p className="text-gray-600 text-xs uppercase tracking-wider px-2 mb-2">Alerts</p>
+                    <p className="text-slate-500 text-xs uppercase tracking-wider px-2 mb-2">Alerts</p>
                     <div className="space-y-1">
                       {adminNotifs.filter(n => !n.read).slice(0, 3).map(n => (
-                        <div key={n.id} onClick={() => markNotifRead(n.id)} className={`px-2 py-2 rounded-lg cursor-pointer text-xs border ${n.type === 'warning' ? 'border-brand-500/20 bg-brand-500/5 text-brand-300' : n.type === 'error' ? 'border-red-500/20 bg-red-500/5 text-red-400' : n.type === 'success' ? 'border-green-500/20 bg-green-500/5 text-green-400' : 'border-brand-500/20 bg-brand-500/5 text-brand-300'}`}>
+                        <div key={n.id} onClick={() => markNotifRead(n.id)} className={`px-2 py-2 rounded-lg cursor-pointer text-xs border ${n.type === 'warning' ? 'border-brand-500/20 bg-brand-500/5 text-brand-700' : n.type === 'error' ? 'border-red-500/20 bg-red-500/5 text-red-700' : n.type === 'success' ? 'border-green-500/20 bg-green-500/5 text-green-700' : 'border-brand-500/20 bg-brand-500/5 text-brand-700'}`}>
                           <p className="font-semibold leading-tight">{n.msg}</p>
-                          <p className="text-gray-600 mt-0.5">{n.time}</p>
+                          <p className="text-slate-500 mt-0.5">{n.time}</p>
                         </div>
                       ))}
                     </div>
@@ -2137,7 +2141,7 @@ export default function PuntingClub() {
                 {/* Mobile tab bar */}
                 <div style={{WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}} className="md:hidden flex gap-1 overflow-x-auto pb-2 mb-4">
                   {tabs.map(t => (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${adminTab === t.id ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/5 text-gray-400'}`}>
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${adminTab === t.id ? 'bg-brand-100 text-brand-900 border border-brand-200' : 'bg-white text-slate-600 border border-gray-200'}`}>
                       {t.icon} {t.label}
                     </button>
                   ))}
@@ -2145,9 +2149,9 @@ export default function PuntingClub() {
 
                 {/* Global search */}
                 <div className="relative mb-5">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/40" />
-                  {adminSearch && <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white"><X className="w-4 h-4"/></button>}
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search teams, users, bets…" className="w-full bg-white border border-gray-300 rounded-lg pl-9 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-red-500/40" />
+                  {adminSearch && <button onClick={() => setAdminSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"><X className="w-4 h-4"/></button>}
                 </div>
 
                 {/* ── DASHBOARD ───────────────────────────────────────────── */}
@@ -2156,42 +2160,42 @@ export default function PuntingClub() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-2xl font-black mb-1">Dashboard</h2>
-                        <p className="text-gray-500 text-sm">Overview · {(() => { const ac = adminComps.find(c => c.status === 'active') || adminComps[0]; if (!ac?.start_date) return ''; const wk = calcCurrentWeek(ac.start_date); const tot = ac.weeks || '?'; return `Week ${wk} of ${tot} · `; })()}{new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
+                        <p className="text-slate-500 text-sm">Overview · {(() => { const ac = adminComps.find(c => c.status === 'active') || adminComps[0]; if (!ac?.start_date) return ''; const wk = calcCurrentWeek(ac.start_date); const tot = ac.weeks || '?'; return `Week ${wk} of ${tot} · `; })()}{new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long' })}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/5 border border-white/8 px-3 py-2 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 bg-white border border-gray-300 px-3 py-2 rounded-lg">
                         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"/>
                         Live
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-brand-300" />
-                      <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-brand-300"  />
-                      <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-400" />
-                      <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-brand-300"/>
+                      <AdminCard title="Total Teams"    value={adminTeams.length}  sub={`${adminTeams.filter(t=>t.status==='verified').length} verified · ${adminTeams.filter(t=>t.status==='pending').length} pending`}  icon={<Users className="w-7 h-7"/>}      color="text-brand-700" />
+                      <AdminCard title="Total Users"    value={adminUsers.length}  sub={`${adminUsers.filter(u=>u.kyc==='pending').length} KYC pending · ${adminUsers.filter(u=>u.kyc==='verified').length} verified`}    icon={<UserCheck className="w-7 h-7"/>}  color="text-brand-700"  />
+                      <AdminCard title="Bets This Week" value={adminBets.length}   sub={`${adminBets.filter(b=>b.flagged).length} flagged · ${adminBets.filter(b=>b.status==='won'||b.overall_status==='won').length} won`} icon={<FileText className="w-7 h-7"/>}   color="text-green-700" />
+                      <AdminCard title="Competitions"   value={adminComps.length}  sub={`${adminComps.filter(c=>c.status==='active').length} active · ${adminComps.filter(c=>c.status==='pending').length} pending`}       icon={<Trophy className="w-7 h-7"/>}     color="text-brand-700"/>
                     </div>
 
                     {/* Pending notifications panel on dashboard */}
                     {adminNotifs.filter(n => !n.read).length > 0 && (
-                      <div className="bg-white/5 border border-brand-500/20 rounded-xl p-5">
+                      <div className="bg-white border border-brand-500/20 rounded-xl p-5">
                         <div className="flex items-center justify-between mb-3">
-                          <h3 className="font-bold text-brand-300 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-brand-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
-                          <button onClick={markAllNotifsRead} className="text-xs text-brand-300 hover:text-brand-300">Mark all read</button>
+                          <h3 className="font-bold text-brand-700 flex items-center gap-2"><Bell className="w-4 h-4"/>Unread Notifications <span className="bg-brand-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminNotifs.filter(n => !n.read).length}</span></h3>
+                          <button onClick={markAllNotifsRead} className="text-xs text-brand-700 hover:text-brand-800">Mark all read</button>
                         </div>
                         <div className="space-y-2">
                           {adminNotifs.filter(n => !n.read).slice(0, 5).map(n => (
                             <div
                               key={n.id}
                               onClick={() => { markNotifRead(n.id); if (n.notifType === 'new_team') setAdminTab('teams'); else if (n.notifType === 'competition_request') setAdminTab('competitions'); }}
-                              className="flex items-start gap-3 bg-black/30 rounded-lg px-3 py-2.5 cursor-pointer hover:bg-black/50 transition-colors"
+                              className="flex items-start gap-3 bg-gray-50 rounded-lg px-3 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors"
                             >
-                              <span className="flex-shrink-0 flex items-center">{n.notifType === 'new_team' ? <Trophy className="w-4 h-4 text-brand-300" /> : n.notifType === 'competition_request' ? <Building2 className="w-4 h-4 text-brand-300" /> : <Bell className="w-4 h-4 text-gray-400" />}</span>
+                              <span className="flex-shrink-0 flex items-center">{n.notifType === 'new_team' ? <Trophy className="w-4 h-4 text-brand-700" /> : n.notifType === 'competition_request' ? <Building2 className="w-4 h-4 text-brand-700" /> : <Bell className="w-4 h-4 text-slate-600" />}</span>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-white">{n.msg}</p>
-                                {n.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.detail}</p>}
-                                <p className="text-xs text-gray-600 mt-1">{n.time}</p>
+                                <p className="text-sm font-semibold text-slate-900">{n.msg}</p>
+                                {n.detail && <p className="text-xs text-slate-500 mt-0.5 truncate">{n.detail}</p>}
+                                <p className="text-xs text-slate-500 mt-1">{n.time}</p>
                               </div>
-                              <span className="text-xs text-brand-300 flex-shrink-0 mt-0.5">{n.notifType === 'new_team' ? 'View →' : 'Review →'}</span>
+                              <span className="text-xs text-brand-700 flex-shrink-0 mt-0.5">{n.notifType === 'new_team' ? 'View →' : 'Review →'}</span>
                             </div>
                           ))}
                         </div>
@@ -2202,31 +2206,31 @@ export default function PuntingClub() {
                     <div className="grid lg:grid-cols-2 gap-4">
                     {/* Flagged items */}
                     {(adminBets.some(b=>b.flagged) || adminTeams.some(t=>t.flagged) || adminUsers.some(u=>u.flagged)) && (
-                      <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-5">
-                        <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Flagged Items Requiring Attention</h3>
+                      <div className="bg-red-50 border border-red-500/30 rounded-xl p-5">
+                        <h3 className="font-bold text-red-700 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Flagged Items Requiring Attention</h3>
                         <div className="space-y-2">
                           {adminBets.filter(b=>b.flagged).map(b => (
-                            <div key={b.id} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2">
+                            <div key={b.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                               <div>
-                                <p className="text-sm font-semibold text-red-300">Bet {b.id} — {b.team}</p>
-                                <p className="text-xs text-gray-500">Stake: {b.stake} · AI confidence: {b.aiConfidence != null ? `${b.aiConfidence}%` : 'N/A'} · {b.valid ? '' : '⚠ Invalid submission'}</p>
+                                <p className="text-sm font-semibold text-red-700">Bet {b.id} — {b.team}</p>
+                                <p className="text-xs text-slate-500">Stake: {b.stake} · AI confidence: {b.aiConfidence != null ? `${b.aiConfidence}%` : 'N/A'} · {b.valid ? '' : '⚠ Invalid submission'}</p>
                               </div>
                               <div className="flex gap-2">
-                                <button onClick={() => confirmBetResult(b.id,'won')}  className="bg-green-500/20 border border-green-500/40 text-green-400 px-2 py-1 rounded text-xs font-semibold">Won</button>
-                                <button onClick={() => confirmBetResult(b.id,'lost')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2 py-1 rounded text-xs font-semibold">Lost</button>
-                                <button onClick={() => rejectBet(b.id,'Invalid stake')} className="bg-gray-500/20 border border-gray-500/40 text-gray-400 px-2 py-1 rounded text-xs font-semibold">Reject</button>
+                                <button onClick={() => confirmBetResult(b.id,'won')}  className="bg-green-500/20 border border-green-500/40 text-green-700 px-2 py-1 rounded text-xs font-semibold">Won</button>
+                                <button onClick={() => confirmBetResult(b.id,'lost')} className="bg-red-500/20 border border-red-500/40 text-red-700 px-2 py-1 rounded text-xs font-semibold">Lost</button>
+                                <button onClick={() => rejectBet(b.id,'Invalid stake')} className="bg-gray-500/20 border border-gray-500/40 text-slate-600 px-2 py-1 rounded text-xs font-semibold">Reject</button>
                               </div>
                             </div>
                           ))}
                           {adminUsers.filter(u=>u.flagged).map(u => (
-                            <div key={u.phone} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2">
+                            <div key={u.phone} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                               <div>
-                                <p className="text-sm font-semibold text-red-300">{u.name}</p>
-                                <p className="text-xs text-gray-500">KYC: {u.kyc} · {u.phone}</p>
+                                <p className="text-sm font-semibold text-red-700">{u.name}</p>
+                                <p className="text-xs text-slate-500">KYC: {u.kyc} · {u.phone}</p>
                               </div>
                               <div className="flex gap-2">
-                                <button onClick={() => setKycStatus(u.phone,'verified')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2 py-1 rounded text-xs">Verify</button>
-                                <button onClick={() => setKycStatus(u.phone,'rejected')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2 py-1 rounded text-xs">Reject</button>
+                                <button onClick={() => setKycStatus(u.phone,'verified')} className="bg-green-500/20 border border-green-500/40 text-green-700 px-2 py-1 rounded text-xs">Verify</button>
+                                <button onClick={() => setKycStatus(u.phone,'rejected')} className="bg-red-500/20 border border-red-500/40 text-red-700 px-2 py-1 rounded text-xs">Reject</button>
                               </div>
                             </div>
                           ))}
@@ -2236,18 +2240,18 @@ export default function PuntingClub() {
 
                     {/* KYC pending */}
                     {adminUsers.some(u => u.kyc === 'pending') && (
-                      <div className="bg-white/5 border border-brand-500/20 rounded-xl p-5">
-                        <h3 className="font-bold text-brand-300 mb-3 flex items-center gap-2"><Clock className="w-4 h-4"/>KYC Pending Review</h3>
+                      <div className="bg-white border border-brand-500/20 rounded-xl p-5">
+                        <h3 className="font-bold text-brand-700 mb-3 flex items-center gap-2"><Clock className="w-4 h-4"/>KYC Pending Review</h3>
                         <div className="space-y-2">
                           {adminUsers.filter(u => u.kyc === 'pending').map(u => (
-                            <div key={u.phone} className="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2.5">
+                            <div key={u.phone} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
                               <div>
                                 <p className="text-sm font-semibold">{u.name}</p>
-                                <p className="text-xs text-gray-500">{u.phone} · {u.team} · DOB: {u.dob}</p>
+                                <p className="text-xs text-slate-500">{u.phone} · {u.team} · DOB: {u.dob}</p>
                               </div>
                               <div className="flex gap-2">
-                                <button onClick={() => setKycStatus(u.phone,'verified')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify</button>
-                                <button onClick={() => setKycStatus(u.phone,'rejected')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✗ Reject</button>
+                                <button onClick={() => setKycStatus(u.phone,'verified')} className="bg-green-500/20 border border-green-500/40 text-green-700 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify</button>
+                                <button onClick={() => setKycStatus(u.phone,'rejected')} className="bg-red-500/20 border border-red-500/40 text-red-700 px-2.5 py-1 rounded-lg text-xs font-semibold">✗ Reject</button>
                               </div>
                             </div>
                           ))}
@@ -2257,28 +2261,28 @@ export default function PuntingClub() {
                     </div>{/* end two-col grid */}
 
                     {/* Recent activity */}
-                    <div className="rounded-xl p-5" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.08)"}}>
+                    <div className="rounded-xl p-5" style={{backgroundColor:"#FFFFFF",border:"1px solid #E5E7EB"}}>
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-white flex items-center gap-2"><Activity className="w-4 h-4 text-brand-300"/>Recent Activity</h3>
-                        <button onClick={() => setAdminTab('audit')} className="text-xs text-brand-300 hover:text-brand-300">View all →</button>
+                        <h3 className="font-bold text-slate-900 flex items-center gap-2"><Activity className="w-4 h-4 text-brand-700"/>Recent Activity</h3>
+                        <button onClick={() => setAdminTab('audit')} className="text-xs text-brand-700 hover:text-brand-800">View all →</button>
                       </div>
                       <div className="space-y-0">
                         {adminAuditLog.slice(0, 8).map((e, i) => (
-                          <div key={i} className="flex items-start gap-3 py-2.5 border-b border-white/5 last:border-0">
+                          <div key={i} className="flex items-start gap-3 py-2.5 border-b border-gray-300 last:border-0">
                             <div className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                               <div className="w-2 h-2 rounded-full bg-brand-500"/>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white font-medium"><span className="text-brand-300">{e.action}</span>{e.target ? ` — ${e.target}` : ''}</p>
-                              {e.detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{e.detail}</p>}
+                              <p className="text-sm text-slate-900 font-medium"><span className="text-brand-700">{e.action}</span>{e.target ? ` — ${e.target}` : ''}</p>
+                              {e.detail && <p className="text-xs text-slate-500 mt-0.5 truncate">{e.detail}</p>}
                             </div>
                             <div className="text-right flex-shrink-0 ml-2">
-                              <p className="text-xs text-gray-500 whitespace-nowrap">{e.ts}</p>
-                              <span className="text-xs text-gray-700 capitalize bg-white/5 px-1.5 py-0.5 rounded mt-0.5 inline-block">{e.adminRole}</span>
+                              <p className="text-xs text-slate-500 whitespace-nowrap">{e.ts}</p>
+                              <span className="text-xs text-slate-700 capitalize bg-white px-1.5 py-0.5 rounded mt-0.5 inline-block">{e.adminRole}</span>
                             </div>
                           </div>
                         ))}
-                        {adminAuditLog.length === 0 && <p className="text-gray-600 text-sm text-center py-4">No activity yet</p>}
+                        {adminAuditLog.length === 0 && <p className="text-slate-500 text-sm text-center py-4">No activity yet</p>}
                       </div>
                     </div>
                   </div>
@@ -2290,16 +2294,16 @@ export default function PuntingClub() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-xl font-black">Teams</h2>
-                        <p className="text-gray-500 text-sm">{adminTeams.length} registered · {adminTeams.filter(t=>t.status==='pending').length} pending</p>
+                        <p className="text-slate-500 text-sm">{adminTeams.length} registered · {adminTeams.filter(t=>t.status==='pending').length} pending</p>
                       </div>
-                      <button onClick={() => refreshAdminData(adminToken)} className="bg-white/5 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5">
+                      <button onClick={() => refreshAdminData(adminToken)} className="bg-white border border-gray-300 text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5">
                         <RefreshCw className="w-3 h-3" /> Refresh
                       </button>
                     </div>
                     <div className="space-y-2">
                       {filteredTeams.length === 0 && (
-                        <div className="text-center py-12 text-gray-600">
-                          <Trophy className="w-10 h-10 text-gray-700 mb-2 mx-auto" />
+                        <div className="text-center py-12 text-slate-500">
+                          <Trophy className="w-10 h-10 text-slate-700 mb-2 mx-auto" />
                           <p className="font-semibold">No teams registered yet</p>
                           <p className="text-sm mt-1">Teams will appear here after signup.</p>
                         </div>
@@ -2308,7 +2312,7 @@ export default function PuntingClub() {
                         const isExpanded = expandedTeamId === t.id;
                         const pendingCount = (t.memberList || []).filter(m => m.role === 'pending').length;
                         return (
-                        <div key={t.id} className={`bg-white/5 border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-white/8'}`}>
+                        <div key={t.id} className={`bg-white border rounded-xl overflow-hidden ${t.flagged ? 'border-red-500/40' : t.status === 'verified' ? 'border-green-500/15' : t.status === 'suspended' ? 'border-red-500/20' : 'border-gray-300'}`}>
                           {/* ── Team header row ── */}
                           <div className="p-4">
                             <div className="flex items-start justify-between gap-3">
@@ -2316,39 +2320,39 @@ export default function PuntingClub() {
                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                                   <p className="font-bold text-sm">{t.name}</p>
                                   <StatusPill s={t.status} />
-                                  {t.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
+                                  {t.flagged && <span className="text-red-700 text-xs font-bold">🚩 Flagged</span>}
                                   {pendingCount > 0 && (
-                                    <span className="bg-brand-500/20 border border-brand-500/40 text-brand-300 text-xs font-bold px-2 py-0.5 rounded-full">
+                                    <span className="bg-brand-500/20 border border-brand-500/40 text-brand-700 text-xs font-bold px-2 py-0.5 rounded-full">
                                       {pendingCount} pending
                                     </span>
                                   )}
                                 </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gray-500">
-                                  <span>Captain: <span className="text-gray-300">{t.captain}</span></span>
-                                  <span>Members: <span className="text-gray-300">{t.members}</span></span>
-                                  <span>Deposits: <span className={t.depositsPaid === t.members ? 'text-green-400' : 'text-brand-300'}>{t.depositsPaid}/{t.members}</span></span>
-                                  <span>Comp: <span className="text-gray-300">{t.compCode || '—'}</span></span>
-                                  <span>Created: <span className="text-gray-300">{t.createdAt}</span></span>
-                                  <span>Total Bet: <span className="text-green-400 font-semibold">{t.totalBet}</span></span>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs text-slate-500">
+                                  <span>Captain: <span className="text-slate-700">{t.captain}</span></span>
+                                  <span>Members: <span className="text-slate-700">{t.members}</span></span>
+                                  <span>Deposits: <span className={t.depositsPaid === t.members ? 'text-green-700' : 'text-brand-700'}>{t.depositsPaid}/{t.members}</span></span>
+                                  <span>Comp: <span className="text-slate-700">{t.compCode || '—'}</span></span>
+                                  <span>Created: <span className="text-slate-700">{t.createdAt}</span></span>
+                                  <span>Total Bet: <span className="text-green-700 font-semibold">{t.totalBet}</span></span>
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1.5 flex-shrink-0">
                                 {t.status === 'pending' && canAdmin('bets') && (
-                                  <button onClick={() => verifyTeam(t.id)} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify</button>
+                                  <button onClick={() => verifyTeam(t.id)} className="bg-green-500/20 border border-green-500/40 text-green-700 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify</button>
                                 )}
                                 {t.status !== 'suspended' && canAdmin('bets') && (
-                                  <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
+                                  <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-700 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
                                 )}
                                 {t.status === 'suspended' && canAdmin('bets') && (
-                                  <button onClick={() => verifyTeam(t.id)} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
+                                  <button onClick={() => verifyTeam(t.id)} className="bg-brand-500/20 border border-brand-500/40 text-brand-700 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
                                 )}
-                                <button onClick={() => flagTeam(t.id)} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:text-brand-300 px-2.5 py-1 rounded-lg text-xs">🚩</button>
+                                <button onClick={() => flagTeam(t.id)} className="bg-brand-500/10 border border-brand-500/20 text-brand-700 hover:text-brand-800 px-2.5 py-1 rounded-lg text-xs">🚩</button>
                                 {adminUser?.role === 'owner' && (
-                                  <button onClick={() => deleteTeam(t.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-300 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
+                                  <button onClick={() => deleteTeam(t.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-800 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
                                 )}
                                 <button
                                   onClick={() => setExpandedTeamId(isExpanded ? null : t.id)}
-                                  className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                                  className="bg-white hover:bg-gray-50 border border-gray-300 text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
                                 >
                                   {isExpanded ? '▲ Hide' : '▼ Members'}
                                 </button>
@@ -2358,50 +2362,50 @@ export default function PuntingClub() {
 
                           {/* ── Expanded member list ── */}
                           {isExpanded && (
-                            <div className="border-t border-white/8 bg-black/20">
+                            <div className="border-t border-gray-300 bg-gray-50">
                               <div className="px-4 py-3 flex items-center justify-between">
-                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Team Members ({t.memberList?.length || 0})</span>
+                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Team Members ({t.memberList?.length || 0})</span>
                                 {pendingCount > 0 && (
-                                  <span className="text-xs text-brand-300 font-semibold">{pendingCount} awaiting approval</span>
+                                  <span className="text-xs text-brand-700 font-semibold">{pendingCount} awaiting approval</span>
                                 )}
                               </div>
                               {(!t.memberList || t.memberList.length === 0) ? (
-                                <p className="px-4 pb-4 text-gray-600 text-sm">No members found.</p>
+                                <p className="px-4 pb-4 text-slate-500 text-sm">No members found.</p>
                               ) : (
-                                <div className="divide-y divide-white/5">
+                                <div className="divide-y divide-gray-200">
                                   {t.memberList.map((m, mi) => {
                                     const isPending = m.role === 'pending';
                                     const roleBg = m.role === 'captain'
-                                      ? 'bg-brand-500/15 text-brand-300 border-brand-200'
+                                      ? 'bg-brand-500/15 text-brand-700 border-brand-200'
                                       : isPending
-                                      ? 'bg-brand-500/15 text-brand-300 border-brand-500/30'
+                                      ? 'bg-brand-500/15 text-brand-700 border-brand-500/30'
                                       : m.role === 'view-only'
                                       ? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
-                                      : 'bg-brand-500/15 text-brand-300 border-brand-200';
+                                      : 'bg-brand-500/15 text-brand-700 border-brand-200';
                                     const kycBg = (m.kyc === 'verified' || m.kyc === 'approved')
-                                      ? 'text-green-400'
+                                      ? 'text-green-700'
                                       : m.kyc === 'rejected'
-                                      ? 'text-red-400'
-                                      : 'text-brand-300';
+                                      ? 'text-red-700'
+                                      : 'text-brand-700';
                                     return (
                                       <div key={mi} className={`flex items-center gap-3 px-4 py-3 ${isPending ? 'bg-brand-500/5' : ''}`}>
                                         {/* Avatar initial */}
-                                        <div className="w-8 h-8 rounded-full bg-white/8 border border-white/10 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
+                                        <div className="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-slate-700 flex-shrink-0">
                                           {(m.name || '?')[0].toUpperCase()}
                                         </div>
                                         {/* Info */}
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-semibold text-white truncate">{m.name || 'Unknown'}</span>
+                                            <span className="text-sm font-semibold text-slate-900 truncate">{m.name || 'Unknown'}</span>
                                             <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${roleBg}`}>{m.role}</span>
                                           </div>
                                           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                            <span className="text-xs text-gray-500">{m.phone || 'No phone'}</span>
+                                            <span className="text-xs text-slate-500">{m.phone || 'No phone'}</span>
                                             <span className={`text-xs font-semibold ${kycBg}`}>KYC: {m.kyc || 'unknown'}</span>
-                                            <span className={`text-xs ${m.depositPaid ? 'text-green-400' : 'text-gray-600'}`}>
+                                            <span className={`text-xs ${m.depositPaid ? 'text-green-700' : 'text-slate-500'}`}>
                                               {m.depositPaid ? '✓ Deposit paid' : '— No deposit'}
                                             </span>
-                                            <span className={`text-xs ${m.canBet ? 'text-brand-300' : 'text-gray-600'}`}>
+                                            <span className={`text-xs ${m.canBet ? 'text-brand-700' : 'text-slate-500'}`}>
                                               {m.canBet ? '✓ Can bet' : '— No betting'}
                                             </span>
                                           </div>
@@ -2411,13 +2415,13 @@ export default function PuntingClub() {
                                           <div className="flex gap-2 flex-shrink-0">
                                             <button
                                               onClick={() => adminApproveMember(t.id, m.userId, t.name, m.name)}
-                                              className="bg-green-500/20 hover:bg-green-500/35 border border-green-500/40 text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                              className="bg-green-500/20 hover:bg-green-500/35 border border-green-500/40 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                             >
                                               ✓ Approve
                                             </button>
                                             <button
                                               onClick={() => adminDeclineMember(t.id, m.userId, t.name, m.name)}
-                                              className="bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                              className="bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 text-red-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                             >
                                               ✕ Decline
                                             </button>
@@ -2427,7 +2431,7 @@ export default function PuntingClub() {
                                         {!isPending && m.role !== 'captain' && canAdmin('bets') && (
                                           <button
                                             onClick={() => adminDeclineMember(t.id, m.userId, t.name, m.name)}
-                                            className="bg-red-500/10 hover:bg-red-500/25 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0"
+                                            className="bg-red-500/10 hover:bg-red-500/25 border border-red-500/30 text-red-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0"
                                           >
                                             Remove
                                           </button>
@@ -2452,17 +2456,17 @@ export default function PuntingClub() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-xl font-black">Users & KYC</h2>
-                        <p className="text-gray-500 text-sm">{adminUsers.length} users · {adminUsers.filter(u=>u.kyc==='pending').length} awaiting KYC · {adminUsers.filter(u=>!u.active).length} suspended</p>
+                        <p className="text-slate-500 text-sm">{adminUsers.length} users · {adminUsers.filter(u=>u.kyc==='pending').length} awaiting KYC · {adminUsers.filter(u=>!u.active).length} suspended</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser.role,'Data Export','Users CSV','Downloaded user list'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser.role,'Data Export','Users CSV','Downloaded user list'); }} className="bg-white border border-gray-300 text-slate-600 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                       </div>
                     </div>
 
                     {/* KYC legend */}
                     <div className="flex gap-3 flex-wrap">
                       {[['verified','green'],['pending','amber'],['rejected','red']].map(([s,c]) => (
-                        <div key={s} className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <div key={s} className="flex items-center gap-1.5 text-xs text-slate-500">
                           <div className={`w-2 h-2 rounded-full ${{ green: 'bg-green-400', amber: 'bg-amber-400', red: 'bg-red-400' }[c]}`}/>
                           <span className="capitalize">{s}: {adminUsers.filter(u=>u.kyc===s).length}</span>
                         </div>
@@ -2471,24 +2475,24 @@ export default function PuntingClub() {
 
                     <div className="space-y-2">
                       {filteredUsers.length === 0 && (
-                        <div className="text-center py-12 text-gray-600">
-                          <User className="w-10 h-10 text-gray-700 mb-2 mx-auto" />
+                        <div className="text-center py-12 text-slate-500">
+                          <User className="w-10 h-10 text-slate-700 mb-2 mx-auto" />
                           <p className="font-semibold">No users yet</p>
                           <p className="text-sm mt-1">Users will appear here after they sign up.</p>
                         </div>
                       )}
                       {filteredUsers.map(u => (
-                        <div key={u.phone} className={`bg-white/5 border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-white/8'}`}>
+                        <div key={u.phone} className={`bg-white border rounded-xl p-4 ${u.flagged ? 'border-red-500/40' : !u.active ? 'border-red-500/15 opacity-60' : 'border-gray-300'}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                 <p className="font-bold text-sm">{u.name}</p>
                                 <StatusPill s={u.kyc} />
-                                <span className="bg-brand-500/10 border border-brand-500/20 text-brand-300 text-xs px-1.5 py-0.5 rounded capitalize">{u.role}</span>
-                                {!u.active && <span className="text-red-400 text-xs font-bold">Suspended</span>}
-                                {u.flagged && <span className="text-red-400 text-xs">🚩</span>}
+                                <span className="bg-brand-500/10 border border-brand-500/20 text-brand-700 text-xs px-1.5 py-0.5 rounded capitalize">{u.role}</span>
+                                {!u.active && <span className="text-red-700 text-xs font-bold">Suspended</span>}
+                                {u.flagged && <span className="text-red-700 text-xs">🚩</span>}
                               </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-gray-500">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-slate-500">
                                 <span className="flex items-center gap-1"><Smartphone className="w-3 h-3" /> {u.phone}</span>
                                 <span className="flex items-center gap-1"><Trophy className="w-3 h-3" /> {u.team}</span>
                                 <span className="flex items-center gap-1"><CalendarRange className="w-3 h-3" /> DOB: {u.dob}</span>
@@ -2499,16 +2503,16 @@ export default function PuntingClub() {
                             <div className="flex flex-col gap-1.5 flex-shrink-0">
                               {u.kyc === 'pending' && (
                                 <>
-                                  <button onClick={() => setKycStatus(u.phone,'verified')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify KYC</button>
-                                  <button onClick={() => setKycStatus(u.phone,'rejected')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✗ Reject</button>
+                                  <button onClick={() => setKycStatus(u.phone,'verified')} className="bg-green-500/20 border border-green-500/40 text-green-700 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Verify KYC</button>
+                                  <button onClick={() => setKycStatus(u.phone,'rejected')} className="bg-red-500/20 border border-red-500/40 text-red-700 px-2.5 py-1 rounded-lg text-xs font-semibold">✗ Reject</button>
                                 </>
                               )}
                               {u.kyc === 'verified' && (
-                                <button onClick={() => setKycStatus(u.phone,'pending')} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">Re-review</button>
+                                <button onClick={() => setKycStatus(u.phone,'pending')} className="bg-brand-500/10 border border-brand-500/20 text-brand-700 px-2.5 py-1 rounded-lg text-xs">Re-review</button>
                               )}
-                              <button onClick={() => resetPassword(u.phone)} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">Reset Pwd</button>
+                              <button onClick={() => resetPassword(u.phone)} className="bg-brand-500/10 border border-brand-500/20 text-brand-700 px-2.5 py-1 rounded-lg text-xs">Reset Pwd</button>
                               {adminUser?.role === 'owner' && (
-                                <button onClick={() => deleteUser(u.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-300 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
+                                <button onClick={() => deleteUser(u.id)} className="bg-red-900/30 border border-red-700/40 text-red-500 hover:text-red-800 hover:bg-red-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all">🗑 Delete</button>
                               )}
                             </div>
                           </div>
@@ -2518,10 +2522,10 @@ export default function PuntingClub() {
 
                     {/* GDPR note */}
                     <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex gap-3">
-                      <Shield className="w-4 h-4 text-brand-300 flex-shrink-0 mt-0.5" />
+                      <Shield className="w-4 h-4 text-brand-700 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-brand-300 text-xs font-bold mb-1">Handling personal information</p>
-                        <p className="text-gray-500 text-xs">Members' phone numbers, dates of birth and postcodes are personal information under the Australian Privacy Act. Only download what you need, don't share exports, and delete exported files when finished. A member can ask to be removed — the owner can delete their account here.</p>
+                        <p className="text-brand-700 text-xs font-bold mb-1">Handling personal information</p>
+                        <p className="text-slate-500 text-xs">Members' phone numbers, dates of birth and postcodes are personal information under the Australian Privacy Act. Only download what you need, don't share exports, and delete exported files when finished. A member can ask to be removed — the owner can delete their account here.</p>
                       </div>
                     </div>
                   </div>
@@ -2533,7 +2537,7 @@ export default function PuntingClub() {
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div>
                         <h2 className="text-xl font-black">Bet Management</h2>
-                        <p className="text-gray-500 text-sm">{adminBets.filter(b=>b.flagged).length} flagged · {adminBets.filter(b=>!b.valid).length} invalid submission</p>
+                        <p className="text-slate-500 text-sm">{adminBets.filter(b=>b.flagged).length} flagged · {adminBets.filter(b=>!b.valid).length} invalid submission</p>
                       </div>
                       {canAdmin('bets') && (
                         <button
@@ -2557,104 +2561,104 @@ export default function PuntingClub() {
                           role="tab"
                           aria-selected={adminBetFilter === key}
                           onClick={() => setAdminBetFilter(key)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${adminBetFilter === key ? 'bg-white text-gray-900 border-white' : 'text-gray-400 border-white/15 hover:text-white'}`}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${adminBetFilter === key ? 'bg-white text-gray-900 border-white' : 'text-slate-600 border-gray-300 hover:text-slate-900'}`}
                         >
                           {label} <span className={key === 'review' && list.length ? 'text-red-500' : 'opacity-60'}>{list.length}</span>
                         </button>
                       ))}
                     </div>
                     {filteredBets.length === 0 && (
-                      <p className="text-gray-400 text-sm bg-white/5 border border-white/8 rounded-xl p-4">
+                      <p className="text-slate-600 text-sm bg-white border border-gray-300 rounded-xl p-4">
                         {adminBetFilter === 'review' ? 'Nothing needs a look right now.' : 'No bets match this filter.'}
                       </p>
                     )}
 
                     {/* AI confidence legend */}
-                    <div className="bg-white/5 border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
-                      <div><span className="text-gray-500">AI Confidence: </span><span className="text-green-400 font-bold">90-100%</span><span className="text-gray-600"> = High</span></div>
-                      <div><span className="text-brand-300 font-bold">70-89%</span><span className="text-gray-600"> = Review recommended</span></div>
-                      <div><span className="text-red-400 font-bold">&lt;70%</span><span className="text-gray-600"> = Manual review required</span></div>
+                    <div className="bg-white border border-gray-300 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
+                      <div><span className="text-slate-500">AI Confidence: </span><span className="text-green-700 font-bold">90-100%</span><span className="text-slate-500"> = High</span></div>
+                      <div><span className="text-brand-700 font-bold">70-89%</span><span className="text-slate-500"> = Review recommended</span></div>
+                      <div><span className="text-red-700 font-bold">&lt;70%</span><span className="text-slate-500"> = Manual review required</span></div>
                     </div>
 
                     <div className="space-y-3">
                       {filteredBets.map(b => (
-                        <div key={b.id} className={`bg-white/5 border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-brand-200' : 'border-white/8'}`}>
+                        <div key={b.id} className={`bg-white border rounded-xl overflow-hidden ${b.flagged ? 'border-red-500/40' : !b.valid ? 'border-brand-200' : 'border-gray-300'}`}>
                           <div className="px-4 py-3 flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                                <span className="text-gray-600 text-xs font-mono" title={b.id}>#{String(b.id).slice(-6)}</span>
+                                <span className="text-slate-500 text-xs font-mono" title={b.id}>#{String(b.id).slice(-6)}</span>
                                 <p className="font-bold text-sm">{b.team}</p>
                                 <StatusPill s={b.status} />
-                                {b.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
-                                {!b.valid && <span className="text-brand-300 text-xs font-bold">⚠ Invalid</span>}
+                                {b.flagged && <span className="text-red-700 text-xs font-bold">🚩 Flagged</span>}
+                                {!b.valid && <span className="text-brand-700 text-xs font-bold">⚠ Invalid</span>}
                               </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-xs text-gray-500 mb-2">
-                                <span>Type: <span className="text-gray-300">{b.type}</span></span>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-xs text-slate-500 mb-2">
+                                <span>Type: <span className="text-slate-700">{b.type}</span></span>
                                 <span>Stake: {editingBetField?.betId === b.id && editingBetField?.field === 'stake' ? (
-                                  <input defaultValue={b.stake} onBlur={e => { correctBetField(b.id,'stake',e.target.value); setEditingBetField(null); }} className="bg-black border border-brand-500/50 rounded px-1 text-brand-300 w-20 text-xs" autoFocus />
-                                ) : <span className="text-brand-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'stake' })}>{b.stake} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
+                                  <input defaultValue={b.stake} onBlur={e => { correctBetField(b.id,'stake',e.target.value); setEditingBetField(null); }} className="bg-black border border-brand-500/50 rounded px-1 text-brand-700 w-20 text-xs" autoFocus />
+                                ) : <span className="text-brand-700 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'stake' })}>{b.stake} {canAdmin('bets') && <span className="text-slate-700">✎</span>}</span>}</span>
                                 <span>Odds: {editingBetField?.betId === b.id && editingBetField?.field === 'odds' ? (
-                                  <input defaultValue={b.odds} onBlur={e => { correctBetField(b.id,'combined_odds',e.target.value); setEditingBetField(null); }} className="bg-black border border-brand-500/50 rounded px-1 text-brand-300 w-20 text-xs" autoFocus />
-                                ) : <span className="text-gray-300 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'odds' })}>{b.odds} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
+                                  <input defaultValue={b.odds} onBlur={e => { correctBetField(b.id,'combined_odds',e.target.value); setEditingBetField(null); }} className="bg-black border border-brand-500/50 rounded px-1 text-brand-700 w-20 text-xs" autoFocus />
+                                ) : <span className="text-slate-700 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'odds' })}>{b.odds} {canAdmin('bets') && <span className="text-slate-700">✎</span>}</span>}</span>
                                 <span>To Win: {editingBetField?.betId === b.id && editingBetField?.field === 'toWin' ? (
-                                  <input defaultValue={b.toWin} onBlur={e => { correctBetField(b.id,'estimated_return',e.target.value); setEditingBetField(null); }} className="bg-black border border-green-500/50 rounded px-1 text-green-400 w-24 text-xs" autoFocus />
-                                ) : <span className="text-green-400 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'toWin' })}>{b.toWin} {canAdmin('bets') && <span className="text-gray-700">✎</span>}</span>}</span>
-                                <span>Week: <span className="text-gray-300">{b.week}</span></span>
-                                <span>Submitted: <span className="text-gray-300">{b.submittedAt}</span></span>
-                                <span>AI Confidence: <span className={b.aiConfidence >= 90 ? 'text-green-400' : b.aiConfidence >= 70 ? 'text-brand-300' : 'text-red-400'}>{b.aiConfidence}%</span></span>
+                                  <input defaultValue={b.toWin} onBlur={e => { correctBetField(b.id,'estimated_return',e.target.value); setEditingBetField(null); }} className="bg-black border border-green-500/50 rounded px-1 text-green-700 w-24 text-xs" autoFocus />
+                                ) : <span className="text-green-700 cursor-pointer" onClick={() => canAdmin('bets') && setEditingBetField({ betId: b.id, field: 'toWin' })}>{b.toWin} {canAdmin('bets') && <span className="text-slate-700">✎</span>}</span>}</span>
+                                <span>Week: <span className="text-slate-700">{b.week}</span></span>
+                                <span>Submitted: <span className="text-slate-700">{b.submittedAt}</span></span>
+                                <span>AI Confidence: <span className={b.aiConfidence >= 90 ? 'text-green-700' : b.aiConfidence >= 70 ? 'text-brand-700' : 'text-red-700'}>{b.aiConfidence}%</span></span>
                               </div>
                             </div>
                           </div>
                           {/* Actions */}
                           {canAdmin('bets') && b.status === 'pending' && (
-                            <div className="border-t border-white/5 bg-black/20 px-4 py-2.5 flex items-center gap-2 flex-wrap">
-                              <p className="text-gray-600 text-xs mr-1">Set result:</p>
-                              <button onClick={() => confirmBetResult(b.id,'won')}  className="bg-green-500/20 border border-green-500/40 text-green-400 px-3 py-1 rounded-lg text-xs font-semibold">✓ Confirm Won</button>
-                              <button onClick={() => confirmBetResult(b.id,'lost')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-3 py-1 rounded-lg text-xs font-semibold">✗ Confirm Lost</button>
-                              <button onClick={() => { const r = prompt('Rejection reason:','Invalid stake'); if(r) rejectBet(b.id,r); }} className="bg-gray-500/20 border border-gray-500/40 text-gray-400 px-3 py-1 rounded-lg text-xs font-semibold">Reject</button>
-                              <span className="ml-auto text-gray-600 text-xs italic">Click any value above to edit</span>
+                            <div className="border-t border-gray-300 bg-gray-50 px-4 py-2.5 flex items-center gap-2 flex-wrap">
+                              <p className="text-slate-500 text-xs mr-1">Set result:</p>
+                              <button onClick={() => confirmBetResult(b.id,'won')}  className="bg-green-500/20 border border-green-500/40 text-green-700 px-3 py-1 rounded-lg text-xs font-semibold">✓ Confirm Won</button>
+                              <button onClick={() => confirmBetResult(b.id,'lost')} className="bg-red-500/20 border border-red-500/40 text-red-700 px-3 py-1 rounded-lg text-xs font-semibold">✗ Confirm Lost</button>
+                              <button onClick={() => { const r = prompt('Rejection reason:','Invalid stake'); if(r) rejectBet(b.id,r); }} className="bg-gray-500/20 border border-gray-500/40 text-slate-600 px-3 py-1 rounded-lg text-xs font-semibold">Reject</button>
+                              <span className="ml-auto text-slate-500 text-xs italic">Click any value above to edit</span>
                             </div>
                           )}
                           {canAdmin('bets') && (b.status === 'won' || b.status === 'lost') && (
-                            <div className="border-t border-white/5 bg-black/20 px-4 py-2 flex items-center gap-2">
-                              <p className="text-gray-600 text-xs">Result confirmed.</p>
-                              <button onClick={() => confirmBetResult(b.id, 'pending')} className="text-brand-300 text-xs hover:text-brand-300">Reopen dispute</button>
+                            <div className="border-t border-gray-300 bg-gray-50 px-4 py-2 flex items-center gap-2">
+                              <p className="text-slate-500 text-xs">Result confirmed.</p>
+                              <button onClick={() => confirmBetResult(b.id, 'pending')} className="text-brand-700 text-xs hover:text-brand-800">Reopen dispute</button>
                             </div>
                           )}
                           {/* Per-leg override */}
                           {canAdmin('bets') && b.legs?.length > 0 && (
-                            <div className="border-t border-white/5">
+                            <div className="border-t border-gray-300">
                               <button
                                 onClick={() => setExpandedBetId(expandedBetId === b.id ? null : b.id)}
-                                className="w-full px-4 py-2 text-left text-xs text-gray-500 hover:text-brand-300 flex items-center gap-1.5 transition-colors"
+                                className="w-full px-4 py-2 text-left text-xs text-slate-500 hover:text-brand-800 flex items-center gap-1.5 transition-colors"
                               >
                                 <Edit3 className="w-3 h-3" />
                                 {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})${b.legs.some(l => l.needsReview && l.status === 'pending') ? ' · ⚑ needs review' : ''}`}
                               </button>
                               {expandedBetId === b.id && (
-                                <div className="px-4 pb-4 space-y-2 bg-black/30">
-                                  <p className="text-brand-300 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
+                                <div className="px-4 pb-4 space-y-2 bg-gray-50">
+                                  <p className="text-brand-700 text-xs font-semibold mb-2">⚠ Manual Override — use when AI couldn't find a result</p>
                                   {b.legs.map(leg => {
-                                    const legColor = leg.status === 'won' ? 'text-green-400' : leg.status === 'lost' ? 'text-red-400' : leg.status === 'void' ? 'text-gray-400' : 'text-brand-300';
+                                    const legColor = leg.status === 'won' ? 'text-green-700' : leg.status === 'lost' ? 'text-red-700' : leg.status === 'void' ? 'text-slate-600' : 'text-brand-700';
                                     return (
-                                      <div key={leg.id} className="bg-white/5 border border-white/8 rounded-lg p-3">
+                                      <div key={leg.id} className="bg-white border border-gray-300 rounded-lg p-3">
                                         <div className="flex items-start justify-between gap-2 mb-2">
                                           <div>
-                                            <span className="text-gray-500 text-xs">Leg {leg.leg_number} · </span>
-                                            <span className="text-white text-xs font-semibold">{leg.selection}</span>
-                                            <span className="text-gray-500 text-xs"> · {leg.market}</span>
+                                            <span className="text-slate-500 text-xs">Leg {leg.leg_number} · </span>
+                                            <span className="text-slate-900 text-xs font-semibold">{leg.selection}</span>
+                                            <span className="text-slate-500 text-xs"> · {leg.market}</span>
                                           </div>
                                           <span className={`text-xs font-bold ${legColor}`}>
                                             {leg.needsReview && leg.status === 'pending' ? '⚑ NEEDS REVIEW' : leg.status?.toUpperCase()}
                                           </span>
                                         </div>
-                                        <div className="text-gray-600 text-xs mb-2 truncate">{leg.event}</div>
+                                        <div className="text-slate-500 text-xs mb-2 truncate">{leg.event}</div>
                                         {(leg.resultNote || leg.result_evidence) && (
-                                          <div className="text-gray-500 text-xs mb-2">
+                                          <div className="text-slate-500 text-xs mb-2">
                                             {leg.resultNote}
-                                            {leg.result_evidence && <span className="block italic text-gray-600">“{leg.result_evidence}”</span>}
+                                            {leg.result_evidence && <span className="block italic text-slate-500">“{leg.result_evidence}”</span>}
                                             {/^https?:\/\//.test(leg.resultSourceUrl || '') && (
-                                              <a href={leg.resultSourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-300 underline">View source</a>
+                                              <a href={leg.resultSourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-700 underline">View source</a>
                                             )}
                                           </div>
                                         )}
@@ -2665,7 +2669,7 @@ export default function PuntingClub() {
                                               onClick={() => overrideLegResult(b.id, leg.id, s, legNotes[leg.id] || leg.resultNote || '')}
                                               className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all ${
                                                 leg.status === s
-                                                  ? s === 'won' ? 'bg-green-500/30 border-green-400 text-green-300' : s === 'lost' ? 'bg-red-500/30 border-red-400 text-red-300' : 'bg-gray-500/30 border-gray-400 text-gray-300'
+                                                  ? s === 'won' ? 'bg-green-500/30 border-green-400 text-green-700' : s === 'lost' ? 'bg-red-500/30 border-red-400 text-red-700' : 'bg-gray-500/30 border-gray-400 text-slate-700'
                                                   : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/30 hover:text-white'
                                               }`}
                                             >
@@ -2678,7 +2682,7 @@ export default function PuntingClub() {
                                           placeholder="Result note (optional)"
                                           defaultValue={leg.resultNote || ''}
                                           onChange={e => setLegNotes(prev => ({ ...prev, [leg.id]: e.target.value }))}
-                                          className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-brand-500/50"
+                                          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-brand-500/50"
                                         />
                                       </div>
                                     );
@@ -2693,11 +2697,11 @@ export default function PuntingClub() {
 
                     {/* Rejected bets log — sourced from adminBets state */}
                     {adminBets.filter(b => b.status === 'rejected').length > 0 && (
-                      <div className="bg-white/5 border border-white/8 rounded-xl p-4">
-                        <h3 className="font-bold text-gray-400 mb-3 text-sm">Rejected Bets Archive</h3>
+                      <div className="bg-white border border-gray-300 rounded-xl p-4">
+                        <h3 className="font-bold text-slate-600 mb-3 text-sm">Rejected Bets Archive</h3>
                         {adminBets.filter(b => b.status === 'rejected').map((b, i) => (
-                          <div key={i} className="text-xs text-gray-600 py-1.5 border-b border-white/5 last:border-0">
-                            <span className="text-gray-400">{b.team}</span> · {b.stake} · <span className="text-red-400">Rejected</span> · {b.submittedAt}
+                          <div key={i} className="text-xs text-slate-500 py-1.5 border-b border-gray-300 last:border-0">
+                            <span className="text-slate-600">{b.team}</span> · {b.stake} · <span className="text-red-700">Rejected</span> · {b.submittedAt}
                           </div>
                         ))}
                       </div>
@@ -2712,33 +2716,33 @@ export default function PuntingClub() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h2 className="text-xl font-black">Competitions</h2>
-                          <p className="text-gray-500 text-sm">{adminComps.length} competitions · {adminComps.filter(c=>c.status==='active').length} active</p>
+                          <p className="text-slate-500 text-sm">{adminComps.length} competitions · {adminComps.filter(c=>c.status==='active').length} active</p>
                         </div>
                         {(adminUser.role === 'owner' || adminUser.role === 'pub_admin') && (
-                          <button onClick={() => setShowCreateComp(!showCreateComp)} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-3 py-2 rounded-lg text-xs font-semibold">+ New Competition</button>
+                          <button onClick={() => setShowCreateComp(!showCreateComp)} className="bg-brand-500/20 border border-brand-500/40 text-brand-700 px-3 py-2 rounded-lg text-xs font-semibold">+ New Competition</button>
                         )}
                       </div>
 
                       {/* Create form */}
                       {showCreateComp && (
-                        <div className="bg-white/5 border border-brand-500/30 rounded-xl p-5 space-y-3">
-                          <h3 className="font-bold text-brand-300">Create New Competition</h3>
+                        <div className="bg-white border border-brand-500/30 rounded-xl p-5 space-y-3">
+                          <h3 className="font-bold text-brand-700">Create New Competition</h3>
                           <div className="grid sm:grid-cols-2 gap-3">
                             {[['Competition Name','name','text','RSL Summer Cup'],['Pub / Club Name','pub','text','RSL Club Sydney'],['Buy-In Amount','buyIn','text','$1,000'],['Max Teams','maxTeams','number','20'],['Start Date','startDate','date',''],['End Date','endDate','date','']].map(([l,k,t,p]) => (
                               <div key={k}>
-                                <label className="block text-xs font-semibold text-brand-300 mb-1">{l}</label>
-                                <input type={t} value={newComp[k]} onChange={e => setNewComp(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder={p} />
+                                <label className="block text-xs font-semibold text-brand-700 mb-1">{l}</label>
+                                <input type={t} value={newComp[k]} onChange={e => setNewComp(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-brand-500/50 placeholder-slate-400" placeholder={p} />
                               </div>
                             ))}
                             <div>
-                              <label className="block text-xs font-semibold text-brand-300 mb-1">Season Length</label>
+                              <label className="block text-xs font-semibold text-brand-700 mb-1">Season Length</label>
                               {(() => {
                                 const weeks = newComp.startDate && newComp.endDate
                                   ? Math.round((new Date(newComp.endDate) - new Date(newComp.startDate)) / (7 * 86400000))
                                   : null;
                                 return (
-                                  <div className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-400">
-                                    {weeks !== null && weeks > 0 ? <span className="text-white">{weeks} week{weeks !== 1 ? 's' : ''}</span> : <span className="text-gray-600 italic">Set start & end dates above</span>}
+                                  <div className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-slate-600">
+                                    {weeks !== null && weeks > 0 ? <span className="text-slate-900">{weeks} week{weeks !== 1 ? 's' : ''}</span> : <span className="text-slate-500 italic">Set start & end dates above</span>}
                                   </div>
                                 );
                               })()}
@@ -2746,7 +2750,7 @@ export default function PuntingClub() {
                           </div>
                           {/* Payout Structure */}
                           <div>
-                            <label className="block text-xs font-semibold text-brand-300 mb-2">Payout Structure</label>
+                            <label className="block text-xs font-semibold text-brand-700 mb-2">Payout Structure</label>
                             <div className="grid grid-cols-1 gap-2">
                               {[
                                 ['winner_takes_all',   '🥇 Winner Takes All',            'The top team takes the full prize pool (minus admin fee)'],
@@ -2755,34 +2759,34 @@ export default function PuntingClub() {
                               ].map(([v, l, d]) => (
                                 <button key={v} type="button"
                                   onClick={() => setNewComp(p => ({...p, payoutStructure: v}))}
-                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${newComp.payoutStructure === v ? 'border-brand-500 bg-brand-500/15 text-brand-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${newComp.payoutStructure === v ? 'border-brand-500 bg-brand-500/15 text-brand-700' : 'border-gray-300 text-slate-600 hover:border-gray-400'}`}
                                 >
                                   <div className="font-bold mb-0.5">{l}</div>
-                                  <div className="text-gray-500 text-xs">{d}</div>
+                                  <div className="text-slate-500 text-xs">{d}</div>
                                 </button>
                               ))}
                             </div>
                           </div>
                           {/* Private/Public toggle */}
                           <div>
-                            <label className="block text-xs font-semibold text-brand-300 mb-2">Visibility</label>
+                            <label className="block text-xs font-semibold text-brand-700 mb-2">Visibility</label>
                             <div className="grid grid-cols-2 gap-2">
                               {[['false','🌐 Public','Visible to all users in competition list'],['true','🔒 Private','Only joinable via the competition code']].map(([v,l,d]) => (
                                 <button key={v} type="button"
                                   onClick={() => setNewComp(p => ({...p, isPrivate: v === 'true'}))}
-                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${String(newComp.isPrivate) === v ? 'border-brand-500 bg-brand-500/15 text-brand-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${String(newComp.isPrivate) === v ? 'border-brand-500 bg-brand-500/15 text-brand-700' : 'border-gray-300 text-slate-600 hover:border-gray-400'}`}
                                 >
                                   <div className="font-bold mb-0.5">{l}</div>
-                                  <div className="text-gray-500 text-xs">{d}</div>
+                                  <div className="text-slate-500 text-xs">{d}</div>
                                 </button>
                               ))}
                             </div>
                           </div>
-                          <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-xs text-gray-400">
-                            <strong className="text-brand-300">Note:</strong> Competition requires approval from Owner Admin before going live. A unique QR code and join link will be auto-generated.
+                          <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-xs text-slate-600">
+                            <strong className="text-brand-700">Note:</strong> Competition requires approval from Owner Admin before going live. A unique QR code and join link will be auto-generated.
                           </div>
                           <div className="flex gap-3">
-                            <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
+                            <button onClick={() => setShowCreateComp(false)} className="flex-1 border border-gray-300 text-slate-600 py-2 rounded-lg text-sm">Cancel</button>
                             <button onClick={async () => { await createCompetition(newComp); setShowCreateComp(false); setNewComp({ name:'', pub:'', buyIn:'$1,000', maxTeams:'20', startDate:'', endDate:'', isPrivate: false, payoutStructure:'winner_takes_all' }); }} className="flex-1 bg-brand-700 hover:bg-brand-600 text-white font-bold py-2 rounded-lg text-sm">Create Competition</button>
                           </div>
                         </div>
@@ -2792,26 +2796,26 @@ export default function PuntingClub() {
                       {adminCompRequests.length > 0 && (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-bold text-brand-300">📬 Competition Requests</h3>
+                            <h3 className="text-sm font-bold text-brand-700">📬 Competition Requests</h3>
                             <span className="bg-brand-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminCompRequests.filter(r => r.status === 'requested').length}</span>
                           </div>
                           {adminCompRequests.map(req => (
-                            <div key={req.id} className={`bg-white/5 border rounded-xl p-4 ${req.status === 'requested' ? 'border-brand-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
+                            <div key={req.id} className={`bg-white border rounded-xl p-4 ${req.status === 'requested' ? 'border-brand-200' : req.status === 'approved' ? 'border-green-500/20' : 'border-red-500/20 opacity-60'}`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
                                     <p className="font-bold text-sm">{req.comp_name}</p>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${req.status === 'requested' ? 'bg-brand-500/20 text-brand-300 border-brand-500/40' : req.status === 'approved' ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${req.status === 'requested' ? 'bg-brand-500/20 text-brand-700 border-brand-500/40' : req.status === 'approved' ? 'bg-green-500/20 text-green-700 border-green-500/40' : 'bg-red-500/20 text-red-700 border-red-500/40'}`}>
                                       {req.status === 'requested' ? '⏳ Pending' : req.status === 'approved' ? '✓ Approved' : '✗ Declined'}
                                     </span>
-                                    {req.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
+                                    {req.is_private && <span className="text-xs bg-purple-500/20 text-purple-700 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
                                   </div>
-                                  <div className="text-xs text-gray-500 space-y-0.5">
+                                  <div className="text-xs text-slate-500 space-y-0.5">
                                     <p className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {req.pub_name}</p>
                                     <p className="flex items-center gap-1"><User className="w-3 h-3" /> {req.contact_name} · {req.contact_phone} · {req.contact_email}</p>
                                     {req.preferred_start_date && <p className="flex items-center gap-1"><CalendarRange className="w-3 h-3" /> {req.preferred_start_date} → {req.preferred_end_date}</p>}
                                     {req.estimated_teams && <p className="flex items-center gap-1"><Users className="w-3 h-3" /> ~{req.estimated_teams} teams · {req.buy_in ? `$${Number(req.buy_in).toLocaleString()} buy-in` : 'buy-in TBD'}</p>}
-                                    {req.notes && <p className="text-gray-400 italic mt-1">"{req.notes}"</p>}
+                                    {req.notes && <p className="text-slate-600 italic mt-1">"{req.notes}"</p>}
                                   </div>
                                 </div>
                                 {req.status === 'requested' && canAdmin('competitions') && (
@@ -2824,7 +2828,7 @@ export default function PuntingClub() {
                                           showToast(`Request from ${req.contact_name} approved`, 'success');
                                         } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
                                       }}
-                                      className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                      className="bg-green-500/20 border border-green-500/40 text-green-700 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                     >✓ Approve</button>
                                     <button
                                       onClick={async () => {
@@ -2834,7 +2838,7 @@ export default function PuntingClub() {
                                           showToast(`Request declined`, 'success');
                                         } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
                                       }}
-                                      className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                      className="bg-red-500/20 border border-red-500/40 text-red-700 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                     >✗ Decline</button>
                                   </div>
                                 )}
@@ -2847,8 +2851,8 @@ export default function PuntingClub() {
                       {/* Comp list */}
                       <div className="space-y-3">
                         {adminComps.length === 0 && (
-                          <div className="text-center py-12 text-gray-600">
-                            <Building2 className="w-10 h-10 text-gray-700 mb-2 mx-auto" />
+                          <div className="text-center py-12 text-slate-500">
+                            <Building2 className="w-10 h-10 text-slate-700 mb-2 mx-auto" />
                             <p className="font-semibold">No competitions yet</p>
                             <p className="text-sm mt-1">Create your first competition using the form above.</p>
                           </div>
@@ -2862,17 +2866,17 @@ export default function PuntingClub() {
                           const showTeams = expandedCompId === compKey;
                           const setShowTeams = (v) => setExpandedCompId(v ? compKey : null);
                           return (
-                          <div key={c.code || c.id} className={`bg-white/5 border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-brand-500/20' : 'border-white/8'}`}>
+                          <div key={c.code || c.id} className={`bg-white border rounded-xl overflow-hidden ${c.status === 'active' ? 'border-green-500/20' : c.status === 'pending' ? 'border-brand-500/20' : 'border-gray-300'}`}>
                             <div className="p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                     <p className="font-bold text-base">{c.name}</p>
                                     <StatusPill s={c.status} />
-                                    <span className="font-mono text-xs bg-black/40 border border-white/10 text-brand-300 px-2 py-0.5 rounded">{c.code}</span>
-                                    {c.is_private && <span className="text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
+                                    <span className="font-mono text-xs bg-gray-50 border border-gray-300 text-brand-700 px-2 py-0.5 rounded">{c.code}</span>
+                                    {c.is_private && <span className="text-xs bg-purple-500/20 text-purple-700 border border-purple-500/30 px-2 py-0.5 rounded-full">🔒 Private</span>}
                                   </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-slate-500 mb-2">
                                     <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {c.pub}</span>
                                     <span className="flex items-center gap-1"><CalendarRange className="w-3 h-3" /> {c.weeks} weeks</span>
                                     <span>💰 Buy-in: {buyIn}</span>
@@ -2881,16 +2885,16 @@ export default function PuntingClub() {
                                   {/* Team registration bar */}
                                   <div className="mt-2">
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className="text-xs text-gray-400 font-semibold flex items-center gap-1">
+                                      <span className="text-xs text-slate-600 font-semibold flex items-center gap-1">
                                         <Users className="w-3 h-3" /> {teamCount} / {maxTeams} teams registered
                                       </span>
                                       {teamCount > 0 && (
-                                        <button onClick={() => setShowTeams(!showTeams)} className="text-xs text-brand-300 hover:text-brand-300">
+                                        <button onClick={() => setShowTeams(!showTeams)} className="text-xs text-brand-700 hover:text-brand-800">
                                           {showTeams ? 'Hide teams ▲' : 'View teams ▼'}
                                         </button>
                                       )}
                                     </div>
-                                    <div className="w-full bg-white/5 rounded-full h-1.5">
+                                    <div className="w-full bg-white rounded-full h-1.5">
                                       <div className={`h-1.5 rounded-full transition-all ${c.status === 'active' ? 'bg-green-500' : 'bg-brand-600'}`}
                                         style={{width: `${Math.min(100, (teamCount / maxTeams) * 100)}%`}} />
                                     </div>
@@ -2898,18 +2902,18 @@ export default function PuntingClub() {
                                 </div>
                                 {canAdmin('competitions') && (
                                   <div className="flex flex-col gap-1.5 flex-shrink-0">
-                                    {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-400 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Approve</button>}
-                                    {c.status === 'active'  && <button onClick={() => updateCompStatus(c.id || c.code, 'closed')} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs">Close</button>}
+                                    {c.status === 'pending' && <button onClick={() => updateCompStatus(c.id || c.code, 'active')} className="bg-green-500/20 border border-green-500/40 text-green-700 px-2.5 py-1 rounded-lg text-xs font-semibold">✓ Approve</button>}
+                                    {c.status === 'active'  && <button onClick={() => updateCompStatus(c.id || c.code, 'closed')} className="bg-red-500/20 border border-red-500/40 text-red-700 px-2.5 py-1 rounded-lg text-xs">Close</button>}
                                     {c.status === 'active' && c.id && (
                                       <button
                                         onClick={() => { if (window.confirm(`Force week rollover for "${c.name}"? This moves current bets to history and starts a new week.`)) advanceWeek(c.id, 'forward'); }}
-                                        className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                        className="bg-brand-500/20 border border-brand-500/40 text-brand-700 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                       >⏭ Advance Week</button>
                                     )}
                                     {c.status === 'active' && c.id && (
                                       <button
                                         onClick={() => { if (window.confirm(`Roll back one week for "${c.name}"?`)) advanceWeek(c.id, 'back'); }}
-                                        className="bg-gray-500/10 border border-gray-500/20 text-gray-500 px-2.5 py-1 rounded-lg text-xs"
+                                        className="bg-gray-500/10 border border-gray-500/20 text-slate-500 px-2.5 py-1 rounded-lg text-xs"
                                       >↩ Rollback</button>
                                     )}
                                     {c.status === 'active' && c.id && (
@@ -2920,11 +2924,11 @@ export default function PuntingClub() {
                                             showToast(`Recap generation started for ${c.name}`, 'success');
                                           } catch(err) { showToast(`Error: ${err.message}`, 'error'); }
                                         }}
-                                        className="bg-purple-500/20 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                        className="bg-purple-500/20 border border-purple-500/40 text-purple-700 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                       >✨ Generate Recap</button>
                                     )}
-                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); showToast('Copied!', 'success'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false, weeklyLimit: c.weekly_limit_cents ? String(c.weekly_limit_cents / 100) : '50', finalWeekLimit: c.final_week_limit_cents ? String(c.final_week_limit_cents / 100) : '' }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); showToast('Copied!', 'success'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-700 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false, weeklyLimit: c.weekly_limit_cents ? String(c.weekly_limit_cents / 100) : '50', finalWeekLimit: c.final_week_limit_cents ? String(c.final_week_limit_cents / 100) : '' }); }} className="bg-brand-500/10 border border-brand-200 text-brand-700 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                     {adminUser?.role === 'owner' && (
                                       <button
                                         onClick={() => {
@@ -2934,7 +2938,7 @@ export default function PuntingClub() {
                                             : `Delete "${c.name}"? This cannot be undone.`;
                                           if (window.confirm(msg)) deleteCompetition(c.id, c.name);
                                         }}
-                                        className="bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                        className="bg-red-500/10 border border-red-500/30 text-red-700 hover:bg-red-500/20 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                       >🗑 Delete</button>
                                     )}
                                   </div>
@@ -2943,48 +2947,48 @@ export default function PuntingClub() {
                             </div>
                             {/* Inline edit form */}
                             {editingCompId === c.id && (
-                              <div className="border-t border-brand-500/20 bg-black/30 px-4 py-4">
-                                <p className="text-xs font-bold text-brand-300 mb-3">Edit Competition</p>
+                              <div className="border-t border-brand-500/20 bg-gray-50 px-4 py-4">
+                                <p className="text-xs font-bold text-brand-700 mb-3">Edit Competition</p>
                                 <div className="grid sm:grid-cols-2 gap-3 mb-3">
                                   {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date'],['Weekly Bet Limit ($)','weeklyLimit','text'],['Final Week Limit ($, optional)','finalWeekLimit','text']].map(([l,k,t]) => (
                                     <div key={k}>
-                                      <label className="block text-xs text-gray-500 mb-1">{l}</label>
-                                      <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                                      <label className="block text-xs text-slate-500 mb-1">{l}</label>
+                                      <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-brand-500/50" />
                                     </div>
                                   ))}
                                 </div>
                                 {editCompForm.startDate && editCompForm.endDate && (() => {
                                   const w = Math.round((new Date(editCompForm.endDate) - new Date(editCompForm.startDate)) / (7 * 86400000));
-                                  return w > 0 ? <p className="text-xs text-gray-500 mb-3">Season length: <span className="text-white">{w} weeks</span></p> : null;
+                                  return w > 0 ? <p className="text-xs text-slate-500 mb-3">Season length: <span className="text-slate-900">{w} weeks</span></p> : null;
                                 })()}
                                 {/* Private toggle in edit form */}
                                 <div>
-                                  <label className="block text-xs text-gray-500 mb-1.5">Visibility</label>
+                                  <label className="block text-xs text-slate-500 mb-1.5">Visibility</label>
                                   <div className="grid grid-cols-2 gap-2">
                                     {[['false','🌐 Public'],['true','🔒 Private']].map(([v,l]) => (
                                       <button key={v} type="button"
                                         onClick={() => setEditCompForm(p => ({...p, isPrivate: v === 'true'}))}
-                                        className={`py-2 rounded-lg border text-xs font-semibold transition-all ${String(editCompForm.isPrivate) === v ? 'border-brand-500 bg-brand-500/15 text-brand-300' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                                        className={`py-2 rounded-lg border text-xs font-semibold transition-all ${String(editCompForm.isPrivate) === v ? 'border-brand-500 bg-brand-500/15 text-brand-700' : 'border-gray-300 text-slate-600 hover:border-gray-400'}`}
                                       >{l}</button>
                                     ))}
                                   </div>
                                 </div>
                                 <div className="flex gap-2">
-                                  <button onClick={() => setEditingCompId(null)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
+                                  <button onClick={() => setEditingCompId(null)} className="flex-1 border border-gray-300 text-slate-600 py-2 rounded-lg text-sm">Cancel</button>
                                   <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate, weeklyLimit: editCompForm.weeklyLimit, finalWeekLimit: editCompForm.finalWeekLimit })} className="flex-1 bg-brand-600 text-white font-bold py-2 rounded-lg text-sm">Save Changes</button>
                                 </div>
                               </div>
                             )}
                             {/* Registered teams list */}
                             {showTeams && teamCount > 0 && (
-                              <div className="border-t border-white/5 bg-black/20 px-4 py-3">
-                                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Registered Teams</p>
+                              <div className="border-t border-gray-300 bg-gray-50 px-4 py-3">
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Registered Teams</p>
                                 <div className="space-y-1.5">
                                   {registeredTeams.map((t, ti) => (
-                                    <div key={ti} className="flex items-center justify-between bg-white/3 rounded-lg px-3 py-2">
+                                    <div key={ti} className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-mono text-brand-300 bg-brand-500/10 px-1.5 py-0.5 rounded">{t.team_code}</span>
-                                        <span className="text-sm font-semibold text-white">{t.team_name}</span>
+                                        <span className="text-xs font-mono text-brand-700 bg-brand-500/10 px-1.5 py-0.5 rounded">{t.team_code}</span>
+                                        <span className="text-sm font-semibold text-slate-900">{t.team_name}</span>
                                       </div>
                                       <StatusPill s={t.status || 'pending'} />
                                     </div>
@@ -3005,7 +3009,7 @@ export default function PuntingClub() {
                   <div className="space-y-4">
                     <div>
                       <h2 className="text-xl font-black">Security & Compliance</h2>
-                      <p className="text-gray-500 text-sm">What protections are actually in place</p>
+                      <p className="text-slate-500 text-sm">What protections are actually in place</p>
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-3">
@@ -3023,43 +3027,43 @@ export default function PuntingClub() {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="font-bold text-sm">{item.title}</p>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${item.color === 'green' ? 'bg-green-500/20 text-green-400 border-green-500/40' : item.color === 'amber' ? 'bg-brand-500/20 text-brand-300 border-brand-500/40' : 'bg-brand-500/20 text-brand-300 border-brand-500/40'}`}>{item.status}</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${item.color === 'green' ? 'bg-green-500/20 text-green-700 border-green-500/40' : item.color === 'amber' ? 'bg-brand-500/20 text-brand-700 border-brand-500/40' : 'bg-brand-500/20 text-brand-700 border-brand-500/40'}`}>{item.status}</span>
                               </div>
-                              <p className="text-gray-500 text-xs leading-relaxed">{item.detail}</p>
+                              <p className="text-slate-500 text-xs leading-relaxed">{item.detail}</p>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="rounded-xl p-5" style={{backgroundColor:"#111827",border:"1px solid rgba(255,255,255,0.08)"}}>
-                      <h3 className="font-bold text-white mb-4">Admin Access Control</h3>
+                    <div className="rounded-xl p-5" style={{backgroundColor:"#FFFFFF",border:"1px solid #E5E7EB"}}>
+                      <h3 className="font-bold text-slate-900 mb-4">Admin Access Control</h3>
                       <div className="space-y-3">
                         {[
                           { role:'Owner Admin',    id:'admin', perms:['All features', 'User management', 'KYC', 'Bet management', 'Competition creation', 'Security', 'Audit log', 'WhatsApp push'] },
                           { role:'Campaign Manager', id:'cm',  perms:['Bet confirmation', 'Bet correction', 'Dispute resolution', 'KYC review', 'Password resets', 'Audit log'] },
                           { role:'Pub Admin',      id:'pub',   perms:['View own competition', 'Competition creation request', 'Team leaderboard', 'Push messages (restricted)'] },
                         ].map(a => (
-                          <div key={a.id} className="bg-black/30 rounded-xl p-4">
+                          <div key={a.id} className="bg-gray-50 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-2">
-                              <Shield className="w-4 h-4 text-red-400" />
+                              <Shield className="w-4 h-4 text-red-700" />
                               <p className="font-bold text-sm">{a.role}</p>
-                              <span className="font-mono text-xs text-gray-600">ID: {a.id}</span>
+                              <span className="font-mono text-xs text-slate-500">ID: {a.id}</span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
-                              {a.perms.map(p => <span key={p} className="bg-white/5 border border-white/8 text-gray-400 text-xs px-2 py-0.5 rounded">{p}</span>)}
+                              {a.perms.map(p => <span key={p} className="bg-white border border-gray-300 text-slate-600 text-xs px-2 py-0.5 rounded">{p}</span>)}
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-5">
-                      <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Privacy requests</h3>
-                      <p className="text-gray-400 text-sm mb-3">Under the Australian Privacy Act members can ask what information you hold about them, or ask to be removed.</p>
+                    <div className="bg-red-50 border border-red-500/30 rounded-xl p-5">
+                      <h3 className="font-bold text-red-700 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Privacy requests</h3>
+                      <p className="text-slate-600 text-sm mb-3">Under the Australian Privacy Act members can ask what information you hold about them, or ask to be removed.</p>
                       <div className="flex gap-3 flex-wrap">
-                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser?.role || 'owner','Data Export','All Users','Downloaded user list'); }} className="bg-white/5 border border-white/10 text-gray-300 px-4 py-2 rounded-lg text-sm">Download member data (CSV)</button>
-                        <button onClick={() => setAdminTab('users')} className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">Delete a member → Users tab</button>
+                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser?.role || 'owner','Data Export','All Users','Downloaded user list'); }} className="bg-white border border-gray-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Download member data (CSV)</button>
+                        <button onClick={() => setAdminTab('users')} className="bg-red-500/10 border border-red-500/30 text-red-700 px-4 py-2 rounded-lg text-sm">Delete a member → Users tab</button>
                       </div>
                     </div>
                   </div>
@@ -3071,31 +3075,31 @@ export default function PuntingClub() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-xl font-black">Audit Log</h2>
-                        <p className="text-gray-500 text-sm">{adminAuditLog.length} entries · Full admin action history</p>
+                        <p className="text-slate-500 text-sm">{adminAuditLog.length} entries · Full admin action history</p>
                       </div>
-                      <button onClick={() => downloadCsv(`punting-club-audit-${new Date().toISOString().slice(0,10)}.csv`, ['Timestamp','Role','Action','Target','Detail'], adminAuditLog.map(e => [e.ts, e.adminRole, e.action, e.target, e.detail]))} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                      <button onClick={() => downloadCsv(`punting-club-audit-${new Date().toISOString().slice(0,10)}.csv`, ['Timestamp','Role','Action','Target','Detail'], adminAuditLog.map(e => [e.ts, e.adminRole, e.action, e.target, e.detail]))} className="bg-white border border-gray-300 text-slate-600 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                     </div>
-                    <div className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
+                    <div className="bg-white border border-gray-300 rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-12 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-2 border-b border-gray-300">
                         <div className="col-span-3">Time</div>
                         <div className="col-span-2">Role</div>
                         <div className="col-span-3">Action</div>
                         <div className="col-span-4">Target / Detail</div>
                       </div>
-                      <div className="divide-y divide-white/5">
+                      <div className="divide-y divide-gray-200">
                         {adminAuditLog.length === 0 && (
-                          <div className="text-center py-10 text-gray-600">
+                          <div className="text-center py-10 text-slate-500">
                             <p className="text-2xl mb-2">📋</p>
                             <p className="font-semibold text-sm">No audit entries yet</p>
                             <p className="text-xs mt-1">Admin actions will be logged here automatically.</p>
                           </div>
                         )}
                         {adminAuditLog.map((e, i) => (
-                          <div key={i} className="grid grid-cols-12 text-xs px-4 py-2.5 hover:bg-white/2">
-                            <div className="col-span-3 text-gray-600 font-mono">{e.ts}</div>
-                            <div className="col-span-2"><span className={`capitalize font-semibold ${e.adminRole === 'owner' ? 'text-red-400' : e.adminRole === 'campaign' ? 'text-brand-300' : 'text-green-400'}`}>{e.adminRole}</span></div>
-                            <div className="col-span-3 text-white font-medium">{e.action}</div>
-                            <div className="col-span-4 text-gray-400 truncate">{e.target}{e.detail ? ` — ${e.detail}` : ''}</div>
+                          <div key={i} className="grid grid-cols-12 text-xs px-4 py-2.5 hover:bg-gray-50">
+                            <div className="col-span-3 text-slate-500 font-mono">{e.ts}</div>
+                            <div className="col-span-2"><span className={`capitalize font-semibold ${e.adminRole === 'owner' ? 'text-red-700' : e.adminRole === 'campaign' ? 'text-brand-700' : 'text-green-700'}`}>{e.adminRole}</span></div>
+                            <div className="col-span-3 text-slate-900 font-medium">{e.action}</div>
+                            <div className="col-span-4 text-slate-600 truncate">{e.target}{e.detail ? ` — ${e.detail}` : ''}</div>
                           </div>
                         ))}
                       </div>
@@ -3110,46 +3114,21 @@ export default function PuntingClub() {
       })()}</ErrorBoundary>}
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-gray-200 bg-white py-10 px-4 sm:px-6">
-        <div className="max-w-5xl mx-auto grid sm:grid-cols-4 gap-8 mb-6">
-          <div>
-            <div className="flex items-center gap-2 mb-3"><Sparkles className="w-5 h-5 text-brand-700" /><span className="font-black text-brand-600">PUNTING CLUB</span></div>
-            <p className="text-gray-600 text-xs">The ultimate sports betting league for teams and friends.</p>
+      <footer className="mt-10 border-t border-gray-200 bg-white px-4 sm:px-6 py-8">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-brand-900 flex items-center justify-center"><Sparkles className="w-3.5 h-3.5 text-gold-400" /></span>
+            <span className="font-display text-lg font-bold tracking-wide text-brand-900">PUNTING CLUB</span>
           </div>
-          {[
-            ['Competition',[
-              { label:'How It Works', nav:'competition' },
-              { label:'Leaderboards', nav:'leaderboard' },
-              { label:'Competition Rules', nav:'competition' },
-              { label:'Weekly Summary', nav:'weekly' },
-            ]],
-            ['Features',[
-              { label:'Team Management', nav:'team' },
-              { label:'AI Bet Analysis', action:() => setShowBetAnalyzer(true) },
-              { label:'Result Tracking', nav:'leaderboard' },
-              { label:'Season History', nav:'leaderboard' },
-            ]],
-            ['Contact',[
-              { label:'support@puntingclub.com' },
-              { label:'FAQ', nav:'faq' },
-            ]],
-          ].map(([h, items]) => (
-            <div key={h}>
-              <h4 className="font-bold text-brand-600/80 text-sm mb-3">{h}</h4>
-              <ul className="space-y-1.5">
-                {items.map(item => (
-                  <li key={item.label}>
-                    <button
-                      onClick={() => { if (item.nav) navigateTo(item.nav); else if (item.action) item.action(); }}
-                      className={`text-gray-600 text-xs transition-colors text-left ${item.nav || item.action ? 'hover:text-brand-700/70 cursor-pointer' : 'cursor-default'}`}
-                    >{item.label}</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
+            {[['Rules','competition'],['Ladder','leaderboard'],['Summary','weekly'],['FAQ','faq']].map(([label, nav]) => (
+              <button key={nav+label} onClick={() => navigateTo(nav)} className="hover:text-brand-700">{label}</button>
+            ))}
+            <button onClick={() => window.dispatchEvent(new Event('pc:open-support'))} className="hover:text-brand-700">Help chat</button>
+            <a href="mailto:support@puntingclub.com" className="hover:text-brand-700">support@puntingclub.com</a>
+          </nav>
         </div>
-        <div className="border-t border-gray-200 pt-6 text-center text-gray-500 text-xs space-y-1.5">
+        <div className="max-w-5xl mx-auto mt-6 pt-5 border-t border-gray-100 text-xs text-slate-500 space-y-1.5">
           <p>
             Gamble responsibly. Must be 18+. Need help? Call <a href="tel:1800858858" className="underline">Gambling Help 1800 858 858</a> (24/7, free) or visit{' '}
             <a href="https://www.gamblinghelponline.org.au" target="_blank" rel="noopener noreferrer" className="underline">gamblinghelponline.org.au</a>.
@@ -4277,11 +4256,6 @@ export default function PuntingClub() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── FAQ ───────────────────────────────────────────────────────────────── */}
-      {activeNav === 'faq' && (
-        <FaqView navHistory={navHistory} goBack={goBack} navigateTo={navigateTo} />
       )}
 
       {/* ── SUPPORT CHAT ──────────────────────────────────────────────────────── */}

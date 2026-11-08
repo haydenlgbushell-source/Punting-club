@@ -30,7 +30,7 @@ const WeeklyRecapCard = ({ competitionId, weekNumber, showGenerateButton, onGene
 
   if (loading) {
     return (
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 animate-pulse">
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6 animate-pulse">
         <div className="h-5 bg-gray-200 rounded w-48 mb-3"></div>
         <div className="h-4 bg-gray-100 rounded w-full mb-2"></div>
         <div className="h-4 bg-gray-100 rounded w-3/4"></div>
@@ -62,7 +62,7 @@ const WeeklyRecapCard = ({ competitionId, weekNumber, showGenerateButton, onGene
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
+    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"

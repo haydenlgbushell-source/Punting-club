@@ -7,37 +7,18 @@ import LegDot from '../LegDot.jsx';
 import BetSlipCard from '../BetSlipCard.jsx';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { Page, PageHeader, BackButton, Card, Countdown, RankBadge, btn } from '../ui.jsx';
 
 const parseCurrency = (s) => {
   if (typeof s === 'number') return s;
   return parseFloat(String(s).replace(/[^0-9.\-]/g, '')) || 0;
 };
 
-// Live "bets close in …" countdown to the given cutoff Date.
-const Countdown = ({ to }) => {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(id);
-  }, []);
-  const ms = to.getTime() - now;
-  if (ms <= 0) return null;
-  const d = Math.floor(ms / 86400000);
-  const h = Math.floor((ms % 86400000) / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  const parts = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
-  return (
-    <span className="inline-flex items-center gap-1 text-brand-700 font-semibold">
-      <Clock className="w-3 h-3" /> Closes in {parts}
-    </span>
-  );
-};
-
 // One shimmering placeholder row for the initial leaderboard load.
 const SkeletonRow = () => (
-  <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 animate-pulse">
+  <div className="px-4 py-3.5 animate-pulse">
     <div className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-lg bg-gray-200 flex-shrink-0" />
+      <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0" />
       <div className="flex-1 space-y-1.5">
         <div className="h-3 bg-gray-200 rounded w-32" />
         <div className="h-2.5 bg-gray-100 rounded w-20" />
@@ -81,13 +62,7 @@ const LeaderboardView = () => {
 
   const getComputedStatus = (weekBet) => betStatus(weekBet?.legs, weekBet?.overallStatus);
 
-  const getRowBg = (isMe, computedStatus) => {
-    if (isMe) return 'border-brand-500/40 bg-brand-500/5';
-    if (computedStatus === 'won') return 'border-green-500/20 bg-green-50';
-    if (computedStatus === 'lost') return 'border-red-500/20 bg-red-50';
-    if (computedStatus === 'void' || computedStatus === 'in_progress') return 'border-brand-200 bg-brand-50';
-    return 'border-gray-200 bg-white';
-  };
+  const getRowBg = (isMe) => (isMe ? 'bg-[#FBF6E6]' : 'bg-white');
 
   const comp = activeCompetitions.find(c => c.code === effectiveViewedCode);
   const weekLabel = (() => {
@@ -98,36 +73,19 @@ const LeaderboardView = () => {
   const cutoffLabel = formatCutoff(nextWedCutoff);
 
   return (
-    <section className="pt-28 pb-16 px-0 sm:px-0">
-      <div className="max-w-5xl mx-auto px-2 sm:px-6">
-        {navHistory.length > 0 && (
-          <button onClick={goBack} className="flex items-center gap-1.5 text-gray-500 hover:text-brand-700 text-sm font-semibold mb-4 px-2 transition-colors group">
-            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
-          </button>
-        )}
+    <Page>
+        {navHistory.length > 0 && <BackButton onClick={goBack} />}
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4 px-2">
-          <div>
-            <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
-            <p className="text-slate-500 text-sm flex items-center gap-1.5 flex-wrap">
-              {weekLabel} · <Countdown to={nextWedCutoff} />
-              <span className="text-slate-400">(closes {cutoffLabel})</span>
-            </p>
-            {lastChecked && (
-              <p className="text-slate-400 text-xs mt-0.5" title={resultLog.slice(0, 3).map(l => `${l.time} — ${l.message}`).join('\n')}>
-                Results last checked {lastChecked.toLocaleTimeString()}
-              </p>
-            )}
-          </div>
-          {isLoggedIn && (
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setShowBetAnalyzer(true)} className="bg-gold-500 hover:bg-gold-400 text-brand-950 px-4 py-2 rounded-lg font-bold text-xs transition-colors">
-                Submit Bet
-              </button>
-            </div>
-          )}
-        </div>
+        <PageHeader
+          title="Ladder"
+          subtitle={<span className="flex items-center gap-x-1.5 gap-y-0.5 flex-wrap">{weekLabel} · <Countdown to={nextWedCutoff} /> <span className="text-slate-400">({cutoffLabel})</span></span>}
+          actions={isLoggedIn && <button onClick={() => setShowBetAnalyzer(true)} className={btn.primary}>Submit bet</button>}
+        />
+        {lastChecked && (
+          <p className="text-slate-400 text-xs -mt-4 mb-4" title={resultLog.slice(0, 3).map(l => `${l.time} — ${l.message}`).join('\n')}>
+            Results last checked {lastChecked.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
+          </p>
+        )}
 
         {/* Competition switcher */}
         {activeCompetitions.length > 1 && (
@@ -136,7 +94,7 @@ const LeaderboardView = () => {
             items={activeCompetitions}
             selectedValue={effectiveViewedCode}
             onSelect={switchViewedCompetition}
-            className="mb-3 px-2"
+            className="mb-3"
           />
         )}
 
@@ -149,19 +107,20 @@ const LeaderboardView = () => {
             onSelect={switchViewedTeam}
             valueKey="id"
             labelKey="team_name"
-            className="mb-3 px-2"
+            className="mb-3"
           />
         )}
 
         {/* View toggle */}
-        <div className="flex gap-1 mb-4 px-2">
-          {[['current', 'This Week'], ['season', 'Season View']].map(([v, l]) => (
-            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${leaderboardView === v ? 'bg-brand-50 text-brand-700 border-brand-200' : 'text-slate-500 hover:text-slate-700 border-transparent'}`}>{l}</button>
+        <div className="inline-flex p-1 mb-4 bg-white border border-gray-200 rounded-full">
+          {[['current', 'This week'], ['season', 'Season']].map(([v, l]) => (
+            <button key={v} onClick={() => setLeaderboardView(v)} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${leaderboardView === v ? 'bg-brand-900 text-white' : 'text-slate-500 hover:text-slate-800'}`}>{l}</button>
           ))}
         </div>
 
         {/* ── DESKTOP COLUMN HEADERS (hidden on mobile) ── */}
-        <div className="hidden md:grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        <Card className="overflow-hidden">
+        <div className="hidden md:grid grid-cols-12 gap-2 px-4 py-2.5 border-b border-gray-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           <div className="col-span-1">#</div>
           <div className="col-span-3">Team</div>
           <div className="col-span-1 text-right">Total</div>
@@ -172,7 +131,7 @@ const LeaderboardView = () => {
         </div>
 
         {/* ── TEAM ROWS ── */}
-        <div className="space-y-1.5">
+        <div className="divide-y divide-gray-100">
           {enrichedLeaderboardTeams.length === 0 && showSkeleton && (
             <>{[0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}</>
           )}
@@ -190,12 +149,12 @@ const LeaderboardView = () => {
             const rowId = team.id || idx;
             const isOpen = selectedTeamIdx === rowId;
             const computedStatus = getComputedStatus(weekBet);
-            const rowBg = getRowBg(isMe, computedStatus);
+            const rowBg = getRowBg(isMe);
             const teamTotal = parseCurrency(team.total);
             const behind = leaderTotal - teamTotal;
 
             return (
-              <div key={rowId} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-brand-400/30' : ''}`}>
+              <div key={rowId} className={rowBg}>
 
                 {/* ── MOBILE CARD (shown below md) ── */}
                 <div
@@ -206,29 +165,27 @@ const LeaderboardView = () => {
                   onKeyDown={(e) => rowKeyDown(e, rowId)}
                 >
                   {/* Top row: rank, name, total */}
-                  <div className="flex items-center gap-2.5 px-3 pt-3 pb-1">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm flex-shrink-0`}>
-                      {team.rank}
-                    </div>
+                  <div className="flex items-center gap-3 px-4 pt-3 pb-0.5">
+                    <RankBadge rank={team.rank} />
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-sm truncate flex items-center gap-1">
                         {team.team}
-                        {isMe && <span className="text-brand-600 text-xs flex-shrink-0">(You)</span>}
+                        {isMe && <span className="text-[10px] font-bold uppercase bg-gold-500 text-brand-950 rounded-full px-1.5 py-0.5 flex-shrink-0">You</span>}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <div className="font-black text-brand-700 text-base leading-tight">{team.total}</div>
+                      <div className="font-display font-bold text-slate-900 text-xl leading-tight tabular-nums">{team.total}</div>
                     </div>
                   </div>
 
                   {/* Bottom row: behind, members, status, chevron */}
-                  <div className="flex items-center gap-2 px-3 pb-3 pt-0.5">
+                  <div className="flex items-center gap-2 pl-[60px] pr-4 pb-3">
                     <span className="text-slate-400 text-xs">{team.members} members</span>
                     {behind > 0 && (
                       <>
                         <span className="text-slate-300 text-xs">·</span>
                         <span className="text-slate-500 text-xs font-semibold">
-                          ${behind.toFixed(2)} behind
+                          ${behind.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} behind
                         </span>
                       </>
                     )}
@@ -247,28 +204,28 @@ const LeaderboardView = () => {
 
                 {/* ── DESKTOP ROW (shown at md+) ── */}
                 <div
-                  className="hidden md:grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded-lg"
+                  className="hidden md:grid grid-cols-12 gap-2 items-center px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                   role="button" tabIndex={0} aria-expanded={isOpen}
                   aria-label={`${team.team}, rank ${team.rank}, ${team.total}. Activate to ${isOpen ? 'collapse' : 'expand'} details`}
                   onClick={() => toggleRow(rowId)}
                   onKeyDown={(e) => rowKeyDown(e, rowId)}
                 >
                   <div className="col-span-1">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
+                    <RankBadge rank={team.rank} />
                   </div>
                   <div className="col-span-3 min-w-0 pl-1">
                     <div className="font-bold text-sm truncate flex items-center gap-1">
                       {team.team}
-                      {isMe && <span className="text-brand-600 text-xs flex-shrink-0">(You)</span>}
+                      {isMe && <span className="text-[10px] font-bold uppercase bg-gold-500 text-brand-950 rounded-full px-1.5 py-0.5 flex-shrink-0">You</span>}
                     </div>
                     <div className="text-slate-400 text-xs">{team.members} members</div>
                   </div>
                   <div className="col-span-1 text-right">
-                    <div className="font-bold text-brand-600 text-sm">{team.total}</div>
+                    <div className="font-display font-bold text-slate-900 text-lg tabular-nums">{team.total}</div>
                   </div>
                   <div className="col-span-1 text-right">
                     {behind > 0
-                      ? <span className="text-slate-500 text-xs font-semibold">${behind.toFixed(2)}</span>
+                      ? <span className="text-slate-500 text-xs font-semibold">${behind.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       : <span className="text-green-600 text-xs font-bold">{team.rank === 1 ? 'Leader' : '—'}</span>
                     }
                   </div>
@@ -302,7 +259,7 @@ const LeaderboardView = () => {
 
                 {/* ── EXPANDED DETAIL (shared mobile + desktop) ── */}
                 {isOpen && (
-                  <div className="border-t border-gray-200 bg-gray-50 px-3 py-3">
+                  <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
                     {/* Week-by-week breakdown (mobile: always show; desktop: show in current view) */}
                     {leaderboardView === 'current' && team.weekHistory?.length > 0 && (
                       <div className="mb-3 pb-3 border-b border-gray-200">
@@ -363,8 +320,8 @@ const LeaderboardView = () => {
             );
           })}
         </div>
-      </div>
-    </section>
+        </Card>
+    </Page>
   );
 };
 
