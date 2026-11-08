@@ -1,7 +1,8 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isString, isEmail, isDate } = require('./validate');
-const { corsHeaders, rateLimit, bearerToken } = require('./security');
+const { corsHeaders, rateLimit, bearerToken, safeEqual } = require('./security');
+const { ageOn } = require('../../src/lib/auTime.js');
 
 // Verify the caller's Supabase access token and return their auth user, or null.
 // Used to authorise actions that must only touch the caller's own account.
@@ -93,6 +94,111 @@ const resolveUserTeams = async (userId) => {
   return allMemberships;
 };
 
+// Create a new team (captain) or request to join one by code, for a user who
+// has just been created. Shared by phone sign-up and Google/Apple sign-up.
+// Returns { team } or { error }.
+async function setUpTeam(user, { firstName, lastName, cleanPhone, teamName, teamCode, buyInMode, competitionCode }) {
+  let team = null;
+
+  if (teamName) {
+    let compId = null;
+    if (competitionCode) {
+      const { data: comp } = await supabase.from('competitions').select('id').eq('code', competitionCode).eq('status', 'active').maybeSingle();
+      compId = comp?.id || null;
+    }
+    const { randomBytes } = require('crypto');
+    const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const genTeamCode = () => {
+      const result = [];
+      while (result.length < 6) {
+        const byte = randomBytes(1)[0];
+        if (byte < 252) result.push(CODE_CHARS[byte % 36]);
+      }
+      return result.join('');
+    };
+    let teamCodeGen, attempts = 0;
+    do {
+      teamCodeGen = genTeamCode();
+      const { data: ex } = await supabase.from('teams').select('id').eq('team_code', teamCodeGen).maybeSingle();
+      if (!ex) break;
+    } while (++attempts < 10);
+
+    // Enforce team name uniqueness within competition (case-insensitive)
+    const nameQuery = supabase.from('teams').select('id').ilike('team_name', teamName.trim());
+    if (compId) nameQuery.eq('competition_id', compId);
+    const { data: nameDup } = await nameQuery.maybeSingle();
+    if (nameDup) return { error: `Team name "${teamName.trim()}" is already taken in this competition. Please choose a different name.` };
+
+    const { data: newTeam, error: teamError } = await supabase.from('teams').insert({
+      team_code:      teamCodeGen,
+      team_name:      teamName.trim(),
+      captain_id:     user.id,
+      competition_id: compId,
+      buy_in_mode:    buyInMode || 'split',
+      status:         'pending',
+      finalised:      false,
+    }).select().single();
+    if (teamError) return { error: teamError.message };
+
+    await supabase.from('users').update({ role: 'captain' }).eq('id', user.id);
+
+    // Insert captain into team_members — check result and retry without betting_order if needed
+    const { error: memberErr } = await supabase.from('team_members').insert({
+      team_id:       newTeam.id,
+      user_id:       user.id,
+      role:          'captain',
+      can_bet:       true,
+      deposit_paid:  false,
+      betting_order: 1,
+    });
+    if (memberErr) {
+      console.error('team_members insert (with betting_order) failed:', memberErr.message);
+      // Retry without betting_order in case the column doesn't exist
+      const { error: memberErr2 } = await supabase.from('team_members').insert({
+        team_id:      newTeam.id,
+        user_id:      user.id,
+        role:         'captain',
+        can_bet:      true,
+        deposit_paid: false,
+      });
+      if (memberErr2) console.error('team_members insert (minimal) also failed:', memberErr2.message);
+    }
+
+    // Increment competition team count
+    if (compId) {
+      const { error: rpcErr } = await supabase.rpc('increment_competition_teams', { comp_id: compId });
+      if (rpcErr) {
+        // Fallback: manual increment if RPC not available
+        const { data: cd } = await supabase.from('competitions').select('teams_count').eq('id', compId).maybeSingle();
+        if (cd) await supabase.from('competitions').update({ teams_count: (cd.teams_count || 0) + 1 }).eq('id', compId);
+      }
+    }
+
+    // Notify admin of new team signup
+    await supabase.from('admin_notifications').insert({
+      type:    'new_team',
+      title:   `New team registered: ${teamName.trim()}`,
+      message: `${firstName} ${lastName} created team "${teamName.trim()}"${competitionCode ? ` for competition ${competitionCode}` : ''}. Phone: ${cleanPhone}.`,
+      data:    { teamId: newTeam.id, teamCode: teamCodeGen, teamName: teamName.trim(), competitionCode: competitionCode || null, captainName: `${firstName} ${lastName}`, captainPhone: cleanPhone },
+    });
+
+    team = { ...newTeam, teamCode: teamCodeGen, team_code: teamCodeGen };
+
+  } else if (teamCode) {
+    const { data: existingTeam } = await supabase.from('teams').select('*').eq('team_code', teamCode.toUpperCase()).maybeSingle();
+    if (!existingTeam) return { error: 'Team code not found.' };
+    await supabase.from('team_members').insert({
+      team_id:      existingTeam.id,
+      user_id:      user.id,
+      role:         'pending',
+      can_bet:      false,
+      deposit_paid: false,
+    });
+    team = existingTeam;
+  }
+  return { team };
+}
+
 exports.handler = async (event) => {
   const HEADERS = corsHeaders(event);
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: HEADERS, body: '' };
@@ -133,6 +239,11 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Last name must be 1–64 characters.' }) };
       if (!password  || String(password).length < 8 || String(password).length > 128)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+      // Gambling-related service: members must be 18 or over.
+      const age = ageOn(dob);
+      if (age === null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Please enter your date of birth.' }) };
+      if (age < 18) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'You must be 18 or over to join Punting Club.' }) };
+      if (age > 120) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Please check your date of birth.' }) };
       if (teamName && String(teamName).trim().length > 60)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Team name must be 60 characters or fewer.' }) };
       const cleanPhone = normalisePhone(phone);
@@ -184,104 +295,9 @@ exports.handler = async (event) => {
       }).select().single();
       if (userError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: userError.message }) };
 
-      let team = null;
-
-      if (teamName) {
-        let compId = null;
-        if (competitionCode) {
-          const { data: comp } = await supabase.from('competitions').select('id').eq('code', competitionCode).eq('status', 'active').maybeSingle();
-          compId = comp?.id || null;
-        }
-        const { randomBytes } = require('crypto');
-        const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        const genTeamCode = () => {
-          const result = [];
-          while (result.length < 6) {
-            const byte = randomBytes(1)[0];
-            if (byte < 252) result.push(CODE_CHARS[byte % 36]);
-          }
-          return result.join('');
-        };
-        let teamCodeGen, attempts = 0;
-        do {
-          teamCodeGen = genTeamCode();
-          const { data: ex } = await supabase.from('teams').select('id').eq('team_code', teamCodeGen).maybeSingle();
-          if (!ex) break;
-        } while (++attempts < 10);
-
-        // Enforce team name uniqueness within competition (case-insensitive)
-        const nameQuery = supabase.from('teams').select('id').ilike('team_name', teamName.trim());
-        if (compId) nameQuery.eq('competition_id', compId);
-        const { data: nameDup } = await nameQuery.maybeSingle();
-        if (nameDup) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: `Team name "${teamName.trim()}" is already taken in this competition. Please choose a different name.` }) };
-
-        const { data: newTeam, error: teamError } = await supabase.from('teams').insert({
-          team_code:      teamCodeGen,
-          team_name:      teamName.trim(),
-          captain_id:     user.id,
-          competition_id: compId,
-          buy_in_mode:    buyInMode || 'split',
-          status:         'pending',
-          finalised:      false,
-        }).select().single();
-        if (teamError) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: teamError.message }) };
-
-        await supabase.from('users').update({ role: 'captain' }).eq('id', user.id);
-
-        // Insert captain into team_members — check result and retry without betting_order if needed
-        const { error: memberErr } = await supabase.from('team_members').insert({
-          team_id:       newTeam.id,
-          user_id:       user.id,
-          role:          'captain',
-          can_bet:       true,
-          deposit_paid:  false,
-          betting_order: 1,
-        });
-        if (memberErr) {
-          console.error('team_members insert (with betting_order) failed:', memberErr.message);
-          // Retry without betting_order in case the column doesn't exist
-          const { error: memberErr2 } = await supabase.from('team_members').insert({
-            team_id:      newTeam.id,
-            user_id:      user.id,
-            role:         'captain',
-            can_bet:      true,
-            deposit_paid: false,
-          });
-          if (memberErr2) console.error('team_members insert (minimal) also failed:', memberErr2.message);
-        }
-
-        // Increment competition team count
-        if (compId) {
-          const { error: rpcErr } = await supabase.rpc('increment_competition_teams', { comp_id: compId });
-          if (rpcErr) {
-            // Fallback: manual increment if RPC not available
-            const { data: cd } = await supabase.from('competitions').select('teams_count').eq('id', compId).maybeSingle();
-            if (cd) await supabase.from('competitions').update({ teams_count: (cd.teams_count || 0) + 1 }).eq('id', compId);
-          }
-        }
-
-        // Notify admin of new team signup
-        await supabase.from('admin_notifications').insert({
-          type:    'new_team',
-          title:   `New team registered: ${teamName.trim()}`,
-          message: `${firstName} ${lastName} created team "${teamName.trim()}"${competitionCode ? ` for competition ${competitionCode}` : ''}. Phone: ${cleanPhone}.`,
-          data:    { teamId: newTeam.id, teamCode: teamCodeGen, teamName: teamName.trim(), competitionCode: competitionCode || null, captainName: `${firstName} ${lastName}`, captainPhone: cleanPhone },
-        });
-
-        team = { ...newTeam, teamCode: teamCodeGen, team_code: teamCodeGen };
-
-      } else if (teamCode) {
-        const { data: existingTeam } = await supabase.from('teams').select('*').eq('team_code', teamCode.toUpperCase()).maybeSingle();
-        if (!existingTeam) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Team code not found.' }) };
-        await supabase.from('team_members').insert({
-          team_id:      existingTeam.id,
-          user_id:      user.id,
-          role:         'pending',
-          can_bet:      false,
-          deposit_paid: false,
-        });
-        team = existingTeam;
-      }
+      const setup = await setUpTeam(user, { firstName, lastName, cleanPhone, teamName, teamCode, buyInMode, competitionCode });
+      if (setup.error) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: setup.error }) };
+      const team = setup.team;
 
       // Sign in to get a session token so frontend can persist the session
       let sessionData = null;
@@ -291,6 +307,78 @@ exports.handler = async (event) => {
       } catch(e) {}
 
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, team, session: sessionData?.session || null }) };
+    }
+
+    // ── GOOGLE / APPLE (Supabase OAuth) ────────────────────────────────────
+    // The browser completes the Google/Apple sign-in with Supabase and sends its
+    // access token here. Existing members get their profile; new ones are asked
+    // to finish sign-up (mobile, date of birth 18+, team) via oauth_register.
+    if (action === 'oauth_status') {
+      const authUser = await requireAuth(event);
+      if (!authUser) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Sign-in expired. Please try again.' }) };
+      const { data: user } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+      if (user) {
+        const teams = await resolveUserTeams(user.id);
+        return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ status: 'ok', user, teams }) };
+      }
+      const meta = authUser.user_metadata || {};
+      const full = String(meta.full_name || meta.name || '').trim();
+      const [given, ...rest] = full.split(/\s+/);
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({
+        status: 'needs_profile',
+        provider: authUser.app_metadata?.provider || null,
+        prefill: {
+          email:     authUser.email || meta.email || '',
+          firstName: meta.given_name || meta.first_name || given || '',
+          lastName:  meta.family_name || meta.last_name || rest.join(' ') || '',
+        },
+      }) };
+    }
+
+    if (action === 'oauth_register') {
+      const authUser = await requireAuth(event);
+      if (!authUser) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Sign-in expired. Please sign in with Google or Apple again.' }) };
+      const fail = (msg, code = 400) => ({ statusCode: code, headers: HEADERS, body: JSON.stringify({ error: msg }) });
+
+      const { data: existingUser } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+      if (existingUser) return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user: existingUser, team: null, alreadyRegistered: true }) };
+
+      const { phone, firstName, lastName, email, dob, postcode, teamName, teamCode, buyInMode, competitionCode } = payload;
+      if (!firstName || String(firstName).trim().length < 1 || String(firstName).length > 64) return fail('First name must be 1–64 characters.');
+      if (!lastName  || String(lastName).trim().length < 1  || String(lastName).length > 64)  return fail('Last name must be 1–64 characters.');
+      const age = ageOn(dob);
+      if (age === null) return fail('Please enter your date of birth.');
+      if (age < 18) return fail('You must be 18 or over to join Punting Club.');
+      if (age > 120) return fail('Please check your date of birth.');
+      if (teamName && String(teamName).trim().length > 60) return fail('Team name must be 60 characters or fewer.');
+      const cleanPhone = normalisePhone(phone);
+      if (!/^04\d{8}$/.test(cleanPhone)) return fail('Invalid mobile number. Please use format: 0412 345 678');
+      const emailErr = isEmail(email || authUser.email);
+      if (emailErr) return fail(emailErr);
+
+      // A mobile number belongs to one account. If it's already registered the
+      // person should log in with it instead (we don't merge accounts silently).
+      const { data: phoneTaken } = await supabase.from('users').select('id').eq('phone', cleanPhone).maybeSingle();
+      if (phoneTaken) return fail('That mobile number already has a Punting Club account. Log in with your mobile and password instead.', 409);
+
+      const { data: user, error: userError } = await supabase.from('users').insert({
+        id:            authUser.id,
+        phone:         cleanPhone,
+        first_name:    String(firstName).trim(),
+        last_name:     String(lastName).trim(),
+        email:         (email || authUser.email || null),
+        password_hash: `oauth:${authUser.app_metadata?.provider || 'unknown'}`,
+        dob:           dob || null,
+        postcode:      postcode || null,
+        role:          'member',
+        kyc_status:    'pending',
+        active:        true,
+      }).select().single();
+      if (userError) return fail(userError.message);
+
+      const setup = await setUpTeam(user, { firstName: String(firstName).trim(), lastName: String(lastName).trim(), cleanPhone, teamName, teamCode, buyInMode, competitionCode });
+      if (setup.error) return fail(setup.error);
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ user, team: setup.team }) };
     }
 
     // ── LOGIN ────────────────────────────────────────────────────────────────
@@ -303,7 +391,7 @@ exports.handler = async (event) => {
 
       // Step 1: Supabase auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password });
-      if (authError) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password.' }) };
+      if (authError) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid mobile number or password. If you signed up with Google or Apple, use that button instead.' }) };
       if (!authData) return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'Auth returned null' }) };
 
       // Step 2: Fetch user profile
@@ -325,11 +413,11 @@ exports.handler = async (event) => {
     if (action === 'reset_password') {
       const { phone } = payload;
       if (!phone || !String(phone).trim()) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number is required.' }) };
-      const cleanPhone = normalisePhone(phone);
-      const authEmail  = `${cleanPhone}@puntingclub.app`;
-      const { error } = await supabase.auth.admin.generateLink({ type: 'recovery', email: authEmail });
-      if (error) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: error.message }) };
-      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true }) };
+      // Accounts use phone-derived addresses that can't receive email, and no SMS
+      // provider is configured — so resets are done by a club admin (Users tab →
+      // Reset Pwd issues a temporary password). Same reply for every number so
+      // this can't be used to find out who is registered.
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true, message: 'Ask your club admin or captain to reset your password. They can issue you a temporary one.' }) };
     }
 
     // ── VERIFY SESSION ───────────────────────────────────────────────────────
@@ -369,7 +457,7 @@ exports.handler = async (event) => {
       const cleanId = String(id || '').trim();
       const acct    = ADMIN_ACCOUNTS[cleanId];
 
-      if (!acct || !acct.pw || acct.pw !== String(password || '')) {
+      if (!acct || !acct.pw || !safeEqual(acct.pw, String(password || ''))) {
         return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid admin credentials.' }) };
       }
 

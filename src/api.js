@@ -17,7 +17,30 @@ const writeTokens = (access, refresh) => {
   } catch { /* ignore */ }
 };
 
-const call = async (endpoint, payload, _retry = false) => {
+// One refresh at a time: Supabase rotates refresh tokens, so two parallel
+// refreshes with the same token would log the user out.
+let refreshInFlight = null;
+const refreshTokens = (refreshToken) => {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const rRes = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh', refreshToken }),
+      });
+      if (!rRes.ok) return false;
+      const rData = await rRes.json();
+      if (!rData?.access_token) return false;
+      writeTokens(rData.access_token, rData.refresh_token);
+      return true;
+    })().catch(() => false).finally(() => { setTimeout(() => { refreshInFlight = null; }, 0); });
+  }
+  return refreshInFlight;
+};
+
+// POST with the user's access token, refreshing it once on a 401.
+// Returns the raw { res, data } so callers can handle non-standard error shapes.
+export const postWithAuth = async (endpoint, payload, _retry = false) => {
   const sess = readSession();
   const headers = { 'Content-Type': 'application/json' };
   if (sess.token && sess.token !== 'ok') headers.Authorization = `Bearer ${sess.token}`;
@@ -30,24 +53,23 @@ const call = async (endpoint, payload, _retry = false) => {
 
   // If the access token has expired, transparently refresh once and retry.
   if (res.status === 401 && !_retry && sess.refreshToken) {
-    try {
-      const rRes = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refresh', refreshToken: sess.refreshToken }),
-      });
-      if (rRes.ok) {
-        const rData = await rRes.json();
-        if (rData?.access_token) {
-          writeTokens(rData.access_token, rData.refresh_token);
-          return call(endpoint, payload, true);
-        }
-      }
-    } catch { /* fall through to surface the original error */ }
+    if (await refreshTokens(sess.refreshToken)) return postWithAuth(endpoint, payload, true);
   }
 
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`);
+  let data;
+  try { data = await res.json(); }
+  catch { data = { error: `Server error ${res.status}` }; }
+  return { res, data };
+};
+
+const call = async (endpoint, payload) => {
+  const { res, data } = await postWithAuth(endpoint, payload);
+  if (!res.ok || data.error) {
+    const msg = typeof data.error === 'string' ? data.error : data.error?.message;
+    const err = new Error(msg || `API error ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return data;
 };
 
@@ -58,6 +80,8 @@ export const apiResetPassword  = (phone)         => call('auth', { action: 'rese
 export const apiVerifySession  = (userId)        => call('auth', { action: 'verify_session', userId });
 export const apiAdminLogin     = (id, password)  => call('auth', { action: 'admin_login', id, password });
 export const apiUpdateProfile  = (userId, updates) => call('auth', { action: 'update_profile', userId, ...updates });
+export const apiOAuthStatus    = ()        => call('auth', { action: 'oauth_status' });
+export const apiOAuthRegister  = (payload) => call('auth', { action: 'oauth_register', ...payload });
 export const apiChangePassword = (userId, currentPassword, newPassword) => call('auth', { action: 'change_password', userId, currentPassword, newPassword });
 
 // ── COMPETITIONS ─────────────────────────────────────────────
@@ -81,6 +105,7 @@ export const apiGetAllTeams   = (adminToken)    => call('data', { action: 'get_a
 export const apiUpdateTeam    = (teamId, updates, adminToken) => call('data', { action: 'update_team', teamId, updates, adminToken });
 export const apiDeleteTeam    = (teamId, adminToken)          => call('data', { action: 'delete_team', id: teamId, adminToken });
 export const apiFinaliseTeam  = (teamId, depositPerMember) => call('data', { action: 'finalise_team', teamId, depositPerMember });
+export const apiReopenTeam    = (teamId) => call('data', { action: 'finalise_team', teamId, reopen: true });
 
 // ── TEAM MEMBERS ─────────────────────────────────────────────
 export const apiGetTeamMembers    = (teamId)            => call('data', { action: 'get_team_members', teamId });
@@ -104,6 +129,7 @@ export const apiGetLeaderboard = (competitionId, currentWeek, startDate) => call
 // ── ADMIN ────────────────────────────────────────────────────
 export const apiGetAllUsers  = (adminToken)              => call('data', { action: 'get_all_users', adminToken });
 export const apiUpdateKyc    = (userId, kycStatus, adminToken) => call('data', { action: 'update_kyc', userId, kycStatus, adminToken });
+export const apiAdminResetPassword = (userId, adminToken) => call('data', { action: 'admin_reset_password', userId, adminToken });
 export const apiUpdateUser   = (userId, updates, adminToken)   => call('data', { action: 'update_user', userId, updates, adminToken });
 export const apiDeleteUser   = (userId, adminToken)            => call('data', { action: 'delete_user', userId, adminToken });
 export const apiGetAuditLog  = (limit, adminToken)       => call('data', { action: 'get_audit_log', limit, adminToken });
@@ -117,26 +143,4 @@ export const apiGetWeeklyRecap  = (competitionId, weekNumber) => call('data', { 
 export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get_latest_recap', competitionId });
 export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
 export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
-export const apiTriggerResultsCheck = (adminToken) => call('data', { action: 'trigger_results_check', adminToken });
-
-// ── CLAUDE AI ────────────────────────────────────────────────
-export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {
-  model: 'claude-haiku-4-5-20251001',
-  max_tokens: 1200,
-  messages: [{
-    role: 'user',
-    content: [
-      { type: 'text', text: `Analyse this bet slip image and return ONLY valid JSON:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"aiConfidence":95,"legs":[{"legNumber":1,"event":"Event","selection":"Selection","market":"Win","odds":"2.10","status":"pending"}]}\nRules: dollar signs on money, decimal odds, status in {pending,won,lost,void}, submissionValid=placed before first leg, aiConfidence=0-100. Return ONLY JSON.` },
-      { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } },
-    ],
-  }],
-});
-
-export const apiCheckBetResults = (legs) => call('claude', {
-  model: 'claude-haiku-4-5-20251001',
-  max_tokens: 500,
-  messages: [{
-    role: 'user',
-    content: `Today: ${new Date().toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}.\n\nBet legs:\n${legs.map(l => `Leg ${l.leg_number}: ${l.selection} — ${l.event} — ${l.market} @ ${l.odds} — status: ${l.status}`).join('\n')}\n\nFor each pending leg determine if concluded. Return ONLY JSON array:\n[{"legId":"uuid","legNumber":1,"status":"won|lost|void|pending","result":"brief note"}]\nOnly settle if confident. Return all legs.`,
-  }],
-});
+export const apiTriggerResultsCheck = (adminToken, betId = null) => call('data', { action: 'trigger_results_check', adminToken, betId });

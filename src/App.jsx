@@ -14,20 +14,24 @@ import LeaderboardView from './components/views/LeaderboardView.jsx';
 import WeeklySummaryView from './components/views/WeeklySummaryView.jsx';
 import MyTeamView from './components/views/MyTeamView.jsx';
 import { AppContext } from './context/AppContext.jsx';
-import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, WEEK_BUDGET } from './utils.js';
+import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, weeklyLimitFor } from './utils.js';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
   apiGetAllTeams, apiUpdateTeam, apiDeleteTeam, apiFinaliseTeam,
-  apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder,
+  apiGetTeamMembers, apiApproveMember, apiRejectMember, apiUpdateMember, apiSaveBettingOrder, apiReopenTeam,
   apiSubmitBet, apiGetAllBets, apiUpdateBetResult, apiUpdateBetLeg, apiRejectBet, apiCorrectBet, apiJoinExistingTeam,
   apiGetLeaderboard, apiGetAllUsers, apiUpdateKyc, apiDeleteUser, apiGetAuditLog, apiUpdateCompetition,
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
-  apiUpdateProfile, apiChangePassword,
-  apiGenerateRecap, apiTriggerResultsCheck,
+  apiUpdateProfile, apiChangePassword, apiAdminResetPassword, apiOAuthStatus, apiOAuthRegister,
+  apiGenerateRecap, apiTriggerResultsCheck, postWithAuth,
 } from './api.js';
+import { buildSlipPrompt } from './lib/slipPrompt.js';
+import { betStatus } from './lib/betMath.js';
+import { oauthEnabled, oauthProviders, startOAuth, isOAuthReturn, finishOAuthFromUrl } from './lib/supabaseClient.js';
+import { nextCutoff, ageOn } from './lib/auTime.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -49,6 +53,9 @@ export default function PuntingClub() {
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError]     = useState(null);
   const [signupMode, setSignupMode] = useState(null); // 'create' | 'join'
+  // Set while a Google/Apple user finishes sign-up: { provider, email }
+  const [oauthPending, setOauthPending] = useState(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
 
   // Create / join additional team (logged-in users)
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
@@ -82,7 +89,14 @@ export default function PuntingClub() {
   // My Team
   const [pendingMembers, setPendingMembers] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [bettingOrder, setBettingOrder] = useState([]);
+  const [bettingOrder, setBettingOrder] = useState([]); // [{ user_id, name }] in rotation order
+  // Rotation from team members: active members who can bet, in the captain's saved
+  // order (team_members.betting_order), then anyone new at the end.
+  const orderFromMembers = (members) => (members || [])
+    .filter(m => m.role !== 'pending' && m.role !== 'view-only' && (m.can_bet || m.canBet) && m.user_id)
+    .map((m, i) => ({ user_id: m.user_id, name: m.name || 'Member', pos: m.betting_order ?? 1e6 + i }))
+    .sort((a, b) => a.pos - b.pos)
+    .map(({ user_id, name }) => ({ user_id, name }));
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [teamFinalised, setTeamFinalised] = useState(false);
@@ -164,14 +178,12 @@ export default function PuntingClub() {
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedTeamForBet, setSelectedTeamForBet] = useState('');
   const [showBetResults, setShowBetResults] = useState(false);
+  const [submittingBet, setSubmittingBet] = useState(false);
   const fileInputRef = useRef(null);
 
   // Result checking
-  const [checkingResults, setCheckingResults] = useState(false);
-  const [lastChecked, setLastChecked] = useState(null);
-  const [checkingBetId, setCheckingBetId] = useState(null);
-  const [resultLog, setResultLog] = useState([]);
-  const intervalRef = useRef(null);
+  const [lastChecked] = useState(null);
+  const [resultLog] = useState([]);
 
   // Captain join-request notifications
   const [joinRequestNotifs, setJoinRequestNotifs] = useState([]);
@@ -228,7 +240,7 @@ export default function PuntingClub() {
       if (myTeam?.id) {
         try {
           const members = await apiGetTeamMembers(myTeam.id);
-          const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+          const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name} ${m.users?.last_name}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet, betting_order: m.betting_order ?? null }));
           // Always ensure the logged-in user appears in the list
           const selfInList = mapped.some(m => m.user_id === user.id);
           if (!selfInList) {
@@ -236,7 +248,7 @@ export default function PuntingClub() {
           }
           setTeamMembers(mapped);
           const approved = mapped.filter(m => m.role !== 'pending');
-          if (approved.length > 0) setBettingOrder(approved.filter(m => m.can_bet || m.canBet).map(m => m.name));
+          if (approved.length > 0) setBettingOrder(orderFromMembers(mapped));
         } catch(e) { 
           // Fallback: at minimum show the logged-in user
           setTeamMembers([{ user_id: user.id, role: myTeam.myRole || user.role, can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${user.first_name} ${user.last_name}`.trim(), phone: user.phone }]);
@@ -338,6 +350,10 @@ export default function PuntingClub() {
     setDepositPerMember(null);
     setActiveNav('home');
     setNavHistory([]);
+    setViewedCompetitionCode(null);
+    setShowBetAnalyzer(false);
+    setUploadedImages([]); setAnalyzedBet(null); setSelectedTeamForBet('');
+    setPendingMembers([]); setJoinRequestNotifs([]);
     try { localStorage.removeItem('pc_session'); } catch(e) {}
   };
 
@@ -380,7 +396,10 @@ export default function PuntingClub() {
       setCurrentTeamId(team.id);
       if (newCompCode) setViewedCompetitionCode(newCompCode);
       setTeamMembers([{ user_id: currentUser.id, role: 'captain', can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${currentUser.firstName} ${currentUser.lastName}`, users: { id: currentUser.id, first_name: currentUser.firstName, last_name: currentUser.lastName } }]);
-      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: newCompCode || currentUser.competitionCode, token: 'ok', allTeamIds: updatedAllTeamIds })); } catch(_) {}
+      // Keep the existing login tokens — overwriting them logged the user out of every API call.
+      let prevSess = {};
+      try { prevSess = JSON.parse(localStorage.getItem('pc_session') || '{}'); } catch(_) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: newCompCode || currentUser.competitionCode, token: prevSess.token || null, refreshToken: prevSess.refreshToken || null, allTeamIds: updatedAllTeamIds })); } catch(_) {}
       setShowCreateTeamModal(false);
       setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' });
       setActiveNav('team');
@@ -411,6 +430,48 @@ export default function PuntingClub() {
   };
 
   // ── SIGNUP ────────────────────────────────────────────────────────────────
+  // Save tokens (and optionally the user) to the app's session store, then reload
+  // so the normal session-restore path loads teams, members and leaderboard.
+  const saveSessionAndReload = (tokens, user) => {
+    try {
+      localStorage.setItem('pc_session', JSON.stringify({ ...(user ? { user } : {}), token: tokens.accessToken, refreshToken: tokens.refreshToken }));
+    } catch (_) {}
+    if (user) window.location.replace(window.location.pathname);
+  };
+  const readTokens = () => {
+    try { const s = JSON.parse(localStorage.getItem('pc_session') || '{}'); return { accessToken: s.token, refreshToken: s.refreshToken }; }
+    catch { return {}; }
+  };
+
+  const signInWith = async (provider) => {
+    setApiError(null);
+    setOauthBusy(true);
+    try { await startOAuth(provider); }
+    catch (err) { setOauthBusy(false); setApiError(err.message || 'Could not start sign-in.'); }
+  };
+
+  // Returning from Google/Apple (/?oauth=1&code=…)
+  useEffect(() => {
+    if (!isOAuthReturn()) return;
+    (async () => {
+      try {
+        const tokens = await finishOAuthFromUrl();
+        saveSessionAndReload(tokens, null);           // token only, so the next call is authenticated
+        const status = await apiOAuthStatus();
+        if (status.status === 'ok' && status.user) { saveSessionAndReload(tokens, status.user); return; }
+        // New member: finish sign-up (mobile, DOB, team) in the normal sign-up form.
+        setFormData(f => ({ ...f, firstName: status.prefill?.firstName || f.firstName, lastName: status.prefill?.lastName || f.lastName, email: status.prefill?.email || f.email, password: '', confirmPassword: '' }));
+        setOauthPending({ provider: status.provider, email: status.prefill?.email || '' });
+        setSignupMode(m => m || 'create');
+        setShowSignupModal(true);
+      } catch (err) {
+        try { localStorage.removeItem('pc_session'); } catch (_) {}
+        showToast(`Sign-in failed: ${err.message}`, 'error');
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmitSignup = useCallback(async (e) => {
     e.preventDefault();
 
@@ -425,14 +486,43 @@ export default function PuntingClub() {
       return;
     }
     setPhoneError('');
-    if (!formData.password)          { setApiError('Please enter a password.'); return; }
-    if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
-    if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
+    if (!oauthPending) {
+      if (!formData.password)          { setApiError('Please enter a password.'); return; }
+      if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
+      if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
+    }
+    const age = ageOn(formData.dob);
+    if (age === null) { setApiError('Please enter your date of birth.'); return; }
+    if (age < 18) { setApiError('You must be 18 or over to join Punting Club.'); return; }
     if (signupMode === 'create' && !formData.teamName?.trim()) { setApiError('Please enter a team name.'); return; }
     if (signupMode === 'join'   && !formData.teamCode?.trim()) { setApiError('Please enter a team code.'); return; }
 
     setApiLoading(true);
     setApiError(null);
+
+    if (oauthPending) {
+      try {
+        const result = await apiOAuthRegister({
+          phone:           validatePhone(formData.phone).normalised || formData.phone.trim(),
+          firstName:       formData.firstName.trim(),
+          lastName:        formData.lastName.trim(),
+          email:           formData.email?.trim() || null,
+          dob:             formData.dob || null,
+          postcode:        formData.postcode?.trim() || null,
+          teamName:        signupMode === 'create' ? formData.teamName.trim() : null,
+          teamCode:        signupMode === 'join'   ? formData.teamCode.trim().toUpperCase() : null,
+          buyInMode:       formData.buyInMode || 'split',
+          competitionCode: formData.competitionCode || null,
+        });
+        setOauthPending(null);
+        saveSessionAndReload(readTokens(), result.user);
+      } catch (err) {
+        setApiError(err.message);
+      } finally {
+        setApiLoading(false);
+      }
+      return;
+    }
 
     try {
       // Try Supabase first — if it works, great
@@ -513,7 +603,7 @@ export default function PuntingClub() {
     } finally {
       setApiLoading(false);
     }
-  }, [formData, signupMode]);
+  }, [formData, signupMode, oauthPending]);
 
   // ── MEMBER MANAGEMENT ────────────────────────────────────────────────────
   // Dismiss a single member from the join-request notification popup
@@ -532,10 +622,9 @@ export default function PuntingClub() {
       dismissJoinNotif(userId);
       // Reload members from DB and rebuild betting order
       const members = await apiGetTeamMembers(currentTeamId);
-      const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet }));
+      const mapped = members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet, betting_order: m.betting_order ?? null }));
       setTeamMembers(mapped);
-      const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
-      if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
+      setBettingOrder(orderFromMembers(mapped));
       showToast('Member approved!', 'success');
     } catch (err) { showToast(`Failed to approve member: ${err.message}`, 'error'); }
   };
@@ -549,10 +638,21 @@ export default function PuntingClub() {
   };
 
   const updateMemberRole = async (userId, role) => {
+    const before = teamMembers;
+    const next = teamMembers.map(m => m.user_id === userId ? { ...m, role, can_bet: role !== 'view-only', canBet: role !== 'view-only' } : m);
+    setTeamMembers(next);
+    setBettingOrder(prev => {
+      const fresh = orderFromMembers(next);
+      // keep the existing order, drop anyone who can no longer bet, append newcomers
+      const kept = prev.filter(p => fresh.some(f => f.user_id === p.user_id));
+      return [...kept, ...fresh.filter(f => !kept.some(k => k.user_id === f.user_id))];
+    });
     try {
-      setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role, can_bet: role !== 'view-only', canBet: role !== 'view-only' } : m));
       await apiUpdateMember(currentTeamId, userId, { role, can_bet: role !== 'view-only' });
-    } catch (err) { showToast(`Failed to update role: ${err.message}`, 'error'); }
+    } catch (err) {
+      setTeamMembers(before);
+      showToast(`Failed to update role: ${err.message}`, 'error');
+    }
   };
 
   const toggleCanBet = async (userId) => {
@@ -565,23 +665,19 @@ export default function PuntingClub() {
   };
 
   const toggleDepositPaid = async (userId) => {
-    const member = teamMembers.find(m => (m.user_id || m.phone) === userId);
-    const newVal = !(member?.deposit_paid ?? member?.depositPaid);
-    setTeamMembers(prev => prev.map(m => (m.user_id || m.phone) === userId ? { ...m, deposit_paid: newVal, depositPaid: newVal } : m));
+    const member = teamMembers.find(m => m.user_id === userId);
+    if (!member) return;
+    const newVal = !(member.deposit_paid ?? member.depositPaid);
+    setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, deposit_paid: newVal, depositPaid: newVal } : m));
     try { await apiUpdateMember(currentTeamId, userId, { deposit_paid: newVal }); }
-    catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
+    catch (err) {
+      setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, deposit_paid: !newVal, depositPaid: !newVal } : m));
+      showToast(`Failed to update deposit: ${err.message}`, 'error');
+    }
   };
 
-  // Next Wednesday 12:00 AEST cutoff from now (for display)
-  const nextWedCutoff = (() => {
-    const AEST = 10 * 60 * 60 * 1000;
-    let d = new Date(Date.now() + AEST);
-    d.setUTCHours(12, 0, 0, 0);
-    const daysToWed = (3 - d.getUTCDay() + 7) % 7;
-    d = new Date(d.getTime() + daysToWed * 86400000);
-    if (d.getTime() <= Date.now() + AEST) d = new Date(d.getTime() + 7 * 86400000);
-    return new Date(d.getTime() - AEST); // back to real UTC for display
-  })();
+  // Next Wednesday 12:00 midday cutoff (Sydney time, daylight-saving aware)
+  const nextWedCutoff = nextCutoff();
 
   // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
   const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-amber-600 to-amber-800','from-brand-500 to-brand-700','from-brand-500 to-brand-700','from-brand-500 to-brand-700','from-brand-500 to-brand-700','from-brand-500 to-brand-700'];
@@ -593,10 +689,12 @@ export default function PuntingClub() {
     bets: (t.bets || []).map(b => ({
       id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
       estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
+      // Actual gross return (reduced for void legs; stake back if all void) from the server's shared rules
+      actualReturn: `$${((b.actual_return ?? 0)/100).toFixed(2)}`, returnReduced: !!b.return_reduced,
       weekNumber: b.week_number,
       submittedAt: new Date(b.submitted_at).toLocaleString(),
       submittedBy: b.submitted_by_name || null,
-      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time, resultSourceUrl: l.result_source_url || null, needsReview: !!l.needs_review, settledBy: l.settled_by || null })),
     })),
   })), []);
 
@@ -626,41 +724,10 @@ export default function PuntingClub() {
     return null;
   }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData, LEADERBOARD_TTL_MS]);
 
-  // ── RESULT CHECKER ────────────────────────────────────────────────────────
-  // Calls the synchronous /api/check-results function once per pending bet
-  // (one bet at a time keeps each call within the 26s Netlify timeout).
-  const reviewBetResults = useCallback(async (teams) => {
-    const UNSETTLED = ['pending', 'in_progress'];
-    const hasPendingBets = (teams || []).some(t =>
-      (t.bets || []).some(b => (b.legs || []).some(l => UNSETTLED.includes(l.status)))
-    );
-    if (!hasPendingBets) return; // no pending bets — silently skip
-
-    setCheckingResults(true);
-
-    try {
-      // Single batch call — backend deduplicates shared events across all bet slips
-      const res = await fetch('/api/check-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const totalLegsUpdated = data.legsUpdated || 0;
-        await refreshLeaderboard(undefined, undefined, { force: true });
-        setLastChecked(new Date());
-        if (totalLegsUpdated > 0) {
-          showToast('Results updated — leaderboard refreshed!', 'success');
-          setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${totalLegsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
-        }
-      }
-    } catch (e) {
-      console.warn('[check-results] batch error:', e.message);
-    }
-
-    setCheckingResults(false);
-  }, [refreshLeaderboard, showToast]);
+  // ── RESULT CHECKING ───────────────────────────────────────────────────────
+  // Results are settled server-side only: the scheduled check-results function
+  // runs every 3 hours, and admins can trigger a run via "Update Scores"
+  // (triggerResultsCheck). Browsers never call the settler directly.
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -670,6 +737,8 @@ export default function PuntingClub() {
       .catch(err => console.error('Failed to load competitions:', err));
 
     // Restore session from localStorage so refresh doesn't log out
+    // (skipped on a Google/Apple return — that flow sets the session itself)
+    if (isOAuthReturn()) return;
     try {
       const saved = localStorage.getItem('pc_session');
       if (saved) {
@@ -704,8 +773,15 @@ export default function PuntingClub() {
             if (myTeam?.finalised) { setTeamFinalised(true); setDepositPerMember(myTeam.deposit_per_member || null); }
             else { setTeamFinalised(false); setDepositPerMember(null); }
             try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', refreshToken: sess.refreshToken || null, allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
-          }).catch(() => {
-            // Server unreachable — keep cached session, data will load via normal effects
+          }).catch((err) => {
+            if (err?.status === 401 || err?.status === 404) {
+              // Login expired or account gone — don't leave a "logged in" screen where every action fails.
+              try { localStorage.removeItem('pc_session'); } catch(_) {}
+              setIsLoggedIn(false); setCurrentUser(null); setCurrentTeamId(null);
+              setShowLoginModal(true);
+              showToast('Your login has expired — please log in again.', 'warning');
+            }
+            // Otherwise the server is unreachable — keep the cached session for now.
           });
         } else {
           // local_ fallback ID — no longer valid now that functions are deployed, clear it
@@ -713,6 +789,27 @@ export default function PuntingClub() {
         }
       }
     } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }
+  }, []);
+
+  // Invite links: /?join=TEAMCODE opens "join team" (logged in) or sign-up with
+  // the code filled in, then removes the parameter from the address bar.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const code = (params.get('join') || '').trim().toUpperCase();
+      if (!/^[A-Z0-9]{4,10}$/.test(code)) return;
+      const hasSession = !!JSON.parse(localStorage.getItem('pc_session') || '{}')?.user?.id;
+      if (hasSession) {
+        setJoinTeamCode(code); setJoinTeamError(null); setJoinTeamSuccess(null);
+        setTeamModalTab('join'); setShowCreateTeamModal(true);
+      } else {
+        setFormData(f => ({ ...f, teamCode: code }));
+        setSignupMode('join'); setShowSignupModal(true);
+      }
+      params.delete('join');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+    } catch (_) { /* ignore malformed URLs */ }
   }, []);
 
   // ── Admin data loader (reusable) ────────────────────────────────────────
@@ -779,10 +876,11 @@ export default function PuntingClub() {
       if (bets.status === 'fulfilled' && bets.value) {
         setAdminBets(bets.value.map(b => ({
           id: b.id, team: b.teams?.team_name, status: b.overall_status,
+          type: b.bet_type, week: b.week_number, toWin: `$${((b.estimated_return || 0) / 100).toFixed(2)}`,
           stake: `$${((b.stake || 0) / 100).toFixed(2)}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
           valid: b.submission_valid !== false,
           flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
-          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time, resultSourceUrl: l.result_source_url || null, needsReview: !!l.needs_review })),
         })));
       }
       if (comps.status === 'fulfilled' && comps.value) {
@@ -851,141 +949,65 @@ export default function PuntingClub() {
     }
   }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Smart auto-check: fire every 3 hours from the first event's start time.
-  // Admin-only — regular users must never trigger a settlement run from their
-  // browser. The scheduled server function handles automatic checks for everyone.
-  useEffect(() => {
-    if (!isAdminLoggedIn) return;
-    if (!leaderboardTeams.length) return;
-
-    // Only schedule the timer when there are actually pending/in-progress bets
-    const hasPendingBets = leaderboardTeams.some(t =>
-      (t.bets || []).some(b => (b.legs || []).some(l => ['pending', 'in_progress'].includes(l.status)))
-    );
-    if (!hasPendingBets) return;
-
-    const THREE_HOURS = 3 * 60 * 60 * 1000;
-
-    // Find the earliest event start across all pending/in-progress legs
-    let firstEventMs = null;
-    for (const team of leaderboardTeams) {
-      for (const bet of team.bets || []) {
-        for (const leg of bet.legs || []) {
-          if (leg.eventDate && ['pending', 'in_progress'].includes(leg.status)) {
-            const timeStr = leg.startTime ? leg.startTime.substring(0, 5) : '00:00';
-            const dt = new Date(`${leg.eventDate}T${timeStr}`);
-            if (!isNaN(dt.getTime()) && (!firstEventMs || dt.getTime() < firstEventMs)) {
-              firstEventMs = dt.getTime();
-            }
-          }
-        }
-      }
-    }
-
-    // Calculate milliseconds until next 3-hour check boundary from first event
-    const now = Date.now();
-    let delay;
-    if (!firstEventMs) {
-      delay = THREE_HOURS; // no event dates stored — fall back to 3h from now
-    } else if (now < firstEventMs) {
-      delay = firstEventMs - now; // wait until first event starts
-    } else {
-      const elapsed = now - firstEventMs;
-      const nextCount = Math.ceil(elapsed / THREE_HOURS) || 1;
-      delay = firstEventMs + nextCount * THREE_HOURS - now;
-      if (delay < 30000) delay += THREE_HOURS; // avoid firing within 30s
-    }
-
-    // Schedule first check, then repeat every 3 hours
-    const runCheck = async () => {
-      const current = leaderboardTeams;
-      if (current.length) await reviewBetResults(current);
-    };
-    const tid = setTimeout(() => {
-      runCheck();
-      intervalRef.current = setInterval(runCheck, THREE_HOURS);
-    }, delay);
-
-    return () => {
-      clearTimeout(tid);
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminLoggedIn, leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
-
-  // Trigger a result check using client-side Claude+web-search, then persist
-  // any changes to the DB. The scheduled background function runs the same
-  // logic server-side every 3 hours as a backup.
-  const checkResultsNow = useCallback(async () => {
-    if (!isAdminLoggedIn) return; // admin-only — users cannot trigger a results check
-    if (!leaderboardTeams.length) {
-      showToast('No leaderboard data to check', 'info');
-      return;
-    }
-    await reviewBetResults(leaderboardTeams);
-  }, [isAdminLoggedIn, leaderboardTeams, reviewBetResults, showToast]);
-
-  // Per-bet result check — calls the synchronous /api/check-results function
-  // with a specific betId. One bet fits comfortably within the 26s Netlify timeout.
-  const checkSingleBet = useCallback(async (betId) => {
-    if (!isAdminLoggedIn) return; // admin-only — users cannot trigger a results check
-    if (!betId || checkingBetId) return;
-    setCheckingBetId(betId);
-    showToast('Checking result — searching live sports data…', 'info');
-
-    try {
-      const res = await fetch('/api/check-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ betId }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      await refreshLeaderboard(undefined, undefined, { force: true });
-      if (data.legsUpdated > 0) {
-        showToast('Result found — leaderboard updated!', 'success');
-        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet — ${data.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
-      } else {
-        showToast('No new results — match may still be in progress', 'info');
-      }
-    } catch (err) {
-      showToast('Could not check result — try again shortly', 'warning');
-      console.error('[check-results]', err.message);
-    }
-    setCheckingBetId(null);
-  }, [isAdminLoggedIn, checkingBetId, refreshLeaderboard, showToast]);
-
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
   // ── TEAM FINALISATION ─────────────────────────────────────────────────────
+  // Competition of the team being viewed (falls back to the user's primary one).
+  const teamCompetition = () =>
+    activeCompetitions.find(c => c.id && c.id === viewedMyTeam?.competition_id) ||
+    activeCompetitions.find(c => c.code === currentUser?.competitionCode) || null;
+  // Buy-in is stored in whole dollars on the competition.
+  const teamBuyIn = () => {
+    const comp = teamCompetition();
+    return comp ? (parseInt(String(comp.buy_in ?? '').replace(/[^0-9]/g, ''), 10) || 1000) : 1000;
+  };
+  // Members who share the buy-in: everyone approved (pending requests don't pay).
+  const activeMembers = () => teamMembers.filter(m => m.role !== 'pending');
+
   const finaliseTeam = async () => {
-    const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
-    const totalBuyIn = comp
-      ? parseInt((comp.buy_in || comp.buyIn || '1000').toString().replace(/[^0-9]/g, '')) || 1000
-      : 1000;
-    const allMembers = teamMembers.length || 1;
-    const perMember  = Math.ceil(totalBuyIn / allMembers);
+    const teamId = currentTeamId || currentUser?.teamId;
+    if (!teamId) { showToast('No team selected.', 'warning'); return; }
+    const perMember = Math.ceil(teamBuyIn() / Math.max(1, activeMembers().length));
+    try {
+      await apiFinaliseTeam(teamId, perMember);
+    } catch (err) {
+      showToast(`Could not finalise the team: ${err.message}`, 'error');
+      return;
+    }
     setDepositPerMember(perMember);
     setTeamFinalised(true);
     setShowFinaliseModal(false);
-    // Persist to localStorage so refresh restores state before verify_session returns
     try {
       const saved = localStorage.getItem('pc_session');
       if (saved) { const s = JSON.parse(saved); localStorage.setItem('pc_session', JSON.stringify({ ...s, teamFinalised: true, depositPerMember: perMember })); }
     } catch(_) {}
-    try {
-      if (currentUser?.teamId) await apiFinaliseTeam(currentUser.teamId, perMember);
-    } catch (err) { console.error('Finalise save failed (local state still updated):', err); }
+    showToast('Team finalised — deposits are now due.', 'success');
   };
 
-  const unfinaliseTeam = () => {
+  const unfinaliseTeam = async () => {
+    const teamId = currentTeamId || currentUser?.teamId;
+    try {
+      if (teamId) await apiReopenTeam(teamId);
+    } catch (err) {
+      showToast(`Could not re-open the team: ${err.message}`, 'error');
+      return;
+    }
     setTeamFinalised(false);
     setDepositPerMember(null);
-    // Clear from localStorage too
     try {
       const saved = localStorage.getItem('pc_session');
       if (saved) { const s = JSON.parse(saved); localStorage.setItem('pc_session', JSON.stringify({ ...s, teamFinalised: false, depositPerMember: null })); }
     } catch(_) {}
+  };
+
+  // Download rows as a CSV file (values quoted/escaped properly).
+  const downloadCsv = (filename, header, rows) => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [header.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   // ── ADMIN AUTH ────────────────────────────────────────────────────────────
@@ -1022,19 +1044,19 @@ export default function PuntingClub() {
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, status: 'verified' } : t));
     addAuditEntry(adminUser?.role, 'Team Verified', t?.name || id, 'Team status set to verified');
     setAdminNotifs(prev => [{ id: Date.now(), type:'success', msg:`${t?.name} verified`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateTeam(id, { status: 'verified' }, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { status: 'verified' }, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const suspendTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, status: 'suspended', flagged: true } : t));
     addAuditEntry(adminUser?.role, 'Team Suspended', t?.name || id, 'Team suspended by admin');
-    try { await apiUpdateTeam(id, { status: 'suspended', flagged: true }, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { status: 'suspended', flagged: true }, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const flagTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
-    try { await apiUpdateTeam(id, { flagged: newFlagged }, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { flagged: newFlagged }, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const deleteTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
@@ -1079,12 +1101,20 @@ export default function PuntingClub() {
     setAdminUsers(prev => prev.map(u => (u.id === userId || u.phone === userId) ? { ...u, kyc_status: status, kyc: status, active: status !== 'rejected' } : u));
     addAuditEntry(adminUser?.role, `KYC ${status}`, u?.name || u?.first_name || userId, `KYC status updated to ${status}`);
     setAdminNotifs(prev => [{ id: Date.now(), type: status === 'verified' ? 'success' : 'error', msg:`${u?.name || u?.first_name} KYC ${status}`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateKyc(u?.id || userId, status, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateKyc(u?.id || userId, status, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
-  const resetPassword = (phone) => {
+  const resetPassword = async (phone) => {
     const u = adminUsers.find(x => x.phone === phone);
-    addAuditEntry(adminUser?.role, 'Password Reset', u?.name || phone, 'Temporary password issued');
-    showToast(`Password reset SMS sent to ${u?.name || phone}.`, 'info');
+    if (!u?.id) { showToast('User not found.', 'error'); return; }
+    if (!window.confirm(`Issue a temporary password for ${u.name}? Their current password will stop working.`)) return;
+    try {
+      const { tempPassword } = await apiAdminResetPassword(u.id, adminToken);
+      addAuditEntry(adminUser?.role, 'Password Reset', u.name, 'Temporary password issued');
+      try { await navigator.clipboard?.writeText(tempPassword); } catch (_) { /* clipboard may be blocked */ }
+      window.prompt(`Temporary password for ${u.name} (copied). Give it to them directly — they should change it in their profile after logging in.`, tempPassword);
+    } catch (err) {
+      showToast(`Password reset failed: ${err.message}`, 'error');
+    }
   };
   const deleteUser = async (userId) => {
     const u = adminUsers.find(x => x.id === userId);
@@ -1104,19 +1134,19 @@ export default function PuntingClub() {
     setAdminBets(prev => prev.map(b => b.id === id ? { ...b, status: result, overall_status: result, flagged: false } : b));
     addAuditEntry(adminUser?.role, `Bet ${result}`, `${b?.team || b?.teams?.team_name} ${id}`, `Result manually set to ${result}`);
     setAdminNotifs(prev => [{ id: Date.now(), type: result === 'won' ? 'success' : 'warning', msg:`Bet marked ${result}`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateBetResult(id, result, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateBetResult(id, result, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const correctBetField = async (id, field, value) => {
     const b = adminBets.find(x => x.id === id);
     setAdminBets(prev => prev.map(b => b.id === id ? { ...b, [field]: value, flagged: false } : b));
     addAuditEntry(adminUser?.role, 'Bet Corrected', `${b?.team || b?.teams?.team_name} ${id}`, `${field} changed to ${value}`);
-    try { await apiCorrectBet(id, field, value, adminToken); } catch(err) { console.error(err); }
+    try { await apiCorrectBet(id, field, value, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const rejectBet = async (id, reason) => {
     const b = adminBets.find(x => x.id === id);
     setAdminBets(prev => prev.map(bet => bet.id === id ? { ...bet, status: 'rejected', overall_status: 'rejected', flagged: false } : bet));
     addAuditEntry(adminUser?.role, 'Bet Rejected', `${b?.team || b?.teams?.team_name} ${id}`, reason);
-    try { await apiRejectBet(id, reason, adminToken); } catch(err) { console.error(err); }
+    try { await apiRejectBet(id, reason, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
 
   const overrideLegResult = async (betId, legId, status, resultNote) => {
@@ -1127,7 +1157,7 @@ export default function PuntingClub() {
       legs: (bet.legs || []).map(l => l.id !== legId ? l : { ...l, status, result_note: resultNote, resultNote }),
     }));
     addAuditEntry(adminUser?.role, 'Leg Override', `${b?.team} — Leg ${leg?.leg_number}`, `${leg?.selection} → ${status}${resultNote ? ': ' + resultNote : ''}`);
-    try { await apiUpdateBetLeg(legId, status, resultNote, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateBetLeg(legId, status, resultNote, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
 
   // Trigger a full server-side scores/results update (fires the background settler)
@@ -1233,49 +1263,56 @@ export default function PuntingClub() {
     return false;
   };
 
-  const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB — Claude's per-image limit
+  const MAX_IMAGE_BYTES = 25 * 1024 * 1024; // raw file limit before shrinking
   const MAX_IMAGES = 5;
 
+  // Shrink a photo/screenshot to Claude's working size (1568px long edge) as JPEG.
+  // Keeps uploads well under Netlify's 6 MB request limit (5 raw phone photos
+  // could be 30 MB+) and opens anything the browser can display (incl. HEIC on iPhone).
+  const shrinkImage = (file, maxEdge = 1568, quality = 0.85) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // transparent PNGs → white, not black
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ src: canvas.toDataURL('image/jpeg', quality), name: file.name, mediaType: 'image/jpeg' });
+      } catch (e) { reject(e); }
+      finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`"${file.name}" couldn't be opened. Try a screenshot (PNG or JPG).`)); };
+    img.src = url;
+  });
+
   const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
     const errors = [];
     const valid = [];
-
     for (const f of files) {
-      if (!ALLOWED_IMAGE_TYPES.has(f.type)) {
-        errors.push(`"${f.name}" is not a supported image type. Use JPEG, PNG, WebP, or GIF.`);
-        continue;
-      }
-      if (f.size > MAX_IMAGE_BYTES) {
-        errors.push(`"${f.name}" is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum is 5 MB per image.`);
-        continue;
-      }
+      if (f.type && !f.type.startsWith('image/')) { errors.push(`"${f.name}" is not an image.`); continue; }
+      if (f.size > MAX_IMAGE_BYTES) { errors.push(`"${f.name}" is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Try a screenshot instead.`); continue; }
       valid.push(f);
     }
-
-    if (errors.length) {
-      showToast(errors[0], 'error');
-    }
-
+    if (errors.length) showToast(errors[0], 'error');
     if (!valid.length) return;
 
     const slots = MAX_IMAGES - uploadedImages.length;
     if (slots <= 0) { showToast(`Maximum ${MAX_IMAGES} images allowed.`, 'warning'); return; }
-    if (valid.length > slots) {
-      showToast(`Only ${slots} more image${slots > 1 ? 's' : ''} can be added (max ${MAX_IMAGES}).`, 'warning');
-    }
-    const toLoad = valid.slice(0, slots);
+    if (valid.length > slots) showToast(`Only ${slots} more image${slots > 1 ? 's' : ''} can be added (max ${MAX_IMAGES}).`, 'warning');
 
-    Promise.all(
-      toLoad.map(f => new Promise(res => {
-        const r = new FileReader();
-        r.onload = () => res({ src: r.result, name: f.name, mediaType: f.type });
-        r.readAsDataURL(f);
-      }))
-    ).then(imgs => setUploadedImages(prev => [...prev, ...imgs]));
-
-    e.target.value = '';
+    Promise.allSettled(valid.slice(0, slots).map(f => shrinkImage(f))).then(results => {
+      const ok = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+      const failed = results.find(r => r.status === 'rejected');
+      if (failed) showToast(failed.reason?.message || 'An image could not be read.', 'error');
+      if (ok.length) setUploadedImages(prev => [...prev, ...ok].slice(0, MAX_IMAGES));
+    });
   };
 
   const analyzeBetSlips = async () => {
@@ -1286,12 +1323,13 @@ export default function PuntingClub() {
       // Scale the output budget with the number of slips so a multi-image bet
       // (many legs) isn't truncated mid-JSON — the old fixed 1024 cut off large
       // multis and surfaced as a bogus "couldn't read the image" error.
-      const maxTokens = Math.min(2048 + imgCount * 1024, 8192);
-      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages:[{ role:'user', content:[
-        { type:'text', text:`You are given ${imgCount} bet slip image${imgCount > 1 ? 's' : ''}. They are parts of ONE bet — combine EVERY leg from ALL images into a single JSON bet. Return JSON only, no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- Include one leg object for EVERY selection across all images; number legNumber sequentially from 1.\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/combinedOdds/estimatedReturn: the overall bet totals (usually the "Potential"/payout figure). Include $ on money; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
+      const maxTokens = Math.min(3072 + imgCount * 1536, 8192);
+      const slipPrompt = buildSlipPrompt(imgCount);
+      const { res, data } = await postWithAuth('claude', { purpose:'slip', max_tokens: maxTokens, messages:[{ role:'user', content:[
+        { type:'text', text: slipPrompt },
         ...uploadedImages.slice(0, MAX_IMAGES).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
-      ]}] }) });
-      const data = await res.json();
+      ]}] });
+      if (res.status === 401) { showToast('Please log in to analyse a bet slip.', 'warning'); return; }
       if (!res.ok || data.error || data.type === 'error') {
         const errMsg = data.error?.message || data.error || `API error ${res.status}`;
         showToast(`Analysis failed: ${errMsg}`, 'error');
@@ -1310,7 +1348,8 @@ export default function PuntingClub() {
         }
         // Validate stake doesn't exceed weekly budget
         const stakeNum = parseFloat((parsed.stake || '0').replace(/[^0-9.]/g,''));
-        if (stakeNum > WEEK_BUDGET) { showToast(`Stake $${stakeNum} exceeds the $${WEEK_BUDGET}/week limit.`, 'warning'); return; }
+        const limit = weeklyLimitFor(viewedCompForLimit);
+        if (stakeNum > limit) { showToast(`Stake $${stakeNum} exceeds the $${limit}/week limit for this competition.`, 'warning'); return; }
         const enrichedBet = { ...parsed, betType: parsed.betType || 'Multi', legs: parsed.legs || [], timestamp: new Date().toLocaleTimeString(), images: uploadedImages.length };
         setAnalyzedBet(enrichedBet);
         // Auto-select the user's own team
@@ -1323,47 +1362,59 @@ export default function PuntingClub() {
     finally { setAnalyzing(false); }
   };
 
-  const submitBet = async () => {
+  // Competition whose limits apply to the bet being entered.
+  const viewedCompForLimit = activeCompetitions.find(c => c.code === (viewedCompetitionCode || currentUser?.competitionCode)) || null;
+
+  const submitBet = async ({ allowDuplicate = false } = {}) => {
+    if (submittingBet) return;
     if (!selectedTeamForBet) { showToast('Please select a team before submitting.', 'warning'); return; }
-    // Enforce $50/week total stake cap across all bets for this team this week
-    const targetTeam = leaderboardTeams.find(t => t.team === selectedTeamForBet);
-    const weeklyUsed = (targetTeam?.bets || [])
+    if (!currentUser?.id) { showToast('Please log in to submit a bet.', 'warning'); return; }
+    const team = leaderboardTeams.find(t => t.team === selectedTeamForBet);
+    if (!team?.id) { showToast('Could not find that team — refresh and try again.', 'error'); return; }
+
+    // Friendly pre-check of the weekly limit (the server enforces it too).
+    const weekLimit = weeklyLimitFor(viewedCompForLimit);
+    const weeklyUsed = (team.bets || [])
       .filter(b => b.weekNumber === currentWeekNum + 1)
       .reduce((sum, b) => sum + parseFloat((b.stake || '0').replace(/[^0-9.]/g, '')), 0);
     const newStake = parseFloat((analyzedBet?.stake || '0').replace(/[^0-9.]/g, ''));
-    const weeklyTotal = weeklyUsed + newStake;
-    if (weeklyTotal > WEEK_BUDGET) {
-      const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed).toFixed(2);
+    if (weeklyUsed + newStake > weekLimit) {
+      const remaining = Math.max(0, weekLimit - weeklyUsed).toFixed(2);
       showToast(`Weekly limit exceeded — $${weeklyUsed.toFixed(2)} already staked this week. Only $${remaining} remaining.`, 'warning');
       return;
     }
-    const newBet = { type: analyzedBet.betType, stake: analyzedBet.stake, combinedOdds: analyzedBet.combinedOdds, estimatedReturn: analyzedBet.estimatedReturn, submissionValid: analyzedBet.submissionValid, legs: analyzedBet.legs, overallStatus: 'pending', submittedAt: analyzedBet.timestamp };
-    // Optimistic UI update
-    setLeaderboardTeams(prev => prev.map(t => t.team === selectedTeamForBet ? { ...t, bets: [...t.bets, newBet] } : t));
-    setShowBetAnalyzer(false);
-    resetBetAnalyzer();
-    setActiveNav('team');
-    // Persist to Supabase
+
+    setSubmittingBet(true);
     try {
-      const team = leaderboardTeams.find(t => t.team === selectedTeamForBet);
-      if (team?.id && currentUser?.id) {
-        await apiSubmitBet({
-          teamId:          team.id,
-          submittedBy:     currentUser.id,
-          weekNumber:      currentWeekNum + 1,
-          // Backend enum is lowercase multi|single; the AI returns "Multi"/"Single"
-          // (and occasionally variants like "Same Game Multi"). Normalise here.
-          betType:         /single/i.test(newBet.type || '') ? 'single' : 'multi',
-          stake:           Math.round(parseFloat((newBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
-          combinedOdds:    newBet.combinedOdds,
-          estimatedReturn: Math.round(parseFloat((newBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
-          submissionValid: newBet.submissionValid !== false,
-          legs:            newBet.legs || [],
-        });
-      }
+      await apiSubmitBet({
+        teamId:          team.id,
+        weekNumber:      currentWeekNum + 1,
+        // Backend enum is lowercase multi|single; the AI returns "Multi"/"Single"
+        // (and occasionally variants like "Same Game Multi"). Normalise here.
+        betType:         /single/i.test(analyzedBet.betType || '') ? 'single' : 'multi',
+        stake:           Math.round(newStake * 100),
+        combinedOdds:    analyzedBet.combinedOdds,
+        estimatedReturn: Math.round(parseFloat((analyzedBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
+        submissionValid: analyzedBet.submissionValid !== false,
+        legs:            analyzedBet.legs || [],
+        allowDuplicate,
+      });
+      // Only close and clear the slip once it's actually saved.
+      setShowBetAnalyzer(false);
+      resetBetAnalyzer();
+      setActiveNav('team');
+      showToast('Bet submitted!', 'success');
+      await refreshLeaderboard(viewedCompetitionCode || undefined, undefined, { force: true });
     } catch (err) {
+      if (/^Duplicate bet/i.test(err.message) && !allowDuplicate) {
+        setSubmittingBet(false);
+        if (window.confirm(`${err.message}\n\nSubmit it anyway?`)) return submitBet({ allowDuplicate: true });
+        return;
+      }
       console.error('Bet save failed:', err.message);
-      showToast(`Bet could not be saved: ${err.message}`, 'error');
+      showToast(`Bet not saved: ${err.message} Your slip is still here — try again.`, 'error');
+    } finally {
+      setSubmittingBet(false);
     }
   };
 
@@ -1372,13 +1423,8 @@ export default function PuntingClub() {
   // Share a bet slip via Web Share API or clipboard fallback
   const shareBet = async (bet) => {
     const statusLabel = (() => {
-      const legs = bet.legs || [];
-      if (!legs.length) return (bet.overallStatus || 'pending').toUpperCase();
-      if (legs.some(l => l.status === 'in_progress')) return 'LIVE';
-      if (legs.every(l => l.status === 'won'))  return '✅ WON';
-      if (legs.some(l => l.status === 'lost'))  return '❌ LOST';
-      if (legs.some(l => l.status === 'pending')) return '⏳ PENDING';
-      return '⚡ PARTIAL';
+      const st = betStatus(bet.legs, bet.overallStatus);
+      return { won: '✅ WON', lost: '❌ LOST', void: '↩️ REFUNDED', in_progress: 'LIVE', pending: '⏳ PENDING' }[st] || st.toUpperCase();
     })();
     const legsText = (bet.legs || []).map((l, i) =>
       `  ${i + 1}. ${l.selection}${l.market ? ` (${l.market})` : ''} @ ${l.odds}${l.status && l.status !== 'pending' ? ` — ${l.status.toUpperCase()}` : ''}`
@@ -1469,7 +1515,8 @@ export default function PuntingClub() {
     return teamsInViewedComp[0] || null;
   })();
   const myTeamName = (isLoggedIn && viewedMyTeam?.team_name) || currentUser?.teamName || '';
-  const myTeamData = leaderboardTeams.find(t => t.team === myTeamName) || leaderboardTeams[0];
+  // Match by id first (names can repeat across competitions); never fall back to another team.
+  const myTeamData = (viewedMyTeam?.id && leaderboardTeams.find(t => t.id === viewedMyTeam.id)) || (myTeamName && leaderboardTeams.find(t => t.team === myTeamName)) || null;
   // Role the current user holds in the actively viewed team — syncs automatically when teamMembers loads
   const viewedRole = (() => {
     if (!currentUser?.id || teamMembers.length === 0) return currentUser?.role || 'member';
@@ -1498,7 +1545,7 @@ export default function PuntingClub() {
     return calcCurrentWeek(comp.start_date) - 1; // 0-indexed for betting order rotation
   })();
   const currentWeekBettorIdx = currentWeekNum;
-  const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)];
+  const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)]?.name || null;
   const shareableLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://puntingclub.com'}?join=${currentUser?.teamCode || 'XXXXXX'}`;
 
   // Load team data when user logs in
@@ -1518,8 +1565,7 @@ export default function PuntingClub() {
         const pending = mapped.filter(m => m.role === 'pending');
         setPendingMembers(pending);
         // Populate betting order from active members who can bet (excludes pending + view-only)
-        const canBetMembers = mapped.filter(m => m.role !== 'pending' && (m.can_bet || m.canBet) && m.name);
-        if (canBetMembers.length > 0) setBettingOrder(canBetMembers.map(m => m.name));
+        setBettingOrder(orderFromMembers(mapped));
         // Show join-request popup for captains if there are already pending members
         if (currentUser?.role === 'captain' && pending.length > 0) {
           setJoinRequestNotifs(pending.map(m => ({ user_id: m.user_id, name: m.name, phone: m.phone })));
@@ -2305,7 +2351,7 @@ export default function PuntingClub() {
                                   <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
                                 )}
                                 {t.status === 'suspended' && canAdmin('bets') && (
-                                  <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
+                                  <button onClick={() => verifyTeam(t.id)} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
                                 )}
                                 <button onClick={() => flagTeam(t.id)} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:text-brand-300 px-2.5 py-1 rounded-lg text-xs">🚩</button>
                                 {adminUser?.role === 'owner' && (
@@ -2343,7 +2389,7 @@ export default function PuntingClub() {
                                       : m.role === 'view-only'
                                       ? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
                                       : 'bg-brand-500/15 text-brand-300 border-brand-200';
-                                    const kycBg = m.kyc === 'approved'
+                                    const kycBg = (m.kyc === 'verified' || m.kyc === 'approved')
                                       ? 'text-green-400'
                                       : m.kyc === 'rejected'
                                       ? 'text-red-400'
@@ -2420,7 +2466,7 @@ export default function PuntingClub() {
                         <p className="text-gray-500 text-sm">{adminUsers.length} users · {adminUsers.filter(u=>u.kyc==='pending').length} awaiting KYC · {adminUsers.filter(u=>!u.active).length} suspended</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { const csv = ['Name,Phone,KYC,Team,DOB,Postcode,Joined',...adminUsers.map(u=>`${u.name},${u.phone},${u.kyc},${u.team},${u.dob},${u.postcode},${u.joinedAt}`)].join('\n'); alert('CSV export ready:\n\n' + csv.substring(0,200) + '...'); addAuditEntry(adminUser.role,'Data Export','Users CSV','GDPR-compliant export'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser.role,'Data Export','Users CSV','Downloaded user list'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                       </div>
                     </div>
 
@@ -2428,7 +2474,7 @@ export default function PuntingClub() {
                     <div className="flex gap-3 flex-wrap">
                       {[['verified','green'],['pending','amber'],['rejected','red']].map(([s,c]) => (
                         <div key={s} className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <div className={`w-2 h-2 rounded-full bg-${c}-400`}/>
+                          <div className={`w-2 h-2 rounded-full ${{ green: 'bg-green-400', amber: 'bg-amber-400', red: 'bg-red-400' }[c]}`}/>
                           <span className="capitalize">{s}: {adminUsers.filter(u=>u.kyc===s).length}</span>
                         </div>
                       ))}
@@ -2485,8 +2531,8 @@ export default function PuntingClub() {
                     <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex gap-3">
                       <Shield className="w-4 h-4 text-brand-300 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-brand-300 text-xs font-bold mb-1">Data Privacy & GDPR Compliance</p>
-                        <p className="text-gray-500 text-xs">User PII is encrypted at rest. DOB and postcode used for KYC age verification only. Export logs maintained for audit. Users may request data deletion via support.</p>
+                        <p className="text-brand-300 text-xs font-bold mb-1">Handling personal information</p>
+                        <p className="text-gray-500 text-xs">Members' phone numbers, dates of birth and postcodes are personal information under the Australian Privacy Act. Only download what you need, don't share exports, and delete exported files when finished. A member can ask to be removed — the owner can delete their account here.</p>
                       </div>
                     </div>
                   </div>
@@ -2563,7 +2609,7 @@ export default function PuntingClub() {
                           {canAdmin('bets') && (b.status === 'won' || b.status === 'lost') && (
                             <div className="border-t border-white/5 bg-black/20 px-4 py-2 flex items-center gap-2">
                               <p className="text-gray-600 text-xs">Result confirmed.</p>
-                              <button onClick={() => setAdminBets(prev => prev.map(x => x.id === b.id ? {...x, status:'pending'} : x))} className="text-brand-300 text-xs hover:text-brand-300">Reopen dispute</button>
+                              <button onClick={() => confirmBetResult(b.id, 'pending')} className="text-brand-300 text-xs hover:text-brand-300">Reopen dispute</button>
                             </div>
                           )}
                           {/* Per-leg override */}
@@ -2574,7 +2620,7 @@ export default function PuntingClub() {
                                 className="w-full px-4 py-2 text-left text-xs text-gray-500 hover:text-brand-300 flex items-center gap-1.5 transition-colors"
                               >
                                 <Edit3 className="w-3 h-3" />
-                                {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})`}
+                                {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})${b.legs.some(l => l.needsReview && l.status === 'pending') ? ' · ⚑ needs review' : ''}`}
                               </button>
                               {expandedBetId === b.id && (
                                 <div className="px-4 pb-4 space-y-2 bg-black/30">
@@ -2589,9 +2635,20 @@ export default function PuntingClub() {
                                             <span className="text-white text-xs font-semibold">{leg.selection}</span>
                                             <span className="text-gray-500 text-xs"> · {leg.market}</span>
                                           </div>
-                                          <span className={`text-xs font-bold ${legColor}`}>{leg.status?.toUpperCase()}</span>
+                                          <span className={`text-xs font-bold ${legColor}`}>
+                                            {leg.needsReview && leg.status === 'pending' ? '⚑ NEEDS REVIEW' : leg.status?.toUpperCase()}
+                                          </span>
                                         </div>
                                         <div className="text-gray-600 text-xs mb-2 truncate">{leg.event}</div>
+                                        {(leg.resultNote || leg.result_evidence) && (
+                                          <div className="text-gray-500 text-xs mb-2">
+                                            {leg.resultNote}
+                                            {leg.result_evidence && <span className="block italic text-gray-600">“{leg.result_evidence}”</span>}
+                                            {/^https?:\/\//.test(leg.resultSourceUrl || '') && (
+                                              <a href={leg.resultSourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-300 underline">View source</a>
+                                            )}
+                                          </div>
+                                        )}
                                         <div className="flex items-center gap-1.5 flex-wrap mb-2">
                                           {['won','lost','pending','void'].map(s => (
                                             <button
@@ -2857,8 +2914,8 @@ export default function PuntingClub() {
                                         className="bg-purple-500/20 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                       >✨ Generate Recap</button>
                                     )}
-                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); showToast('Copied!', 'success'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false, weeklyLimit: c.weekly_limit_cents ? String(c.weekly_limit_cents / 100) : '50', finalWeekLimit: c.final_week_limit_cents ? String(c.final_week_limit_cents / 100) : '' }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                     {adminUser?.role === 'owner' && (
                                       <button
                                         onClick={() => {
@@ -2880,7 +2937,7 @@ export default function PuntingClub() {
                               <div className="border-t border-brand-500/20 bg-black/30 px-4 py-4">
                                 <p className="text-xs font-bold text-brand-300 mb-3">Edit Competition</p>
                                 <div className="grid sm:grid-cols-2 gap-3 mb-3">
-                                  {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date']].map(([l,k,t]) => (
+                                  {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date'],['Weekly Bet Limit ($)','weeklyLimit','text'],['Final Week Limit ($, optional)','finalWeekLimit','text']].map(([l,k,t]) => (
                                     <div key={k}>
                                       <label className="block text-xs text-gray-500 mb-1">{l}</label>
                                       <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50" />
@@ -2905,7 +2962,7 @@ export default function PuntingClub() {
                                 </div>
                                 <div className="flex gap-2">
                                   <button onClick={() => setEditingCompId(null)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate })} className="flex-1 bg-brand-600 text-white font-bold py-2 rounded-lg text-sm">Save Changes</button>
+                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate, weeklyLimit: editCompForm.weeklyLimit, finalWeekLimit: editCompForm.finalWeekLimit })} className="flex-1 bg-brand-600 text-white font-bold py-2 rounded-lg text-sm">Save Changes</button>
                                 </div>
                               </div>
                             )}
@@ -2939,17 +2996,17 @@ export default function PuntingClub() {
                   <div className="space-y-4">
                     <div>
                       <h2 className="text-xl font-black">Security & Compliance</h2>
-                      <p className="text-gray-500 text-sm">GDPR compliance · Data encryption · Access control</p>
+                      <p className="text-gray-500 text-sm">What protections are actually in place</p>
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-3">
                       {[
-                        { title:'End-to-End Encryption', status:'Active', icon:'🔐', detail:'AES-256 encryption for all PII data at rest and in transit. TLS 1.3 on all API calls.', color:'green' },
-                        { title:'GDPR Compliance', status:'Compliant', icon:'🛡', detail:'Right to erasure, data portability, and consent management enforced. Last audit: 01/03/2025.', color:'green' },
-                        { title:'Security Audits', status:'Scheduled', icon:'🔍', detail:'Next audit: 01/06/2025. Quarterly penetration testing with Rapid7.', color:'amber' },
-                        { title:'2FA / MFA', status:'Recommended', icon:'📲', detail:'Admin accounts require 2FA. User 2FA via SMS OTP optional. Enable for all admin roles.', color:'amber' },
-                        { title:'Rate Limiting', status:'Active', icon:'⚡', detail:'API: 100 req/min per user. Failed login lockout after 5 attempts (15 min cooldown).', color:'green' },
-                        { title:'Data Retention', status:'Policy Set', icon:'📦', detail:'User data retained 7 years post-competition. KYC docs purged after 2 years. Logs kept 1 year.', color:'blue' },
+                        { title:'Encryption in transit', status:'Active', icon:'🔐', detail:'All traffic uses HTTPS (Netlify). The database (Supabase) encrypts stored data at rest.', color:'green' },
+                        { title:'Database access', status:'Active', icon:'🗄', detail:'Row Level Security is on for all tables. Only the server functions (service key) can read or write data.', color:'green' },
+                        { title:'Admin sessions', status:'Active', icon:'🔑', detail:'Admin logins issue signed 8-hour tokens checked on every admin action. Admin accounts are shared — use strong, unique passwords.', color:'amber' },
+                        { title:'Rate limiting', status:'Partial', icon:'⚡', detail:'Login, sign-up and AI endpoints are throttled per server instance. This slows brute-force attempts but is not a hard global limit.', color:'amber' },
+                        { title:'Two-factor login', status:'Not set up', icon:'📲', detail:'There is no 2FA for admins or members yet.', color:'amber' },
+                        { title:'Audit log', status:'Active', icon:'📝', detail:'Admin actions (results, KYC, deletions, resets, exports) are recorded in the audit log.', color:'green' },
                       ].map(item => (
                         <div key={item.title} className={`bg-white border rounded-xl p-4 ${item.color === 'green' ? 'border-green-500/20' : item.color === 'amber' ? 'border-brand-500/20' : 'border-brand-500/20'}`}>
                           <div className="flex items-start gap-3">
@@ -2989,11 +3046,11 @@ export default function PuntingClub() {
                     </div>
 
                     <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-5">
-                      <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>GDPR Data Requests</h3>
-                      <p className="text-gray-400 text-sm mb-3">Handle user data deletion and export requests in compliance with Australian Privacy Act 1988 and GDPR.</p>
+                      <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Privacy requests</h3>
+                      <p className="text-gray-400 text-sm mb-3">Under the Australian Privacy Act members can ask what information you hold about them, or ask to be removed.</p>
                       <div className="flex gap-3 flex-wrap">
-                        <button onClick={() => { addAuditEntry('owner','Data Export','All Users','GDPR compliant full export triggered'); alert('Full encrypted data export initiated. Link will be emailed to admin@puntingclub.com'); }} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"><Download className="w-3 h-3"/>Export All User Data</button>
-                        <button onClick={() => { const phone = prompt('Enter user phone number to delete:'); if(phone) { addAuditEntry('owner','Data Deletion',phone,'GDPR erasure request'); alert(`Data deletion request for ${phone} queued. Will be processed within 30 days per GDPR.`); }}} className="bg-red-500/20 border border-red-500/40 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold">Request Data Erasure</button>
+                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser?.role || 'owner','Data Export','All Users','Downloaded user list'); }} className="bg-white/5 border border-white/10 text-gray-300 px-4 py-2 rounded-lg text-sm">Download member data (CSV)</button>
+                        <button onClick={() => setAdminTab('users')} className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">Delete a member → Users tab</button>
                       </div>
                     </div>
                   </div>
@@ -3007,7 +3064,7 @@ export default function PuntingClub() {
                         <h2 className="text-xl font-black">Audit Log</h2>
                         <p className="text-gray-500 text-sm">{adminAuditLog.length} entries · Full admin action history</p>
                       </div>
-                      <button onClick={() => { const csv = ['Timestamp,Role,Action,Target,Detail',...adminAuditLog.map(e=>`"${e.ts}",${e.adminRole},"${e.action}","${e.target}","${e.detail}"`)].join('\n'); alert('Audit CSV:\n\n' + csv.substring(0,300)+'...'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                      <button onClick={() => downloadCsv(`punting-club-audit-${new Date().toISOString().slice(0,10)}.csv`, ['Timestamp','Role','Action','Target','Detail'], adminAuditLog.map(e => [e.ts, e.adminRole, e.action, e.target, e.detail]))} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                     </div>
                     <div className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
@@ -3065,8 +3122,7 @@ export default function PuntingClub() {
             ]],
             ['Contact',[
               { label:'support@puntingclub.com' },
-              { label:'WhatsApp: +61 XXX XXX XXX' },
-              { label:'FAQ', nav:'competition' },
+              { label:'FAQ', nav:'faq' },
             ]],
           ].map(([h, items]) => (
             <div key={h}>
@@ -3084,7 +3140,14 @@ export default function PuntingClub() {
             </div>
           ))}
         </div>
-        <div className="border-t border-gray-200 pt-6 text-center text-gray-500 text-xs">© 2025 Punting Club. Please gamble responsibly. Must be 18+</div>
+        <div className="border-t border-gray-200 pt-6 text-center text-gray-500 text-xs space-y-1.5">
+          <p>
+            Gamble responsibly. Must be 18+. Need help? Call <a href="tel:1800858858" className="underline">Gambling Help 1800 858 858</a> (24/7, free) or visit{' '}
+            <a href="https://www.gamblinghelponline.org.au" target="_blank" rel="noopener noreferrer" className="underline">gamblinghelponline.org.au</a>.
+            Self-exclude from all licensed betting providers at <a href="https://www.betstop.gov.au" target="_blank" rel="noopener noreferrer" className="underline">BetStop</a>.
+          </p>
+          <p>© {new Date().getFullYear()} Punting Club</p>
+        </div>
       </footer>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -3100,6 +3163,24 @@ export default function PuntingClub() {
                 <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
               </div>
             )}
+            {oauthEnabled && (
+              <div className="space-y-2">
+                {oauthProviders.includes('google') && (
+                  <button type="button" onClick={() => signInWith('google')} disabled={oauthBusy} className="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+                    Continue with Google
+                  </button>
+                )}
+                {oauthProviders.includes('apple') && (
+                  <button type="button" onClick={() => signInWith('apple')} disabled={oauthBusy} className="w-full bg-black hover:bg-gray-900 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 border border-white/20 disabled:opacity-60">
+                    <svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true" fill="currentColor"><path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C44 790 0 669 0 554 0 370 120 272 238 272c63 0 115 41 155 41 38 0 97-44 168-44 27 0 125 2 189 94zM554 169c29-35 51-84 51-133 0-7-1-14-2-19-48 2-105 32-140 72-27 31-53 80-53 130 0 8 1 15 2 18 3 0 8 1 13 1 43 0 97-29 129-69z"/></svg>
+                    Continue with Apple
+                  </button>
+                )}
+                <div className="flex items-center gap-3 text-gray-600 text-xs py-1"><div className="flex-1 h-px bg-white/10" />or use your mobile<div className="flex-1 h-px bg-white/10" /></div>
+              </div>
+            )}
+            
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Mobile Number</label>
               <input type="tel" required value={loginPhone} onChange={e => { setLoginPhone(e.target.value); setApiError(null); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="+61 412 345 678" />
@@ -3299,12 +3380,35 @@ export default function PuntingClub() {
 
       {/* SIGNUP */}
       {showSignupModal && (
-        <Modal title={signupMode === 'create' ? 'Create a Team' : 'Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
+        <Modal title={oauthPending ? 'Finish setting up your account' : signupMode === 'create' ? 'Create a Team' : 'Join a Team'} onClose={() => { if (oauthPending) { setOauthPending(null); try { localStorage.removeItem('pc_session'); } catch (_) {} } setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
           <form onSubmit={handleSubmitSignup} className="p-5 space-y-3">
             {apiError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm flex items-start gap-2">
                 <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
               </div>
+            )}
+{oauthPending ? (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2.5 text-green-300 text-xs">
+                Signed in with {oauthPending.provider === 'apple' ? 'Apple' : 'Google'}{oauthPending.email ? ` as ${oauthPending.email}` : ''}. Add your mobile and date of birth, then create or join a team.
+              </div>
+            ) : (
+              oauthEnabled && (
+              <div className="space-y-2">
+                {oauthProviders.includes('google') && (
+                  <button type="button" onClick={() => signInWith('google')} disabled={oauthBusy} className="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+                    Continue with Google
+                  </button>
+                )}
+                {oauthProviders.includes('apple') && (
+                  <button type="button" onClick={() => signInWith('apple')} disabled={oauthBusy} className="w-full bg-black hover:bg-gray-900 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 border border-white/20 disabled:opacity-60">
+                    <svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true" fill="currentColor"><path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C44 790 0 669 0 554 0 370 120 272 238 272c63 0 115 41 155 41 38 0 97-44 168-44 27 0 125 2 189 94zM554 169c29-35 51-84 51-133 0-7-1-14-2-19-48 2-105 32-140 72-27 31-53 80-53 130 0 8 1 15 2 18 3 0 8 1 13 1 43 0 97-29 129-69z"/></svg>
+                    Continue with Apple
+                  </button>
+                )}
+                <div className="flex items-center gap-3 text-gray-600 text-xs py-1"><div className="flex-1 h-px bg-white/10" />or use your mobile<div className="flex-1 h-px bg-white/10" /></div>
+              </div>
+            )
             )}
             {/* Toggle */}
             <div className="flex gap-2 p-1 bg-black/30 rounded-lg">
@@ -3476,6 +3580,7 @@ export default function PuntingClub() {
               </div>
             )}
 
+            {!oauthPending && (
             <div className="border-t border-white/5 pt-3 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-brand-300 mb-1">Password *</label>
@@ -3492,6 +3597,7 @@ export default function PuntingClub() {
                 )}
               </div>
             </div>
+            )}
 
             <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-xs text-gray-300">
               <strong className="text-brand-300">Buy-in:</strong> $1,000 per team {signupMode === 'join' && '· Joining requests are approved by the captain'}
@@ -3538,12 +3644,12 @@ export default function PuntingClub() {
       {showOrderModal && (
         <Modal title="Betting Order" onClose={() => setShowOrderModal(false)}>
           <div className="p-5 space-y-4">
-            <p className="text-gray-400 text-sm">Set the rotation order for who places the bet each week. Drag to reorder (use the buttons below).</p>
+            <p className="text-gray-400 text-sm">Set the rotation order for who places the bet each week. Use the arrows to reorder.</p>
             <div className="space-y-2">
-              {bettingOrder.map((name, i) => (
-                <div key={name} className="flex items-center gap-3 bg-black/30 border border-white/8 rounded-lg px-3 py-2.5">
+              {bettingOrder.map((entry, i) => (
+                <div key={entry.user_id} className="flex items-center gap-3 bg-black/30 border border-white/8 rounded-lg px-3 py-2.5">
                   <span className="text-brand-300 font-bold text-sm w-6">{i+1}.</span>
-                  <span className="flex-1 text-sm font-semibold">{name}</span>
+                  <span className="flex-1 text-sm font-semibold">{entry.name}</span>
                   <div className="flex gap-1">
                     <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i > 0) [a[i-1],a[i]] = [a[i],a[i-1]]; return a; })} disabled={i === 0} className="text-gray-500 hover:text-brand-300 disabled:opacity-20 px-1.5 py-1 text-xs">↑</button>
                     <button onClick={() => setBettingOrder(prev => { const a = [...prev]; if (i < a.length-1) [a[i],a[i+1]] = [a[i+1],a[i]]; return a; })} disabled={i === bettingOrder.length-1} className="text-gray-500 hover:text-brand-300 disabled:opacity-20 px-1.5 py-1 text-xs">↓</button>
@@ -3554,7 +3660,7 @@ export default function PuntingClub() {
             <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-xs text-gray-400">
               <strong className="text-brand-300">Note:</strong> Only members with "Can Bet" permission will appear. Change roles in the Members section.
             </div>
-            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder); } catch(e) { console.error(e); } showToast('Betting order saved!', 'success'); setShowOrderModal(false); }} className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm">Save Order</button>
+            <button onClick={async () => { try { await apiSaveBettingOrder(currentTeamId, bettingOrder.map(e => e.user_id)); showToast('Betting order saved!', 'success'); setShowOrderModal(false); } catch(e) { showToast(`Could not save the betting order: ${e.message}`, 'error'); } }} className="w-full bg-brand-700 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-sm">Save Order</button>
           </div>
         </Modal>
       )}
@@ -3601,10 +3707,9 @@ export default function PuntingClub() {
             <div className="bg-green-950/20 border border-green-500/30 rounded-xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Deposit Calculation Preview</p>
               {(() => {
-                const comp = activeCompetitions.find(c => c.code === currentUser?.competitionCode);
-                const totalBuyIn = comp ? parseInt((comp.buyIn || '$1,000').replace(/[^0-9]/g, '')) || 1000 : 1000;
-                const confirmedMembers = teamMembers.filter(m => m.depositPaid).length;
-                const allMembers = teamMembers.length;
+                const totalBuyIn = teamBuyIn();
+                const confirmedMembers = activeMembers().filter(m => m.depositPaid).length;
+                const allMembers = Math.max(1, activeMembers().length);
                 const perMemberAll = Math.ceil(totalBuyIn / allMembers);
                 const perMemberConfirmed = confirmedMembers > 0 ? Math.ceil(totalBuyIn / confirmedMembers) : totalBuyIn;
                 return (
@@ -3672,7 +3777,7 @@ export default function PuntingClub() {
                 <div className="border-2 border-dashed border-brand-200 rounded-xl p-8 text-center hover:bg-brand-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
-                  <p className="text-gray-600 text-xs mt-1">PNG, JPG · up to {MAX_IMAGES} images, 5MB each · $50 weekly max enforced</p>
+                  <p className="text-gray-600 text-xs mt-1">PNG, JPG · up to {MAX_IMAGES} images · ${weeklyLimitFor(viewedCompForLimit)} weekly max</p>
                 </div>
                 {uploadedImages.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
@@ -3704,7 +3809,7 @@ export default function PuntingClub() {
                   const weeklyUsed = selectedTeam
                     ? (selectedTeam.bets || []).filter(b => b.weekNumber === currentWeekNum + 1).reduce((sum, b) => sum + parseFloat((b.stake || '0').replace(/[^0-9.]/g, '')), 0)
                     : 0;
-                  const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed);
+                  const remaining = Math.max(0, weeklyLimitFor(viewedCompForLimit) - weeklyUsed);
                   return (
                     <div>
                       <label className="block text-xs font-semibold text-brand-300 mb-1.5">Submit for team *</label>
@@ -3714,7 +3819,7 @@ export default function PuntingClub() {
                       </select>
                       {selectedTeamForBet && (
                         <div className={`mt-2 flex items-center justify-between text-xs px-1 ${remaining <= 0 ? 'text-red-400' : remaining < 25 ? 'text-brand-300' : 'text-gray-500'}`}>
-                          <span>Weekly budget used: <strong>${weeklyUsed.toFixed(2)}</strong> of ${WEEK_BUDGET}</span>
+                          <span>Weekly budget used: <strong>${weeklyUsed.toFixed(2)}</strong> of ${weeklyLimitFor(viewedCompForLimit)}</span>
                           <span className="font-semibold">${remaining.toFixed(2)} remaining</span>
                         </div>
                       )}
@@ -3722,8 +3827,8 @@ export default function PuntingClub() {
                   );
                 })()}
                 <div className="flex gap-3">
-                  <button onClick={resetBetAnalyzer} className="flex-1 border border-brand-500/40 hover:bg-brand-500/10 text-brand-300 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
-                  <button onClick={submitBet} className="flex-1 bg-gold-500 hover:bg-gold-400 text-brand-950 font-bold py-2.5 rounded-xl text-sm">Submit Bet ✓</button>
+                  <button onClick={resetBetAnalyzer} disabled={submittingBet} className="flex-1 border border-brand-500/40 hover:bg-brand-500/10 disabled:opacity-60 text-brand-300 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
+                  <button onClick={() => submitBet()} disabled={submittingBet} aria-busy={submittingBet} className="flex-1 bg-gold-500 hover:bg-gold-400 disabled:opacity-60 disabled:cursor-wait text-brand-950 font-bold py-2.5 rounded-xl text-sm">{submittingBet ? 'Saving…' : 'Submit Bet ✓'}</button>
                 </div>
               </>
             )}
@@ -3942,8 +4047,9 @@ export default function PuntingClub() {
       )}
 
       {/* ── TOAST NOTIFICATIONS ───────────────────────────────────────────── */}
-      {toasts.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex flex-col-reverse gap-2 items-center w-full max-w-sm px-4 pointer-events-none">
+      {/* Always mounted so screen readers announce new toasts (live region). */}
+      {(
+        <div role="status" aria-live="polite" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex flex-col-reverse gap-2 items-center w-full max-w-sm px-4 pointer-events-none">
           {toasts.map(t => (
             <div key={t.id} className={`pointer-events-auto w-full flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold bc-toast
               ${t.type === 'success' ? 'bg-green-950/95 border border-green-500/50 text-green-200' :

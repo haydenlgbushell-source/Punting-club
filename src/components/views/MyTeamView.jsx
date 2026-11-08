@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { betStatus } from '../../lib/betMath.js';
 import { CheckCircle, AlertCircle, AlertTriangle, Clock, Users, Edit3, Share2, User, ChevronLeft, ChevronDown, Crown, DollarSign, BarChart3, History, Target, Sparkles } from 'lucide-react';
 import BetSlipCard from '../BetSlipCard.jsx';
 import PermissionBadge from '../PermissionBadge.jsx';
@@ -34,7 +35,7 @@ const MyTeamView = ({
         )}
         {!isLoggedIn && (
           <div className="bg-brand-500/10 border border-brand-200 rounded-xl p-4 mb-6 text-center">
-            <p className="text-brand-700 text-sm">Showing demo data. <button onClick={() => setShowLoginModal(true)} className="underline font-semibold">Log in</button> to see your team.</p>
+            <p className="text-brand-700 text-sm">You're not logged in. <button onClick={() => setShowLoginModal(true)} className="underline font-semibold">Log in</button> to see your team.</p>
           </div>
         )}
 
@@ -68,7 +69,7 @@ const MyTeamView = ({
             <h1 className="text-3xl font-black mb-1.5 truncate">{myTeamName}</h1>
             <div className="flex items-center gap-2 flex-wrap text-sm">
               <PermissionBadge role={viewedRole} />
-              <span className="text-slate-500">#{myTeamData?.rank || 1} on leaderboard</span>
+              {myTeamData?.rank && <span className="text-slate-500">#{myTeamData.rank} on leaderboard</span>}
               {effectiveViewedCode && userCompetitions.length <= 1 && (
                 <span className="text-xs bg-brand-500/10 border border-brand-500/20 text-brand-600 px-2 py-0.5 rounded-full">{activeCompetitions.find(c => c.code === effectiveViewedCode)?.name || effectiveViewedCode}</span>
               )}
@@ -104,7 +105,7 @@ const MyTeamView = ({
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          {[['Members', teamMembers.length, 'text-slate-900'], ['Total Won', myTeamData?.total || '$0', 'text-green-600'], ['Position', `#${myTeamData?.rank || 1}`, 'text-brand-600']].map(([l, v, c]) => (
+          {[['Members', teamMembers.length, 'text-slate-900'], ['Total Won', myTeamData?.total || '$0', 'text-green-600'], ['Position', myTeamData?.rank ? `#${myTeamData.rank}` : '—', 'text-brand-600']].map(([l, v, c]) => (
             <div key={l} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <p className="text-slate-500 text-xs mb-1">{l}</p>
               <p className={`text-xl font-black ${c}`}>{v}</p>
@@ -133,11 +134,11 @@ const MyTeamView = ({
             {viewedRole === 'captain' && <button onClick={() => setShowOrderModal(true)} className="text-slate-500 hover:text-brand-700 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>}
           </div>
           <div className="space-y-2">
-            {bettingOrder.map((name, i) => {
+            {bettingOrder.map(({ name, user_id }, i) => {
               const isCurrent = i === currentWeekBettorIdx % bettingOrder.length;
               const isPast = i < currentWeekBettorIdx % bettingOrder.length;
               return (
-                <div key={i} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${isCurrent ? 'bg-brand-500/15 border border-brand-200' : 'bg-gray-100/30 border border-transparent'}`}>
+                <div key={user_id || i} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${isCurrent ? 'bg-brand-500/15 border border-brand-200' : 'bg-gray-100/30 border border-transparent'}`}>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? 'bg-brand-600 text-white' : isPast ? 'bg-green-100 border border-green-300 text-green-700' : 'bg-gray-100 text-slate-500'}`}>
                     {isPast ? '✓' : i + 1}
                   </div>
@@ -206,17 +207,9 @@ const MyTeamView = ({
               <div className="space-y-3">
                 {pastBets.map((bet, i) => {
                   const legs = bet.legs || [];
-                  const status = (() => {
-                    if (!legs.length) return bet.overallStatus || 'pending';
-                    if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-                    if (legs.some(l => l.status === 'pending'))     return 'pending';
-                    if (!legs.every(l => ['won', 'lost', 'void'].includes(l.status))) return 'pending';
-                    if (legs.every(l => l.status === 'won'))  return 'won';
-                    if (legs.some(l => l.status === 'lost'))  return 'lost';
-                    return 'partial';
-                  })();
-                  const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'partial' ? 'text-brand-600 bg-brand-500/15 border-brand-500/40' : 'text-slate-500 bg-gray-100 border-gray-300';
-                  const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
+                  const status = betStatus(legs, bet.overallStatus);
+                  const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'void' ? 'text-brand-600 bg-brand-500/15 border-brand-500/40' : 'text-slate-500 bg-gray-100 border-gray-300';
+                  const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'void' ? 'REFUNDED' : status === 'in_progress' ? 'LIVE' : 'PENDING';
                   const isExpanded = expandedPastBet === (bet.id || i);
                   return (
                     <div key={bet.id || i} className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
@@ -237,7 +230,7 @@ const MyTeamView = ({
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
                             <span className="text-slate-500 text-xs">Stake: <span className="text-slate-700">{bet.stake}</span></span>
-                            {status === 'won' && <span className="text-green-400 text-xs font-semibold">Return: {bet.estimatedReturn}</span>}
+                            {(status === 'won' || status === 'void') && <span className="text-green-400 text-xs font-semibold">{status === 'void' ? 'Refund' : 'Return'}: {bet.actualReturn || bet.estimatedReturn}{bet.returnReduced ? ' (void leg)' : ''}</span>}
                             <span className="text-slate-400 text-xs">{bet.submittedAt}</span>
                           </div>
                         </div>
@@ -327,11 +320,11 @@ const MyTeamView = ({
                 </div>
                 {viewedRole === 'captain' && m.role !== 'captain' && (
                   <div className="flex gap-1 flex-shrink-0">
-                    <select value={m.role} onChange={e => updateMemberRole(m.phone, e.target.value)} className="bg-gray-50 border border-gray-300 text-slate-700 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-brand-500/50">
+                    <select value={m.role} onChange={e => updateMemberRole(m.user_id, e.target.value)} className="bg-gray-50 border border-gray-300 text-slate-700 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-brand-500/50">
                       <option value="member">Member</option>
                       <option value="view-only">View Only</option>
                     </select>
-                    <button onClick={() => toggleDepositPaid(m.phone)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
+                    <button onClick={() => toggleDepositPaid(m.user_id)} className={`text-xs px-2 py-1 rounded border ${m.depositPaid ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
                       {m.depositPaid ? 'Mark Unpaid' : 'Mark Paid'}
                     </button>
                   </div>

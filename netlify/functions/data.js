@@ -4,7 +4,10 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isEnum, isString, isPositiveInt, isPositiveFloat, sanitizeUpdates } = require('./validate');
-const { corsHeaders, bearerToken } = require('./security');
+const { corsHeaders, bearerToken, verifyAdminToken, triggerInternal } = require('./security');
+const { overallFromLegs } = require('./lib/settle');
+const { betStatus, betReturn, STATUS_SHORT } = require('../../src/lib/betMath.js');
+const { weekAt } = require('../../src/lib/auTime.js');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -29,6 +32,28 @@ const isTeamCaptain = async (userId, teamId) => {
   return !!mem && mem.role === 'captain';
 };
 
+// The caller's membership row for a team (any role), or null.
+const getMembership = async (userId, teamId) => {
+  if (!userId || !teamId) return null;
+  const { data: team } = await supabase.from('teams').select('captain_id').eq('id', teamId).maybeSingle();
+  if (team && team.captain_id === userId) return { role: 'captain', can_bet: true };
+  const { data: mem } = await supabase.from('team_members').select('role, can_bet').eq('team_id', teamId).eq('user_id', userId).maybeSingle();
+  return mem || null;
+};
+
+// Remove phone numbers from member rows unless the caller may see them
+// (a member of that team, or an admin). Phone numbers are personal info.
+const stripPhones = (members) => (members || []).map(m => (
+  m && m.users ? { ...m, users: { ...m.users, phone: undefined } } : m
+));
+const canSeeTeamContacts = async (event, payload, teamId) => {
+  try { verifyAdminToken(payload.adminToken); return true; } catch (_) { /* not admin */ }
+  const actor = await getAuthUser(event);
+  if (!actor) return false;
+  const mem = await getMembership(actor.id, teamId);
+  return !!mem && mem.role !== 'pending';
+};
+
 exports.handler = async (event) => {
   const HEADERS = corsHeaders(event);
   const json  = (data, status = 200) => ({ statusCode: status, headers: HEADERS, body: JSON.stringify(data) });
@@ -48,7 +73,7 @@ exports.handler = async (event) => {
       'create_competition','get_competition_requests','update_competition_request',
       'delete_competition','update_competition_status','update_competition','advance_week',
       'update_team','update_bet_result','update_bet_leg','reject_bet','correct_bet',
-      'update_kyc','update_user','delete_user','add_audit',
+      'update_kyc','update_user','delete_user','add_audit','admin_reset_password',
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
       'delete_team',
       'generate_recap',
@@ -92,7 +117,7 @@ exports.handler = async (event) => {
       }
 
       case 'create_competition': {
-        const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
+        const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole, weeklyLimit, finalWeekLimit } = payload;
         if (!name || String(name).trim().length < 1 || String(name).length > 120)
           return error('Competition name must be 1–120 characters.');
         if (pub && String(pub).length > 120)
@@ -108,11 +133,13 @@ exports.handler = async (event) => {
           end_date:   endDate   || null,
           jackpot:    0,
           is_private: isPrivate ? true : false,
+          ...(dollarsToCents(weeklyLimit) ? { weekly_limit_cents: dollarsToCents(weeklyLimit) } : {}),
+          ...(dollarsToCents(finalWeekLimit) ? { final_week_limit_cents: dollarsToCents(finalWeekLimit) } : {}),
         };
         let { data, error: e } = await supabase.from('competitions').insert(insertRow).select().single();
-        if (e && e.message && e.message.includes('is_private')) {
-          // Column not yet migrated — insert without it then patch
-          const { is_private: _drop, ...rowWithout } = insertRow;
+        if (e && e.message && /is_private|limit_cents/.test(e.message)) {
+          // Column not yet migrated — insert without the newer columns
+          const { is_private: _drop, weekly_limit_cents: _w, final_week_limit_cents: _f, ...rowWithout } = insertRow;
           const res2 = await supabase.from('competitions').insert(rowWithout).select().single();
           if (res2.error) return error(res2.error.message);
           data = res2.data;
@@ -255,7 +282,7 @@ exports.handler = async (event) => {
       }
 
       case 'update_competition': {
-        const { id, name, pub, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
+        const { id, name, pub, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole, weeklyLimit, finalWeekLimit } = payload;
         const weeksCalc = startDate && endDate
           ? Math.round((new Date(endDate) - new Date(startDate)) / (7 * 86400000))
           : null;
@@ -268,6 +295,8 @@ exports.handler = async (event) => {
         if (endDate)             updates.end_date   = endDate;
         if (weeksCalc && weeksCalc > 0) updates.weeks = weeksCalc;
         if (isPrivate !== undefined) updates.is_private = isPrivate;
+        if (dollarsToCents(weeklyLimit)) updates.weekly_limit_cents = dollarsToCents(weeklyLimit);
+        if (finalWeekLimit !== undefined) updates.final_week_limit_cents = dollarsToCents(finalWeekLimit) || null;
         const { data, error: e } = await supabase.from('competitions').update(updates).eq('id', id).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, 'Competition Updated', data.name, Object.keys(updates).join(', '));
@@ -301,6 +330,7 @@ exports.handler = async (event) => {
           .select(`*, competitions(*), team_members(*, users(id, first_name, last_name, phone, kyc_status))`)
           .eq('id', teamId).single();
         if (e) return error(e.message);
+        if (!(await canSeeTeamContacts(event, payload, teamId))) data.team_members = stripPhones(data.team_members);
         return json(data);
       }
 
@@ -345,7 +375,7 @@ exports.handler = async (event) => {
 
       case 'update_team': {
         const { teamId, adminRole } = payload;
-        const TEAM_ALLOWED = ['team_name', 'status', 'buy_in_mode', 'finalised', 'deposit_per_member', 'competition_id'];
+        const TEAM_ALLOWED = ['team_name', 'status', 'buy_in_mode', 'finalised', 'deposit_per_member', 'competition_id', 'flagged'];
         const { clean: updates } = sanitizeUpdates(payload.updates, TEAM_ALLOWED);
         if (Object.keys(updates).length === 0) return error('No valid fields to update.');
         const { data, error: e } = await supabase.from('teams').update(updates).eq('id', teamId).select().single();
@@ -355,13 +385,15 @@ exports.handler = async (event) => {
       }
 
       case 'finalise_team': {
-        const { teamId, depositPerMember } = payload;
+        const { teamId, depositPerMember, reopen } = payload;
         const actor = await getAuthUser(event);
         if (!actor) return error('Please log in again.', 401);
-        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can finalise the team.', 403);
+        if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can finalise or re-open the team.', 403);
+        const perMember = parseInt(depositPerMember, 10);
+        if (!reopen && (!perMember || perMember <= 0 || perMember > 1_000_000)) return error('Invalid deposit amount.');
         const { data, error: e } = await supabase
           .from('teams')
-          .update({ finalised: true, deposit_per_member: depositPerMember })
+          .update(reopen ? { finalised: false, deposit_per_member: null } : { finalised: true, deposit_per_member: perMember })
           .eq('id', teamId).select().single();
         if (e) return error(e.message);
         return json(data);
@@ -388,6 +420,7 @@ exports.handler = async (event) => {
           e    = res2.error;
         }
         if (e) return error(e.message);
+        if (!(await canSeeTeamContacts(event, payload, teamId))) data = stripPhones(data);
         return json(data);
       }
 
@@ -451,11 +484,20 @@ exports.handler = async (event) => {
         if (!(await isTeamCaptain(actor.id, teamId))) return error('Only the team captain can set the betting order.', 403);
         if (!Array.isArray(orderedUserIds)) return error('orderedUserIds must be an array.');
         if (orderedUserIds.length > 50) return error('Betting order cannot exceed 50 members.');
+        const { data: memberRows } = await supabase.from('team_members').select('user_id, role').eq('team_id', teamId);
+        const memberIds = new Set((memberRows || []).filter(m => m.role !== 'pending').map(m => m.user_id));
+        const ids = [...new Set(orderedUserIds)].filter(id => memberIds.has(id));
+        if (!ids.length) return error('None of those people are members of this team.');
         await supabase.from('betting_order').delete().eq('team_id', teamId);
-        const rows = orderedUserIds.map((userId, i) => ({ team_id: teamId, user_id: userId, position: i + 1 }));
+        const rows = ids.map((userId, i) => ({ team_id: teamId, user_id: userId, position: i + 1 }));
         const { error: e } = await supabase.from('betting_order').insert(rows);
         if (e) return error(e.message);
-        return json({ success: true });
+        // Mirror the position onto team_members so get_team_members returns the
+        // saved rotation order (that's what the app loads).
+        for (const [i, userId] of ids.entries()) {
+          await supabase.from('team_members').update({ betting_order: i + 1 }).eq('team_id', teamId).eq('user_id', userId);
+        }
+        return json({ success: true, saved: ids.length });
       }
 
       case 'create_additional_team': {
@@ -599,7 +641,50 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'submit_bet': {
-        const { teamId, weekNumber, betType, stake, combinedOdds, estimatedReturn, submissionValid, aiConfidence, legs, submittedBy } = payload;
+        const { teamId, weekNumber, betType, stake, combinedOdds, estimatedReturn, submissionValid, aiConfidence, legs } = payload;
+
+        // Authorise: only a signed-in team member who is allowed to bet may submit,
+        // and the submitter is always the caller (never taken from the request).
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again to submit a bet.', 401);
+        if (isUUID(teamId) !== null) return error('Invalid team.');
+        const membership = await getMembership(actor.id, teamId);
+        if (!membership || membership.role === 'pending') return error('You are not a member of this team.', 403);
+        if (membership.role === 'view-only' || membership.can_bet === false) return error('You do not have betting rights in this team. Ask your captain.', 403);
+
+        const stakeCents = Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, '')));
+
+        // Weekly stake limit for this team's competition (server-side, so it can't
+        // be bypassed). Limits come from the competition; default $50.
+        const { data: teamRow } = await supabase.from('teams').select('competition_id, competitions(*)').eq('id', teamId).maybeSingle();
+        const comp = teamRow?.competitions || null;
+        const thisWeek = comp?.start_date ? weekAt(Date.now(), comp.start_date) : null;
+        const isFinalWeek = !!(comp?.weeks && thisWeek && thisWeek >= comp.weeks);
+        const limitCents = (isFinalWeek && comp?.final_week_limit_cents) || comp?.weekly_limit_cents || 5000;
+
+        const since = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: recent } = await supabase.from('bets')
+          .select('id, stake, submitted_at, overall_status, bet_legs(selection)')
+          .eq('team_id', teamId).gte('submitted_at', since);
+        const live = (recent || []).filter(b => b.overall_status !== 'rejected');
+        if (thisWeek && comp?.start_date) {
+          const usedCents = live
+            .filter(b => weekAt(new Date(b.submitted_at).getTime(), comp.start_date) === thisWeek)
+            .reduce((sum, b) => sum + (b.stake || 0), 0);
+          if (usedCents + stakeCents > limitCents) {
+            const left = Math.max(0, limitCents - usedCents) / 100;
+            return error(`Weekly limit is $${(limitCents / 100).toFixed(2)}${isFinalWeek && comp?.final_week_limit_cents ? ' (final week)' : ''}. Your team has $${left.toFixed(2)} left this week.`, 409);
+          }
+        }
+
+        // Duplicate guard: the same stake and the same selections in the last 8 days
+        // is almost always a double submit. The client can confirm and resend.
+        if (!payload.allowDuplicate && Array.isArray(legs)) {
+          const sig = (sels) => sels.map(x => String(x || '').trim().toLowerCase()).sort().join('|');
+          const mine = sig(legs.map(l => l.selection));
+          const dup = live.find(b => b.stake === stakeCents && sig((b.bet_legs || []).map(l => l.selection)) === mine);
+          if (dup) return error('Duplicate bet: this slip looks like one your team already submitted. Submit again only if you placed it twice.', 409);
+        }
 
         const stakeErr = isPositiveInt(stake, { max: 1_000_000, label: 'Stake' });
         if (stakeErr) return error(stakeErr);
@@ -625,30 +710,59 @@ exports.handler = async (event) => {
           team_id:          teamId,
           week_number:      weekNumber,
           bet_type:         normBetType,
-          stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, ''))),
+          stake:            stakeCents,
           combined_odds:    parseFloat(combinedOdds) || null,
           estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, ''))),
           overall_status:   'pending',
           submission_valid: submissionValid !== false,
           ai_confidence:    aiConfidence || null,
-          submitted_by:     submittedBy || null,
+          submitted_by:     actor.id,
           flagged:          !submissionValid,
         }).select().single();
         if (betError) return error(betError.message);
 
         if (legs?.length) {
-          const legRows = legs.map(leg => ({
+          const MARKET_TYPES = ['head_to_head', 'line', 'total', 'anytime_scorer', 'first_scorer', 'win', 'place', 'other'];
+          const str = (v, max = 120) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+          const intOrNull = (v) => { const n = parseInt(v, 10); return isNaN(n) ? null : n; };
+          const numOrNull = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+          const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null);
+          const timeOrNull = (v) => (/^\d{1,2}:\d{2}/.test(String(v || '')) ? String(v).slice(0, 5) : null);
+          const baseRows = legs.map((leg, i) => ({
             bet_id:     bet.id,
-            leg_number: leg.legNumber,
+            leg_number: intOrNull(leg.legNumber) || i + 1,
             event:      leg.event,
             selection:  leg.selection,
             market:     leg.market,
-            odds:       parseFloat(leg.odds) || null,
-            event_date: leg.eventDate || null,
-            start_time: leg.startTime || null,
+            odds:       numOrNull(leg.odds),
+            event_date: dateOrNull(leg.eventDate),
+            start_time: timeOrNull(leg.startTime),
             status:     'pending',
           }));
-          const { error: legsError } = await supabase.from('bet_legs').insert(legRows);
+          // Structured fields extracted from the slip (v2 migration). They let the
+          // settler search precisely and settle most markets in code.
+          const fullRows = baseRows.map((row, i) => {
+            const leg = legs[i];
+            const mt = String(leg.marketType || '').toLowerCase();
+            return {
+              ...row,
+              sport:         str(leg.sport, 40),
+              competition:   str(leg.competition),
+              home_team:     str(leg.homeTeam),
+              away_team:     str(leg.awayTeam),
+              market_type:   MARKET_TYPES.includes(mt) ? mt : null,
+              line:          numOrNull(leg.line),
+              player:        str(leg.player),
+              venue:         str(leg.venue),
+              race_number:   intOrNull(leg.raceNumber),
+              runner_number: intOrNull(leg.runnerNumber),
+            };
+          });
+          let { error: legsError } = await supabase.from('bet_legs').insert(fullRows);
+          if (legsError && /column|schema cache/i.test(legsError.message || '')) {
+            // v2 columns not migrated yet — store the basic fields.
+            ({ error: legsError } = await supabase.from('bet_legs').insert(baseRows));
+          }
           if (legsError) return error(legsError.message);
         }
 
@@ -683,8 +797,24 @@ exports.handler = async (event) => {
 
       case 'update_bet_leg': {
         const { legId, status, resultNote, adminRole } = payload;
-        const { data, error: e } = await supabase.from('bet_legs').update({ status, result_note: resultNote, updated_at: new Date().toISOString() }).eq('id', legId).select('*, bets(id, teams(team_name))').single();
+        const legStatusErr = isEnum(status, ['pending', 'in_progress', 'won', 'lost', 'void']);
+        if (legStatusErr) return error(`Invalid leg status. ${legStatusErr}`);
+        const baseUpdate = { status, result_note: resultNote, updated_at: new Date().toISOString() };
+        const sel = '*, bets(id, overall_status, teams(team_name))';
+        // Admin decision: clear the review flag and record who settled it (v2 columns).
+        let { data, error: e } = await supabase.from('bet_legs')
+          .update({ ...baseUpdate, settled_by: 'admin', needs_review: false })
+          .eq('id', legId).select(sel).single();
+        if (e && /column|schema cache/i.test(e.message || '')) {
+          ({ data, error: e } = await supabase.from('bet_legs').update(baseUpdate).eq('id', legId).select(sel).single());
+        }
         if (e) return error(e.message);
+        // Keep the bet's overall status in step with its legs.
+        if (data.bet_id) {
+          const { data: siblings } = await supabase.from('bet_legs').select('status').eq('bet_id', data.bet_id);
+          const overall = overallFromLegs(siblings || []);
+          if (overall !== data.bets?.overall_status) await supabase.from('bets').update({ overall_status: overall }).eq('id', data.bet_id);
+        }
         if (adminRole) await addAudit(adminRole, 'Leg Override', `${data.bets?.teams?.team_name} — ${data.selection}`, `Status → ${status}${resultNote ? ': ' + resultNote : ''}`);
         return json(data);
       }
@@ -723,34 +853,10 @@ exports.handler = async (event) => {
 
         const currentWeek = payload.currentWeek || 1;
 
-        // Derive which competition week a bet belongs to from its upload timestamp.
-        // Wednesday 12:00 AEST marks the boundary between weeks — same logic as the frontend.
-        const calcWeekFromTimestamp = (submittedAt, compStartDate) => {
-          if (!submittedAt || !compStartDate) return null;
-          const AEST = 10 * 60 * 60 * 1000;
-          const submittedAEST = new Date(submittedAt).getTime() + AEST;
-          const startAEST    = new Date(compStartDate).getTime() + AEST;
-          let boundary = new Date(startAEST);
-          boundary.setUTCHours(12, 0, 0, 0);
-          const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
-          boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-          if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-          if (submittedAEST < boundary.getTime()) return 1;
-          return Math.floor((submittedAEST - boundary.getTime()) / (7 * 86400000)) + 2;
-        };
-
-        // Compute overall_status from actual leg statuses — keeps display in sync
-        // even if the DB overall_status column hasn't been written yet
-        const deriveLegStatus = (legs) => {
-          if (!legs?.length) return 'pending';
-          const settled = ['won', 'lost', 'void'];
-          if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-          if (legs.some(l => l.status === 'pending'))     return 'pending';
-          if (!legs.every(l => settled.includes(l.status))) return 'pending';
-          if (legs.every(l => l.status === 'won'))  return 'won';
-          if (legs.some(l => l.status === 'lost'))  return 'lost';
-          return 'partial'; // all void or mixed won/void
-        };
+        // A bet's week comes from its upload time: weeks roll over every Wednesday
+        // 12:00 midday Sydney time (DST-aware) — same rule as the app (src/lib/auTime.js).
+        const calcWeekFromTimestamp = (submittedAt, compStartDate) =>
+          (submittedAt && compStartDate) ? weekAt(new Date(submittedAt).getTime(), compStartDate) : null;
 
         const ranked = data
           .map(team => {
@@ -773,21 +879,23 @@ exports.handler = async (event) => {
                   : (b.week_number || 1),
                 // Attach submitter's name from team members lookup
                 submitted_by_name: b.submitted_by ? (memberNameMap[b.submitted_by] || null) : null,
-                // Re-derive status from legs so it's always accurate
-                overall_status: b.bet_legs?.length ? deriveLegStatus(b.bet_legs) : (b.overall_status || 'pending'),
+                // Re-derive status from legs so it's always accurate (shared rules)
+                overall_status: betStatus(b.bet_legs, b.overall_status || 'pending'),
+                // Actual gross return in cents: reduced for void legs, stake back if all void
+                actual_return: betReturn(b).returnCents,
+                return_reduced: betReturn(b).reducedForVoids,
                 // Sort legs by leg_number
                 bet_legs: (b.bet_legs || []).slice().sort((a, b) => (a.leg_number || 0) - (b.leg_number || 0)),
               }))
               .sort((a, b) => (b.week_number || 0) - (a.week_number || 0));
 
-            const wonBets  = sortedBets.filter(b => b.overall_status === 'won');
-            const totalWon = wonBets.reduce((sum, b) => sum + (b.estimated_return || 0), 0);
+            const totalWon = sortedBets.reduce((sum, b) => sum + (b.actual_return || 0), 0);
             const weekBet  = sortedBets.find(b => b.week_number === currentWeek);
             const weekHistory = Array.from({ length: currentWeek - 1 }, (_, i) => {
               const wb = sortedBets.find(b => b.week_number === i + 1);
-              return wb?.overall_status === 'won' ? 'W' : wb?.overall_status === 'lost' ? 'L' : wb?.overall_status === 'partial' ? 'P' : '–';
+              return STATUS_SHORT[wb?.overall_status] || '–';
             });
-            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString()}`, memberCount, currentWeekBet: weekBet || null, weekHistory };
+            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, memberCount, currentWeekBet: weekBet || null, weekHistory };
           })
           .sort((a, b) => b.totalWon - a.totalWon)
           .map((team, i) => ({ ...team, rank: i + 1 }));
@@ -824,11 +932,13 @@ exports.handler = async (event) => {
 
       case 'update_kyc': {
         const { userId, kycStatus, adminRole } = payload;
-        const kycErr = isEnum(kycStatus, ['pending', 'approved', 'rejected']);
+        // The app and database use 'verified'; accept 'approved' as an alias.
+        const kyc = kycStatus === 'approved' ? 'verified' : kycStatus;
+        const kycErr = isEnum(kyc, ['pending', 'verified', 'rejected']);
         if (kycErr) return error(`Invalid KYC status. ${kycErr}`);
-        const { data, error: e } = await supabase.from('users').update({ kyc_status: kycStatus, active: kycStatus !== 'rejected' }).eq('id', userId).select().single();
+        const { data, error: e } = await supabase.from('users').update({ kyc_status: kyc, active: kyc !== 'rejected' }).eq('id', userId).select().single();
         if (e) return error(e.message);
-        await addAudit(adminRole, `KYC ${kycStatus}`, `${data.first_name} ${data.last_name}`, `KYC status set to ${kycStatus}`);
+        await addAudit(adminRole, `KYC ${kyc}`, `${data.first_name} ${data.last_name}`, `KYC status set to ${kyc}`);
         return json(data);
       }
 
@@ -865,6 +975,23 @@ exports.handler = async (event) => {
 
         await addAudit(adminRole, 'User Deleted', userName, 'User account permanently deleted to allow re-registration');
         return json({ success: true });
+      }
+
+      case 'admin_reset_password': {
+        // Issue a temporary password for a member who is locked out. The admin
+        // passes it on in person/by text; the member changes it in their profile.
+        const { userId, adminRole } = payload;
+        if (!['owner', 'campaign'].includes(adminRole)) return error('Only the owner or campaign manager can reset passwords.', 403);
+        if (isUUID(userId) !== null) return error('Invalid user.');
+        const { data: target } = await supabase.from('users').select('first_name, last_name').eq('id', userId).maybeSingle();
+        if (!target) return error('User not found.', 404);
+        const WORDS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        let temp = '';
+        while (temp.length < 12) { const b = randomBytes(1)[0]; if (b < 248) temp += WORDS[b % WORDS.length]; }
+        const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password: temp });
+        if (pwErr) return error(pwErr.message);
+        await addAudit(adminRole, 'Password Reset', `${target.first_name} ${target.last_name}`, 'Temporary password issued');
+        return json({ success: true, tempPassword: temp });
       }
 
       // ══════════════════════════════════════════════════════
@@ -972,23 +1099,13 @@ exports.handler = async (event) => {
       }
 
       case 'trigger_results_check': {
-        const { adminRole } = payload;
+        const { adminRole, betId } = payload;
         if (!adminRole) return error('Admin access required', 403);
-        const bgUrl = process.env.URL
-          ? `${process.env.URL}/.netlify/functions/check-results-background`
-          : null;
-        if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
-        // Await the invocation. Background functions return 202 immediately, so this
-        // is fast — but awaiting is essential: a fire-and-forget fetch can be dropped
-        // when the serverless runtime freezes on return, so the worker never runs.
+        if (betId && isUUID(betId) !== null) return error('Invalid betId.');
         let bgStatus = null, bgErr = null;
-        try {
-          const res = await fetch(bgUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-          bgStatus = res.status;
-        } catch (e) {
-          bgErr = e.message;
-        }
-        await addAudit(adminRole, 'Results Check Triggered', 'All pending bets',
+        try { bgStatus = await triggerInternal('check-results-background', { betId: betId || null }); }
+        catch (e) { bgErr = e.message; }
+        await addAudit(adminRole, 'Results Check Triggered', betId ? `Bet ${betId}` : 'All pending bets',
           bgErr ? `Background trigger failed: ${bgErr}` : `Background settler invoked (HTTP ${bgStatus})`);
         if (bgErr) return error('Could not start results check: ' + bgErr, 502);
         return json({ success: true, message: `Results check started (HTTP ${bgStatus})`, bgStatus });
@@ -998,16 +1115,11 @@ exports.handler = async (event) => {
         const { competitionId, weekNumber, adminRole } = payload;
         if (!adminRole) return error('Admin access required', 403);
         if (!competitionId) return error('competitionId is required');
-        // Trigger the background function via internal fetch
-        const bgUrl = process.env.URL
-          ? `${process.env.URL}/.netlify/functions/generate-recap-background`
-          : null;
-        if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
-        fetch(bgUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ competitionId, weekNumber: weekNumber || null }),
-        }).catch(e => console.error('[generate_recap] trigger error:', e.message));
+        try {
+          await triggerInternal('generate-recap-background', { competitionId, weekNumber: weekNumber || null });
+        } catch (e) {
+          return error('Could not start recap generation: ' + e.message, 502);
+        }
         return json({ success: true, message: 'Recap generation started' });
       }
 
@@ -1018,6 +1130,13 @@ exports.handler = async (event) => {
     console.error('Data function error:', err);
     return error(err.message, 500);
   }
+};
+
+// "$75", "75.50" → 7500 / 7550 cents; null if empty/invalid.
+const dollarsToCents = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  return isNaN(n) || n <= 0 ? null : Math.round(n * 100);
 };
 
 // Helper: add audit log entry
@@ -1034,25 +1153,6 @@ const createAdminNotif = async (type, title, message, data = {}) => {
 const getAdminRole = (payload) => {
   try { return verifyAdminToken(payload.adminToken).role; }
   catch { return null; }
-};
-
-// Helper: verify signed admin token
-const verifyAdminToken = (token) => {
-  const { createHmac } = require('crypto');
-  if (!token) { const e = new Error('Admin token required'); e.status = 401; throw e; }
-  const secret = process.env.ADMIN_JWT_SECRET;
-  if (!secret) { const e = new Error('Admin auth not configured'); e.status = 500; throw e; }
-  const dot = String(token).lastIndexOf('.');
-  if (dot < 0) { const e = new Error('Invalid token format'); e.status = 401; throw e; }
-  const payloadB64 = String(token).slice(0, dot);
-  const sig        = String(token).slice(dot + 1);
-  const expected   = createHmac('sha256', secret).update(payloadB64).digest('hex');
-  if (sig !== expected) { const e = new Error('Invalid admin token'); e.status = 401; throw e; }
-  let claims;
-  try { claims = JSON.parse(Buffer.from(payloadB64, 'base64').toString()); }
-  catch(_) { const e = new Error('Invalid token payload'); e.status = 401; throw e; }
-  if (!claims.exp || Date.now() > claims.exp) { const e = new Error('Admin session expired, please log in again'); e.status = 401; throw e; }
-  return claims;
 };
 
 // Helper: generate random code (crypto-safe)

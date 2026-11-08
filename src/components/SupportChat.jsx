@@ -9,7 +9,7 @@ ABOUT PUNTING CLUB:
 - Each week, teams place multi-bets (any sport/racing, any bookmaker) up to a weekly limit set by the competition host
 - Teams upload a screenshot of their bet slip; AI reads it and tracks results automatically
 - The team with the highest total winnings at season end wins the jackpot prize pool funded by buy-ins
-- Week runs Wednesday 12:00 AM to Tuesday 11:59 PM AEST
+- Each week closes at Wednesday 12:00 pm (midday) Sydney time (AEST, or AEDT in daylight saving) and the next week starts straight away
 - Results are checked by AI every 3 hours once the first leg starts
 
 KEY RULES:
@@ -112,7 +112,6 @@ const SupportChat = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
           max_tokens: 512,
           system: SYSTEM_PROMPT,
           messages: apiMessages,

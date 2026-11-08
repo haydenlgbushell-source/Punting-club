@@ -87,8 +87,8 @@ const CompetitionView = ({ navHistory, goBack, setSignupMode, setShowSignupModal
       <div className="bg-white border border-gray-300 rounded-xl p-6 mb-8">
         <h3 className="text-lg font-bold mb-3 text-brand-600">The Punting Week</h3>
         <p className="text-slate-700 text-sm">
-          Every competition week finishes <strong className="text-slate-900">11:59PM Tuesday</strong> and starts{' '}
-          <strong className="text-slate-900">12:00AM every Wednesday</strong>. Bets must be submitted before the first leg
+          Each competition week rolls over at{' '}
+          <strong className="text-slate-900">12:00 pm (midday) every Wednesday, Sydney time</strong>. Bets must be submitted before the first leg
           of your multi starts. Teams can split their weekly allowance across multiple bets. The final week has a{' '}
           <strong className="text-slate-900">boosted bet limit</strong> — exact amounts are set by your competition host.
         </p>

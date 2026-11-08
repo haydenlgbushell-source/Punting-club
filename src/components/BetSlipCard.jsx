@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
+import { betStatus } from '../lib/betMath.js';
 
 // Barlow Condensed — sports-display font (loaded via Google Fonts in index.html)
 const BC = "'Barlow Condensed', 'Inter', sans-serif";
+
+// Only render http(s) links from stored data; returns { href, host } or null.
+const safeSource = (url) => {
+  try {
+    const u = new URL(String(url || ''));
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return { href: u.href, host: u.hostname.replace(/^www\./, '') };
+  } catch { return null; }
+};
 
 const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const [openLegs, setOpenLegs] = useState({});
@@ -16,23 +26,21 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const pendCount = legs.filter(l => l.status === 'pending').length;
   const totalLegs = legs.length;
 
-  const status = totalLegs === 0 ? (bet.overallStatus || 'pending')
-    : liveCount > 0                       ? 'in_progress'
-    : pendCount > 0                       ? 'pending'
-    : lostCount > 0 && wonCount > 0       ? 'partial'
-    : lostCount > 0                       ? 'lost'
-    :                                       'won';
+  // Shared rules: one lost leg busts the bet; all-void is refunded; won + void
+  // legs pay at reduced odds (actualReturn comes from the server).
+  const status = betStatus(legs, bet.overallStatus);
 
   const allWon         = status === 'won';
   const estimatedReturn = bet.estimatedReturn || bet.return || 'N/A';
-  const payoutValue    = status === 'lost' ? '$0.00' : estimatedReturn;
-  const payoutLabel    = allWon ? 'WINNINGS' : 'POTENTIAL';
+  const settledValue   = bet.actualReturn || estimatedReturn;
+  const payoutValue    = status === 'lost' ? '$0.00' : (status === 'won' || status === 'void') ? settledValue : estimatedReturn;
+  const payoutLabel    = allWon ? (bet.returnReduced ? 'WINNINGS (VOID LEG)' : 'WINNINGS') : status === 'void' ? 'REFUND' : 'POTENTIAL';
   const payoutColor    = allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#94a3b8';
 
-  const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
-  const titleColor = allWon ? '#16a34a' : status === 'lost' ? '#dc2626' : status === 'partial' ? '#ca8a04' : '#0d9488';
-  const cardBorder = allWon ? '#22c55e66' : status === 'lost' ? '#ef444466' : status === 'partial' ? '#eab30866' : status === 'in_progress' ? '#f9731666' : '#cbd5e1';
-  const cardBg     = allWon ? '#f0fdf4' : status === 'lost' ? '#fef2f2' : status === 'partial' ? '#fffbeb' : status === 'in_progress' ? '#fff7ed' : '#ffffff';
+  const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'void' ? 'REFUNDED' : status === 'in_progress' ? 'LIVE' : 'PENDING';
+  const titleColor = allWon ? '#16a34a' : status === 'lost' ? '#dc2626' : status === 'void' ? '#ca8a04' : '#0d9488';
+  const cardBorder = allWon ? '#22c55e66' : status === 'lost' ? '#ef444466' : status === 'void' ? '#eab30866' : status === 'in_progress' ? '#f9731666' : '#cbd5e1';
+  const cardBg     = allWon ? '#f0fdf4' : status === 'lost' ? '#fef2f2' : status === 'void' ? '#fffbeb' : status === 'in_progress' ? '#fff7ed' : '#ffffff';
 
   return (
     <div style={{ border: `1px solid ${cardBorder}`, background: cardBg, borderRadius: 16, overflow: 'hidden' }}>
@@ -107,7 +115,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                             const [yr, mo, dy] = leg.eventDate.split('-').map(Number);
                             return new Date(yr, mo - 1, dy).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
                           })() : ''}
-                          {leg.startTime ? ` · ${String(leg.startTime).substring(0, 5)} AEST` : ''}
+                          {leg.startTime ? ` · ${String(leg.startTime).substring(0, 5)}` : ''}
                         </div>
                       )}
                     </div>
@@ -115,7 +123,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, marginLeft: 10 }}>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#0d9488' }}>@ {leg.odds}</div>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', padding: '2px 9px', borderRadius: 5, background: `${legColor}18`, color: legColor, border: `1px solid ${legColor}44` }}>
-                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : 'WAIT'}
+                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : leg.needsReview ? 'IN REVIEW' : 'WAIT'}
                     </div>
                     {leg.resultNote && (
                       <button onClick={() => toggleLeg(i)} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: 11, cursor: 'pointer', padding: 0 }}>
@@ -127,7 +135,17 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                 {isOpen && leg.resultNote && (
                   <div style={{ borderTop: '1px solid #e5e7eb', padding: '10px 14px 12px', display: 'flex', gap: 7, fontSize: 13, color: '#64748b', lineHeight: 1.5, alignItems: 'flex-start' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: won ? '#22c55e' : lost ? '#ef4444' : '#eab308', flexShrink: 0, marginTop: 4, display: 'inline-block' }} />
-                    <span>{leg.resultNote}</span>
+                    <span>
+                      {leg.resultNote}
+                      {safeSource(leg.resultSourceUrl) && (
+                        <>
+                          {' '}
+                          <a href={safeSource(leg.resultSourceUrl).href} target="_blank" rel="noopener noreferrer" style={{ color: '#0d9488', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+                            Source: {safeSource(leg.resultSourceUrl).host}
+                          </a>
+                        </>
+                      )}
+                    </span>
                   </div>
                 )}
               </div>

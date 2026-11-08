@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Sparkles, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { apiGetLatestRecap, apiGetWeeklyRecap } from '../api.js';
 
@@ -95,7 +96,7 @@ const WeeklyRecapCard = ({ competitionId, weekNumber, showGenerateButton, onGene
         <div className="px-5 pb-5 border-t border-gray-100">
           <div
             className="prose prose-sm max-w-none mt-4 text-slate-700"
-            dangerouslySetInnerHTML={{ __html: recap.summary_html }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(recap.summary_html || '', { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'form', 'input', 'img'], FORBID_ATTR: ['style'] }) }}
           />
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
             <p className="text-xs text-slate-400">

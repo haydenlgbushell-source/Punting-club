@@ -1,5 +1,6 @@
 // Shared utility functions and constants
 
+// Default weekly stake limit in dollars, used when a competition has no limit set.
 export const WEEK_BUDGET = 50;
 
 export const genCode = (len = 6) => {
@@ -38,21 +39,17 @@ export const validatePhone = (raw) => {
   return { valid: false, normalised: null };
 };
 
-// Calculate which competition week we are in.
-// Week boundaries are Wednesday 12:00 AEST — same logic used on frontend and backend.
-export const calcCurrentWeek = (startDate) => {
-  if (!startDate) return 1;
-  const AEST = 10 * 60 * 60 * 1000; // UTC+10 in ms
-  const nowAEST   = Date.now() + AEST;
-  const startAEST = new Date(startDate).getTime() + AEST;
+// Competition weeks (Wednesday 12:00 midday cutoff, daylight-saving aware)
+// live in ./lib/auTime.js so the server uses exactly the same rule.
+export { calcCurrentWeek } from './lib/auTime.js';
 
-  // First Wednesday 12:00 AEST strictly after startAEST
-  let boundary = new Date(startAEST);
-  boundary.setUTCHours(12, 0, 0, 0);
-  const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
-  boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-  if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-
-  if (nowAEST < boundary.getTime()) return 1;
-  return Math.floor((nowAEST - boundary.getTime()) / (7 * 86400000)) + 2;
+// Weekly stake limit (dollars) for a competition this week, including the
+// boosted final-week limit when set. Mirrors the server check in data.js.
+import { calcCurrentWeek as _week } from './lib/auTime.js';
+export const weeklyLimitFor = (comp) => {
+  if (!comp) return WEEK_BUDGET;
+  const wk = _week(comp.start_date);
+  const isFinal = !!(comp.weeks && wk >= comp.weeks);
+  const cents = (isFinal && comp.final_week_limit_cents) || comp.weekly_limit_cents;
+  return cents ? cents / 100 : WEEK_BUDGET;
 };
