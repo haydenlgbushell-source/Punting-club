@@ -14,7 +14,7 @@ import LeaderboardView from './components/views/LeaderboardView.jsx';
 import WeeklySummaryView from './components/views/WeeklySummaryView.jsx';
 import MyTeamView from './components/views/MyTeamView.jsx';
 import { AppContext } from './context/AppContext.jsx';
-import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, WEEK_BUDGET } from './utils.js';
+import { genCode, parseAnalysisJSON, validatePhone, calcCurrentWeek, weeklyLimitFor } from './utils.js';
 import {
   apiSignUp, apiLogin, apiVerifySession, apiAdminLogin,
   apiGetActiveCompetitions, apiCreateCompetition, apiUpdateCompStatus, apiDeleteCompetition, apiAdvanceWeek,
@@ -167,6 +167,7 @@ export default function PuntingClub() {
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedTeamForBet, setSelectedTeamForBet] = useState('');
   const [showBetResults, setShowBetResults] = useState(false);
+  const [submittingBet, setSubmittingBet] = useState(false);
   const fileInputRef = useRef(null);
 
   // Result checking
@@ -1173,7 +1174,8 @@ export default function PuntingClub() {
         }
         // Validate stake doesn't exceed weekly budget
         const stakeNum = parseFloat((parsed.stake || '0').replace(/[^0-9.]/g,''));
-        if (stakeNum > WEEK_BUDGET) { showToast(`Stake $${stakeNum} exceeds the $${WEEK_BUDGET}/week limit.`, 'warning'); return; }
+        const limit = weeklyLimitFor(viewedCompForLimit);
+        if (stakeNum > limit) { showToast(`Stake $${stakeNum} exceeds the $${limit}/week limit for this competition.`, 'warning'); return; }
         const enrichedBet = { ...parsed, betType: parsed.betType || 'Multi', legs: parsed.legs || [], timestamp: new Date().toLocaleTimeString(), images: uploadedImages.length };
         setAnalyzedBet(enrichedBet);
         // Auto-select the user's own team
@@ -1186,47 +1188,59 @@ export default function PuntingClub() {
     finally { setAnalyzing(false); }
   };
 
-  const submitBet = async () => {
+  // Competition whose limits apply to the bet being entered.
+  const viewedCompForLimit = activeCompetitions.find(c => c.code === (viewedCompetitionCode || currentUser?.competitionCode)) || null;
+
+  const submitBet = async ({ allowDuplicate = false } = {}) => {
+    if (submittingBet) return;
     if (!selectedTeamForBet) { showToast('Please select a team before submitting.', 'warning'); return; }
-    // Enforce $50/week total stake cap across all bets for this team this week
-    const targetTeam = leaderboardTeams.find(t => t.team === selectedTeamForBet);
-    const weeklyUsed = (targetTeam?.bets || [])
+    if (!currentUser?.id) { showToast('Please log in to submit a bet.', 'warning'); return; }
+    const team = leaderboardTeams.find(t => t.team === selectedTeamForBet);
+    if (!team?.id) { showToast('Could not find that team — refresh and try again.', 'error'); return; }
+
+    // Friendly pre-check of the weekly limit (the server enforces it too).
+    const weekLimit = weeklyLimitFor(viewedCompForLimit);
+    const weeklyUsed = (team.bets || [])
       .filter(b => b.weekNumber === currentWeekNum + 1)
       .reduce((sum, b) => sum + parseFloat((b.stake || '0').replace(/[^0-9.]/g, '')), 0);
     const newStake = parseFloat((analyzedBet?.stake || '0').replace(/[^0-9.]/g, ''));
-    const weeklyTotal = weeklyUsed + newStake;
-    if (weeklyTotal > WEEK_BUDGET) {
-      const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed).toFixed(2);
+    if (weeklyUsed + newStake > weekLimit) {
+      const remaining = Math.max(0, weekLimit - weeklyUsed).toFixed(2);
       showToast(`Weekly limit exceeded — $${weeklyUsed.toFixed(2)} already staked this week. Only $${remaining} remaining.`, 'warning');
       return;
     }
-    const newBet = { type: analyzedBet.betType, stake: analyzedBet.stake, combinedOdds: analyzedBet.combinedOdds, estimatedReturn: analyzedBet.estimatedReturn, submissionValid: analyzedBet.submissionValid, legs: analyzedBet.legs, overallStatus: 'pending', submittedAt: analyzedBet.timestamp };
-    // Optimistic UI update
-    setLeaderboardTeams(prev => prev.map(t => t.team === selectedTeamForBet ? { ...t, bets: [...t.bets, newBet] } : t));
-    setShowBetAnalyzer(false);
-    resetBetAnalyzer();
-    setActiveNav('team');
-    // Persist to Supabase
+
+    setSubmittingBet(true);
     try {
-      const team = leaderboardTeams.find(t => t.team === selectedTeamForBet);
-      if (team?.id && currentUser?.id) {
-        await apiSubmitBet({
-          teamId:          team.id,
-          submittedBy:     currentUser.id,
-          weekNumber:      currentWeekNum + 1,
-          // Backend enum is lowercase multi|single; the AI returns "Multi"/"Single"
-          // (and occasionally variants like "Same Game Multi"). Normalise here.
-          betType:         /single/i.test(newBet.type || '') ? 'single' : 'multi',
-          stake:           Math.round(parseFloat((newBet.stake || '0').replace(/[^0-9.]/g,'')) * 100),
-          combinedOdds:    newBet.combinedOdds,
-          estimatedReturn: Math.round(parseFloat((newBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
-          submissionValid: newBet.submissionValid !== false,
-          legs:            newBet.legs || [],
-        });
-      }
+      await apiSubmitBet({
+        teamId:          team.id,
+        weekNumber:      currentWeekNum + 1,
+        // Backend enum is lowercase multi|single; the AI returns "Multi"/"Single"
+        // (and occasionally variants like "Same Game Multi"). Normalise here.
+        betType:         /single/i.test(analyzedBet.betType || '') ? 'single' : 'multi',
+        stake:           Math.round(newStake * 100),
+        combinedOdds:    analyzedBet.combinedOdds,
+        estimatedReturn: Math.round(parseFloat((analyzedBet.estimatedReturn || '0').replace(/[^0-9.]/g,'')) * 100),
+        submissionValid: analyzedBet.submissionValid !== false,
+        legs:            analyzedBet.legs || [],
+        allowDuplicate,
+      });
+      // Only close and clear the slip once it's actually saved.
+      setShowBetAnalyzer(false);
+      resetBetAnalyzer();
+      setActiveNav('team');
+      showToast('Bet submitted!', 'success');
+      await refreshLeaderboard(viewedCompetitionCode || undefined, undefined, { force: true });
     } catch (err) {
+      if (/^Duplicate bet/i.test(err.message) && !allowDuplicate) {
+        setSubmittingBet(false);
+        if (window.confirm(`${err.message}\n\nSubmit it anyway?`)) return submitBet({ allowDuplicate: true });
+        return;
+      }
       console.error('Bet save failed:', err.message);
-      showToast(`Bet could not be saved: ${err.message}`, 'error');
+      showToast(`Bet not saved: ${err.message} Your slip is still here — try again.`, 'error');
+    } finally {
+      setSubmittingBet(false);
     }
   };
 
@@ -2727,7 +2741,7 @@ export default function PuntingClub() {
                                       >✨ Generate Recap</button>
                                     )}
                                     <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
-                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
+                                    <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false, weeklyLimit: c.weekly_limit_cents ? String(c.weekly_limit_cents / 100) : '50', finalWeekLimit: c.final_week_limit_cents ? String(c.final_week_limit_cents / 100) : '' }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                     {adminUser?.role === 'owner' && (
                                       <button
                                         onClick={() => {
@@ -2749,7 +2763,7 @@ export default function PuntingClub() {
                               <div className="border-t border-brand-500/20 bg-black/30 px-4 py-4">
                                 <p className="text-xs font-bold text-brand-300 mb-3">Edit Competition</p>
                                 <div className="grid sm:grid-cols-2 gap-3 mb-3">
-                                  {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date']].map(([l,k,t]) => (
+                                  {[['Competition Name','name','text'],['Pub / Club Name','pub','text'],['Buy-In Amount','buyIn','text'],['Max Teams','maxTeams','number'],['Start Date','startDate','date'],['End Date','endDate','date'],['Weekly Bet Limit ($)','weeklyLimit','text'],['Final Week Limit ($, optional)','finalWeekLimit','text']].map(([l,k,t]) => (
                                     <div key={k}>
                                       <label className="block text-xs text-gray-500 mb-1">{l}</label>
                                       <input type={t} value={editCompForm[k] || ''} onChange={e => setEditCompForm(prev => ({...prev, [k]: e.target.value}))} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50" />
@@ -2774,7 +2788,7 @@ export default function PuntingClub() {
                                 </div>
                                 <div className="flex gap-2">
                                   <button onClick={() => setEditingCompId(null)} className="flex-1 border border-white/10 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
-                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate })} className="flex-1 bg-brand-600 text-white font-bold py-2 rounded-lg text-sm">Save Changes</button>
+                                  <button onClick={() => updateCompetition(c.id, { name: editCompForm.name, pub: editCompForm.pub, buyIn: editCompForm.buyIn, maxTeams: editCompForm.maxTeams, startDate: editCompForm.startDate, endDate: editCompForm.endDate, isPrivate: editCompForm.isPrivate, weeklyLimit: editCompForm.weeklyLimit, finalWeekLimit: editCompForm.finalWeekLimit })} className="flex-1 bg-brand-600 text-white font-bold py-2 rounded-lg text-sm">Save Changes</button>
                                 </div>
                               </div>
                             )}
@@ -3541,7 +3555,7 @@ export default function PuntingClub() {
                 <div className="border-2 border-dashed border-brand-200 rounded-xl p-8 text-center hover:bg-brand-500/5 cursor-pointer transition-all" onClick={() => fileInputRef.current?.click()}>
                   <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <p className="text-gray-400 text-sm">Click to upload bet slip images</p>
-                  <p className="text-gray-600 text-xs mt-1">PNG, JPG · up to {MAX_IMAGES} images, 5MB each · $50 weekly max enforced</p>
+                  <p className="text-gray-600 text-xs mt-1">PNG, JPG · up to {MAX_IMAGES} images · ${weeklyLimitFor(viewedCompForLimit)} weekly max</p>
                 </div>
                 {uploadedImages.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
@@ -3573,7 +3587,7 @@ export default function PuntingClub() {
                   const weeklyUsed = selectedTeam
                     ? (selectedTeam.bets || []).filter(b => b.weekNumber === currentWeekNum + 1).reduce((sum, b) => sum + parseFloat((b.stake || '0').replace(/[^0-9.]/g, '')), 0)
                     : 0;
-                  const remaining = Math.max(0, WEEK_BUDGET - weeklyUsed);
+                  const remaining = Math.max(0, weeklyLimitFor(viewedCompForLimit) - weeklyUsed);
                   return (
                     <div>
                       <label className="block text-xs font-semibold text-brand-300 mb-1.5">Submit for team *</label>
@@ -3583,7 +3597,7 @@ export default function PuntingClub() {
                       </select>
                       {selectedTeamForBet && (
                         <div className={`mt-2 flex items-center justify-between text-xs px-1 ${remaining <= 0 ? 'text-red-400' : remaining < 25 ? 'text-brand-300' : 'text-gray-500'}`}>
-                          <span>Weekly budget used: <strong>${weeklyUsed.toFixed(2)}</strong> of ${WEEK_BUDGET}</span>
+                          <span>Weekly budget used: <strong>${weeklyUsed.toFixed(2)}</strong> of ${weeklyLimitFor(viewedCompForLimit)}</span>
                           <span className="font-semibold">${remaining.toFixed(2)} remaining</span>
                         </div>
                       )}
@@ -3591,8 +3605,8 @@ export default function PuntingClub() {
                   );
                 })()}
                 <div className="flex gap-3">
-                  <button onClick={resetBetAnalyzer} className="flex-1 border border-brand-500/40 hover:bg-brand-500/10 text-brand-300 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
-                  <button onClick={submitBet} className="flex-1 bg-gold-500 hover:bg-gold-400 text-brand-950 font-bold py-2.5 rounded-xl text-sm">Submit Bet ✓</button>
+                  <button onClick={resetBetAnalyzer} disabled={submittingBet} className="flex-1 border border-brand-500/40 hover:bg-brand-500/10 disabled:opacity-60 text-brand-300 font-bold py-2.5 rounded-xl text-sm">Upload New</button>
+                  <button onClick={() => submitBet()} disabled={submittingBet} aria-busy={submittingBet} className="flex-1 bg-gold-500 hover:bg-gold-400 disabled:opacity-60 disabled:cursor-wait text-brand-950 font-bold py-2.5 rounded-xl text-sm">{submittingBet ? 'Saving…' : 'Submit Bet ✓'}</button>
                 </div>
               </>
             )}

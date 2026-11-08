@@ -117,7 +117,7 @@ exports.handler = async (event) => {
       }
 
       case 'create_competition': {
-        const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
+        const { name, pub, weeks, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole, weeklyLimit, finalWeekLimit } = payload;
         if (!name || String(name).trim().length < 1 || String(name).length > 120)
           return error('Competition name must be 1–120 characters.');
         if (pub && String(pub).length > 120)
@@ -133,11 +133,13 @@ exports.handler = async (event) => {
           end_date:   endDate   || null,
           jackpot:    0,
           is_private: isPrivate ? true : false,
+          ...(dollarsToCents(weeklyLimit) ? { weekly_limit_cents: dollarsToCents(weeklyLimit) } : {}),
+          ...(dollarsToCents(finalWeekLimit) ? { final_week_limit_cents: dollarsToCents(finalWeekLimit) } : {}),
         };
         let { data, error: e } = await supabase.from('competitions').insert(insertRow).select().single();
-        if (e && e.message && e.message.includes('is_private')) {
-          // Column not yet migrated — insert without it then patch
-          const { is_private: _drop, ...rowWithout } = insertRow;
+        if (e && e.message && /is_private|limit_cents/.test(e.message)) {
+          // Column not yet migrated — insert without the newer columns
+          const { is_private: _drop, weekly_limit_cents: _w, final_week_limit_cents: _f, ...rowWithout } = insertRow;
           const res2 = await supabase.from('competitions').insert(rowWithout).select().single();
           if (res2.error) return error(res2.error.message);
           data = res2.data;
@@ -280,7 +282,7 @@ exports.handler = async (event) => {
       }
 
       case 'update_competition': {
-        const { id, name, pub, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole } = payload;
+        const { id, name, pub, buyIn, maxTeams, startDate, endDate, isPrivate, adminRole, weeklyLimit, finalWeekLimit } = payload;
         const weeksCalc = startDate && endDate
           ? Math.round((new Date(endDate) - new Date(startDate)) / (7 * 86400000))
           : null;
@@ -293,6 +295,8 @@ exports.handler = async (event) => {
         if (endDate)             updates.end_date   = endDate;
         if (weeksCalc && weeksCalc > 0) updates.weeks = weeksCalc;
         if (isPrivate !== undefined) updates.is_private = isPrivate;
+        if (dollarsToCents(weeklyLimit)) updates.weekly_limit_cents = dollarsToCents(weeklyLimit);
+        if (finalWeekLimit !== undefined) updates.final_week_limit_cents = dollarsToCents(finalWeekLimit) || null;
         const { data, error: e } = await supabase.from('competitions').update(updates).eq('id', id).select().single();
         if (e) return error(e.message);
         await addAudit(adminRole, 'Competition Updated', data.name, Object.keys(updates).join(', '));
@@ -637,6 +641,40 @@ exports.handler = async (event) => {
         if (!membership || membership.role === 'pending') return error('You are not a member of this team.', 403);
         if (membership.role === 'view-only' || membership.can_bet === false) return error('You do not have betting rights in this team. Ask your captain.', 403);
 
+        const stakeCents = Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, '')));
+
+        // Weekly stake limit for this team's competition (server-side, so it can't
+        // be bypassed). Limits come from the competition; default $50.
+        const { data: teamRow } = await supabase.from('teams').select('competition_id, competitions(*)').eq('id', teamId).maybeSingle();
+        const comp = teamRow?.competitions || null;
+        const thisWeek = comp?.start_date ? weekAt(Date.now(), comp.start_date) : null;
+        const isFinalWeek = !!(comp?.weeks && thisWeek && thisWeek >= comp.weeks);
+        const limitCents = (isFinalWeek && comp?.final_week_limit_cents) || comp?.weekly_limit_cents || 5000;
+
+        const since = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: recent } = await supabase.from('bets')
+          .select('id, stake, submitted_at, overall_status, bet_legs(selection)')
+          .eq('team_id', teamId).gte('submitted_at', since);
+        const live = (recent || []).filter(b => b.overall_status !== 'rejected');
+        if (thisWeek && comp?.start_date) {
+          const usedCents = live
+            .filter(b => weekAt(new Date(b.submitted_at).getTime(), comp.start_date) === thisWeek)
+            .reduce((sum, b) => sum + (b.stake || 0), 0);
+          if (usedCents + stakeCents > limitCents) {
+            const left = Math.max(0, limitCents - usedCents) / 100;
+            return error(`Weekly limit is $${(limitCents / 100).toFixed(2)}${isFinalWeek && comp?.final_week_limit_cents ? ' (final week)' : ''}. Your team has $${left.toFixed(2)} left this week.`, 409);
+          }
+        }
+
+        // Duplicate guard: the same stake and the same selections in the last 8 days
+        // is almost always a double submit. The client can confirm and resend.
+        if (!payload.allowDuplicate && Array.isArray(legs)) {
+          const sig = (sels) => sels.map(x => String(x || '').trim().toLowerCase()).sort().join('|');
+          const mine = sig(legs.map(l => l.selection));
+          const dup = live.find(b => b.stake === stakeCents && sig((b.bet_legs || []).map(l => l.selection)) === mine);
+          if (dup) return error('Duplicate bet: this slip looks like one your team already submitted. Submit again only if you placed it twice.', 409);
+        }
+
         const stakeErr = isPositiveInt(stake, { max: 1_000_000, label: 'Stake' });
         if (stakeErr) return error(stakeErr);
         // Normalise casing/variants (e.g. "Multi", "Same Game Multi") to the enum.
@@ -661,7 +699,7 @@ exports.handler = async (event) => {
           team_id:          teamId,
           week_number:      weekNumber,
           bet_type:         normBetType,
-          stake:            Math.round(parseFloat(String(stake).replace(/[^0-9.]/g, ''))),
+          stake:            stakeCents,
           combined_odds:    parseFloat(combinedOdds) || null,
           estimated_return: Math.round(parseFloat(String(estimatedReturn).replace(/[^0-9.]/g, ''))),
           overall_status:   'pending',
@@ -1062,6 +1100,13 @@ exports.handler = async (event) => {
     console.error('Data function error:', err);
     return error(err.message, 500);
   }
+};
+
+// "$75", "75.50" → 7500 / 7550 cents; null if empty/invalid.
+const dollarsToCents = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  return isNaN(n) || n <= 0 ? null : Math.round(n * 100);
 };
 
 // Helper: add audit log entry

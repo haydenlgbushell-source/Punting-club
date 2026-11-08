@@ -1,5 +1,6 @@
 // Shared utility functions and constants
 
+// Default weekly stake limit in dollars, used when a competition has no limit set.
 export const WEEK_BUDGET = 50;
 
 export const genCode = (len = 6) => {
@@ -41,3 +42,14 @@ export const validatePhone = (raw) => {
 // Competition weeks (Wednesday 12:00 midday cutoff, daylight-saving aware)
 // live in ./lib/auTime.js so the server uses exactly the same rule.
 export { calcCurrentWeek } from './lib/auTime.js';
+
+// Weekly stake limit (dollars) for a competition this week, including the
+// boosted final-week limit when set. Mirrors the server check in data.js.
+import { calcCurrentWeek as _week } from './lib/auTime.js';
+export const weeklyLimitFor = (comp) => {
+  if (!comp) return WEEK_BUDGET;
+  const wk = _week(comp.start_date);
+  const isFinal = !!(comp.weeks && wk >= comp.weeks);
+  const cents = (isFinal && comp.final_week_limit_cents) || comp.weekly_limit_cents;
+  return cents ? cents / 100 : WEEK_BUDGET;
+};
