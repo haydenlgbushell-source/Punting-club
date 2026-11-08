@@ -6,10 +6,18 @@ const { corsHeaders, rateLimit, bearerToken } = require('./security');
 
 // This is a constrained proxy, not an open one: only cheap models, capped output,
 // no tools, and image (bet-slip) requests require a signed-in user.
-const ALLOWED_MODELS = new Set([
-  'claude-haiku-4-5-20251001',
-  'claude-haiku-5-5',
-]);
+// The SERVER picks the model (the client's "model" field is ignored), so it can
+// be switched in Netlify env vars without a redeploy of the frontend:
+//   SLIP_MODEL  — bet-slip reading (image requests)
+//   CHAT_MODEL  — support chat (text-only requests)
+const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+const ALLOWED_MODELS = new Set([DEFAULT_MODEL, 'claude-haiku-5-5']);
+const pickModel = (envName) => {
+  const m = process.env[envName];
+  return m && ALLOWED_MODELS.has(m) ? m : DEFAULT_MODEL;
+};
+// Haiku 4.5 rejects output_config.effort; newer models accept it.
+const supportsEffort = (model) => !/claude-haiku-4-5/.test(model);
 const MAX_TOKENS_AUTHED = 8192;  // bet-slip analysis scales with leg count
 const MAX_TOKENS_ANON   = 600;   // support chat
 const MAX_MESSAGES      = 30;
@@ -61,11 +69,6 @@ exports.handler = async (event) => {
     body = JSON.parse(event.body || '{}');
   } catch {
     return err('Invalid JSON');
-  }
-
-  // ── Model allowlist ────────────────────────────────────────────────────────
-  if (!body.model || !ALLOWED_MODELS.has(body.model)) {
-    return err(`Invalid model. Allowed: ${[...ALLOWED_MODELS].join(', ')}`);
   }
 
   // ── Image validation ───────────────────────────────────────────────────────
@@ -120,7 +123,10 @@ exports.handler = async (event) => {
 
   // Forward ONLY the fields we allow — tools, tool_choice, thinking, MCP servers
   // etc. from the client are dropped.
-  const upstream = { model: body.model, max_tokens: maxTokens, messages };
+  const model = imageCount > 0 ? pickModel('SLIP_MODEL') : pickModel('CHAT_MODEL');
+  const upstream = { model, max_tokens: maxTokens, messages };
+  // Newer Haiku thinks by default; keep it light (and cheap) for these tasks.
+  if (supportsEffort(model)) upstream.output_config = { effort: process.env.SLIP_EFFORT || 'low' };
   if (body.system) upstream.system = body.system;
 
   try {

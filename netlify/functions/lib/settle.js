@@ -387,7 +387,7 @@ async function callMessages(apiKey, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
-async function lookupEventFacts(apiKey, ev, today, log) {
+async function lookupEventFacts(apiKey, ev, today, log, { model = MODEL } = {}) {
   let restrictDomains = true;
   let messages = [{ role: 'user', content: buildPrompt(ev, today) }];
   let forceRecord = false;
@@ -399,8 +399,8 @@ async function lookupEventFacts(apiKey, ev, today, log) {
       ...(restrictDomains ? { allowed_domains: domainsFor(ev.sport) } : {}),
     };
     const body = {
-      model: MODEL,
-      max_tokens: 2048,
+      model,
+      max_tokens: 4096,
       tools: [webSearch, RECORD_TOOL],
       messages,
       ...(forceRecord ? { tool_choice: { type: 'tool', name: RECORD_TOOL.name } } : {}),

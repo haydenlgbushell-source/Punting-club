@@ -11,7 +11,11 @@
 //
 // Usage:
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... ANTHROPIC_API_KEY=... \
-//     node scripts/replay-settlement.mjs --yes [--events 20] [--admin-only]
+//     node scripts/replay-settlement.mjs --yes [--events 20] [--admin-only] [--model claude-haiku-5-5]
+//
+// Without Supabase credentials, pass --fixture legs.json (an array of bet_legs
+// rows, e.g. exported with SQL) instead of reading the database.
+// The API key is read from PUNTING_ANTHROPIC_KEY, falling back to ANTHROPIC_API_KEY.
 
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
@@ -26,9 +30,12 @@ const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args
 const MAX_EVENTS = parseInt(opt('--events', '20'), 10);
 const ADMIN_ONLY = flag('--admin-only');
 
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY } = process.env;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ANTHROPIC_API_KEY) {
-  console.error('Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and ANTHROPIC_API_KEY.');
+const MODEL = opt('--model', process.env.SETTLER_MODEL || 'claude-haiku-4-5-20251001');
+const FIXTURE = opt('--fixture', null);
+const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+const ANTHROPIC_API_KEY = process.env.PUNTING_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY;
+if (!ANTHROPIC_API_KEY || (!FIXTURE && (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY))) {
+  console.error('Set PUNTING_ANTHROPIC_KEY (or ANTHROPIC_API_KEY), and SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY unless using --fixture.');
   process.exit(1);
 }
 if (!flag('--yes')) {
@@ -36,16 +43,23 @@ if (!flag('--yes')) {
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-let q = supabase.from('bet_legs').select('*')
-  .in('status', ['won', 'lost', 'void'])
-  .not('event_date', 'is', null)
-  .order('event_date', { ascending: false })
-  .limit(1000);
-if (ADMIN_ONLY) q = q.eq('settled_by', 'admin');
-const { data: legs, error } = await q;
-if (error) { console.error(error.message); process.exit(1); }
+let legs;
+if (FIXTURE) {
+  const { readFileSync } = await import('node:fs');
+  legs = JSON.parse(readFileSync(FIXTURE, 'utf8'))
+    .filter(l => ['won', 'lost', 'void'].includes(l.status) && l.event_date && (!ADMIN_ONLY || l.settled_by === 'admin'));
+} else {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  let q = supabase.from('bet_legs').select('*')
+    .in('status', ['won', 'lost', 'void'])
+    .not('event_date', 'is', null)
+    .order('event_date', { ascending: false })
+    .limit(1000);
+  if (ADMIN_ONLY) q = q.eq('settled_by', 'admin');
+  const { data, error } = await q;
+  if (error) { console.error(error.message); process.exit(1); }
+  legs = data;
+}
 if (!legs?.length) { console.log('No settled legs to replay.'); process.exit(0); }
 
 // Group like the live settler does.
@@ -73,11 +87,11 @@ const bump = (m, k) => { stats[m] = stats[m] || { correct: 0, wrong: 0, undecide
 const today = S.todayInTz();
 
 const list = [...events.values()].slice(0, MAX_EVENTS);
-console.log(`Replaying ${list.length} event(s) covering ${list.reduce((n, e) => n + e.refs.length, 0)} leg(s)...\n`);
+console.log(`Model: ${MODEL}\nReplaying ${list.length} event(s) covering ${list.reduce((n, e) => n + e.refs.length, 0)} leg(s)...\n`);
 
 for (const ev of list) {
   let facts = null;
-  try { facts = await S.lookupEventFacts(ANTHROPIC_API_KEY, ev, today, () => {}); }
+  try { facts = await S.lookupEventFacts(ANTHROPIC_API_KEY, ev, today, () => {}, { model: MODEL }); }
   catch (e) { console.warn(`  lookup failed for ${ev.event}: ${e.message}`); }
   const problem = facts ? S.evidenceProblem(facts, ev) : 'lookup failed';
   for (const { leg, selIndex } of ev.refs) {
