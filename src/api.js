@@ -127,6 +127,7 @@ export const apiGetLeaderboard = (competitionId, currentWeek, startDate) => call
 // ── ADMIN ────────────────────────────────────────────────────
 export const apiGetAllUsers  = (adminToken)              => call('data', { action: 'get_all_users', adminToken });
 export const apiUpdateKyc    = (userId, kycStatus, adminToken) => call('data', { action: 'update_kyc', userId, kycStatus, adminToken });
+export const apiAdminResetPassword = (userId, adminToken) => call('data', { action: 'admin_reset_password', userId, adminToken });
 export const apiUpdateUser   = (userId, updates, adminToken)   => call('data', { action: 'update_user', userId, updates, adminToken });
 export const apiDeleteUser   = (userId, adminToken)            => call('data', { action: 'delete_user', userId, adminToken });
 export const apiGetAuditLog  = (limit, adminToken)       => call('data', { action: 'get_audit_log', limit, adminToken });

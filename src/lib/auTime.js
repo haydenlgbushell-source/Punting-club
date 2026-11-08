@@ -81,3 +81,13 @@ export function formatCutoff(date, timeZone = APP_TZ) {
     timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   }).format(date);
 }
+
+// Whole years between a YYYY-MM-DD birth date and today in Australia.
+export function ageOn(dobStr, now = new Date(), timeZone = APP_TZ) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dobStr || ''));
+  if (!m) return null;
+  const [y, mo, d] = todayInTz(now, timeZone).split('-').map(Number);
+  let age = y - Number(m[1]);
+  if (mo < Number(m[2]) || (mo === Number(m[2]) && d < Number(m[3]))) age--;
+  return age;
+}

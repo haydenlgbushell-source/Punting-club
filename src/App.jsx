@@ -25,12 +25,12 @@ import {
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
-  apiUpdateProfile, apiChangePassword,
+  apiUpdateProfile, apiChangePassword, apiAdminResetPassword,
   apiGenerateRecap, apiTriggerResultsCheck, postWithAuth,
 } from './api.js';
 import { buildSlipPrompt } from './lib/slipPrompt.js';
 import { betStatus } from './lib/betMath.js';
-import { nextCutoff } from './lib/auTime.js';
+import { nextCutoff, ageOn } from './lib/auTime.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -443,6 +443,9 @@ export default function PuntingClub() {
     if (!formData.password)          { setApiError('Please enter a password.'); return; }
     if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
     if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
+    const age = ageOn(formData.dob);
+    if (age === null) { setApiError('Please enter your date of birth.'); return; }
+    if (age < 18) { setApiError('You must be 18 or over to join Punting Club.'); return; }
     if (signupMode === 'create' && !formData.teamName?.trim()) { setApiError('Please enter a team name.'); return; }
     if (signupMode === 'join'   && !formData.teamCode?.trim()) { setApiError('Please enter a team code.'); return; }
 
@@ -799,6 +802,7 @@ export default function PuntingClub() {
       if (bets.status === 'fulfilled' && bets.value) {
         setAdminBets(bets.value.map(b => ({
           id: b.id, team: b.teams?.team_name, status: b.overall_status,
+          type: b.bet_type, week: b.week_number, toWin: `$${((b.estimated_return || 0) / 100).toFixed(2)}`,
           stake: `$${((b.stake || 0) / 100).toFixed(2)}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
           valid: b.submission_valid !== false,
           flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
@@ -922,6 +926,16 @@ export default function PuntingClub() {
     } catch(_) {}
   };
 
+  // Download rows as a CSV file (values quoted/escaped properly).
+  const downloadCsv = (filename, header, rows) => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [header.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   // ── ADMIN AUTH ────────────────────────────────────────────────────────────
   const handleAdminLogin = async (e) => {
     e.preventDefault();
@@ -956,19 +970,19 @@ export default function PuntingClub() {
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, status: 'verified' } : t));
     addAuditEntry(adminUser?.role, 'Team Verified', t?.name || id, 'Team status set to verified');
     setAdminNotifs(prev => [{ id: Date.now(), type:'success', msg:`${t?.name} verified`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateTeam(id, { status: 'verified' }, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { status: 'verified' }, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const suspendTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, status: 'suspended', flagged: true } : t));
     addAuditEntry(adminUser?.role, 'Team Suspended', t?.name || id, 'Team suspended by admin');
-    try { await apiUpdateTeam(id, { status: 'suspended', flagged: true }, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { status: 'suspended', flagged: true }, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const flagTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
     const newFlagged = !t?.flagged;
     setAdminTeams(prev => prev.map(t => t.id === id ? { ...t, flagged: newFlagged } : t));
-    try { await apiUpdateTeam(id, { flagged: newFlagged }, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateTeam(id, { flagged: newFlagged }, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const deleteTeam = async (id) => {
     const t = adminTeams.find(x => x.id === id);
@@ -1013,12 +1027,20 @@ export default function PuntingClub() {
     setAdminUsers(prev => prev.map(u => (u.id === userId || u.phone === userId) ? { ...u, kyc_status: status, kyc: status, active: status !== 'rejected' } : u));
     addAuditEntry(adminUser?.role, `KYC ${status}`, u?.name || u?.first_name || userId, `KYC status updated to ${status}`);
     setAdminNotifs(prev => [{ id: Date.now(), type: status === 'verified' ? 'success' : 'error', msg:`${u?.name || u?.first_name} KYC ${status}`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateKyc(u?.id || userId, status, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateKyc(u?.id || userId, status, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
-  const resetPassword = (phone) => {
+  const resetPassword = async (phone) => {
     const u = adminUsers.find(x => x.phone === phone);
-    addAuditEntry(adminUser?.role, 'Password Reset', u?.name || phone, 'Temporary password issued');
-    showToast(`Password reset SMS sent to ${u?.name || phone}.`, 'info');
+    if (!u?.id) { showToast('User not found.', 'error'); return; }
+    if (!window.confirm(`Issue a temporary password for ${u.name}? Their current password will stop working.`)) return;
+    try {
+      const { tempPassword } = await apiAdminResetPassword(u.id, adminToken);
+      addAuditEntry(adminUser?.role, 'Password Reset', u.name, 'Temporary password issued');
+      try { await navigator.clipboard?.writeText(tempPassword); } catch (_) { /* clipboard may be blocked */ }
+      window.prompt(`Temporary password for ${u.name} (copied). Give it to them directly — they should change it in their profile after logging in.`, tempPassword);
+    } catch (err) {
+      showToast(`Password reset failed: ${err.message}`, 'error');
+    }
   };
   const deleteUser = async (userId) => {
     const u = adminUsers.find(x => x.id === userId);
@@ -1038,19 +1060,19 @@ export default function PuntingClub() {
     setAdminBets(prev => prev.map(b => b.id === id ? { ...b, status: result, overall_status: result, flagged: false } : b));
     addAuditEntry(adminUser?.role, `Bet ${result}`, `${b?.team || b?.teams?.team_name} ${id}`, `Result manually set to ${result}`);
     setAdminNotifs(prev => [{ id: Date.now(), type: result === 'won' ? 'success' : 'warning', msg:`Bet marked ${result}`, time:'just now', read:false }, ...prev]);
-    try { await apiUpdateBetResult(id, result, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateBetResult(id, result, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const correctBetField = async (id, field, value) => {
     const b = adminBets.find(x => x.id === id);
     setAdminBets(prev => prev.map(b => b.id === id ? { ...b, [field]: value, flagged: false } : b));
     addAuditEntry(adminUser?.role, 'Bet Corrected', `${b?.team || b?.teams?.team_name} ${id}`, `${field} changed to ${value}`);
-    try { await apiCorrectBet(id, field, value, adminToken); } catch(err) { console.error(err); }
+    try { await apiCorrectBet(id, field, value, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
   const rejectBet = async (id, reason) => {
     const b = adminBets.find(x => x.id === id);
     setAdminBets(prev => prev.map(bet => bet.id === id ? { ...bet, status: 'rejected', overall_status: 'rejected', flagged: false } : bet));
     addAuditEntry(adminUser?.role, 'Bet Rejected', `${b?.team || b?.teams?.team_name} ${id}`, reason);
-    try { await apiRejectBet(id, reason, adminToken); } catch(err) { console.error(err); }
+    try { await apiRejectBet(id, reason, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
 
   const overrideLegResult = async (betId, legId, status, resultNote) => {
@@ -1061,7 +1083,7 @@ export default function PuntingClub() {
       legs: (bet.legs || []).map(l => l.id !== legId ? l : { ...l, status, result_note: resultNote, resultNote }),
     }));
     addAuditEntry(adminUser?.role, 'Leg Override', `${b?.team} — Leg ${leg?.leg_number}`, `${leg?.selection} → ${status}${resultNote ? ': ' + resultNote : ''}`);
-    try { await apiUpdateBetLeg(legId, status, resultNote, adminToken); } catch(err) { console.error(err); }
+    try { await apiUpdateBetLeg(legId, status, resultNote, adminToken); } catch(err) { showToast(`Not saved — ${err.message}. Refresh to see the current data.`, 'error'); }
   };
 
   // Trigger a full server-side scores/results update (fires the background settler)
@@ -2255,7 +2277,7 @@ export default function PuntingClub() {
                                   <button onClick={() => suspendTeam(t.id)} className="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold">Suspend</button>
                                 )}
                                 {t.status === 'suspended' && canAdmin('bets') && (
-                                  <button onClick={() => setAdminTeams(prev => prev.map(x => x.id === t.id ? {...x, status:'verified'} : x))} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
+                                  <button onClick={() => verifyTeam(t.id)} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-2.5 py-1 rounded-lg text-xs font-semibold">Restore</button>
                                 )}
                                 <button onClick={() => flagTeam(t.id)} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:text-brand-300 px-2.5 py-1 rounded-lg text-xs">🚩</button>
                                 {adminUser?.role === 'owner' && (
@@ -2293,7 +2315,7 @@ export default function PuntingClub() {
                                       : m.role === 'view-only'
                                       ? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
                                       : 'bg-brand-500/15 text-brand-300 border-brand-200';
-                                    const kycBg = m.kyc === 'approved'
+                                    const kycBg = (m.kyc === 'verified' || m.kyc === 'approved')
                                       ? 'text-green-400'
                                       : m.kyc === 'rejected'
                                       ? 'text-red-400'
@@ -2370,7 +2392,7 @@ export default function PuntingClub() {
                         <p className="text-gray-500 text-sm">{adminUsers.length} users · {adminUsers.filter(u=>u.kyc==='pending').length} awaiting KYC · {adminUsers.filter(u=>!u.active).length} suspended</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { const csv = ['Name,Phone,KYC,Team,DOB,Postcode,Joined',...adminUsers.map(u=>`${u.name},${u.phone},${u.kyc},${u.team},${u.dob},${u.postcode},${u.joinedAt}`)].join('\n'); alert('CSV export ready:\n\n' + csv.substring(0,200) + '...'); addAuditEntry(adminUser.role,'Data Export','Users CSV','GDPR-compliant export'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser.role,'Data Export','Users CSV','Downloaded user list'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                       </div>
                     </div>
 
@@ -2378,7 +2400,7 @@ export default function PuntingClub() {
                     <div className="flex gap-3 flex-wrap">
                       {[['verified','green'],['pending','amber'],['rejected','red']].map(([s,c]) => (
                         <div key={s} className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <div className={`w-2 h-2 rounded-full bg-${c}-400`}/>
+                          <div className={`w-2 h-2 rounded-full ${{ green: 'bg-green-400', amber: 'bg-amber-400', red: 'bg-red-400' }[c]}`}/>
                           <span className="capitalize">{s}: {adminUsers.filter(u=>u.kyc===s).length}</span>
                         </div>
                       ))}
@@ -2435,8 +2457,8 @@ export default function PuntingClub() {
                     <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex gap-3">
                       <Shield className="w-4 h-4 text-brand-300 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-brand-300 text-xs font-bold mb-1">Data Privacy & GDPR Compliance</p>
-                        <p className="text-gray-500 text-xs">User PII is encrypted at rest. DOB and postcode used for KYC age verification only. Export logs maintained for audit. Users may request data deletion via support.</p>
+                        <p className="text-brand-300 text-xs font-bold mb-1">Handling personal information</p>
+                        <p className="text-gray-500 text-xs">Members' phone numbers, dates of birth and postcodes are personal information under the Australian Privacy Act. Only download what you need, don't share exports, and delete exported files when finished. A member can ask to be removed — the owner can delete their account here.</p>
                       </div>
                     </div>
                   </div>
@@ -2513,7 +2535,7 @@ export default function PuntingClub() {
                           {canAdmin('bets') && (b.status === 'won' || b.status === 'lost') && (
                             <div className="border-t border-white/5 bg-black/20 px-4 py-2 flex items-center gap-2">
                               <p className="text-gray-600 text-xs">Result confirmed.</p>
-                              <button onClick={() => setAdminBets(prev => prev.map(x => x.id === b.id ? {...x, status:'pending'} : x))} className="text-brand-300 text-xs hover:text-brand-300">Reopen dispute</button>
+                              <button onClick={() => confirmBetResult(b.id, 'pending')} className="text-brand-300 text-xs hover:text-brand-300">Reopen dispute</button>
                             </div>
                           )}
                           {/* Per-leg override */}
@@ -2818,7 +2840,7 @@ export default function PuntingClub() {
                                         className="bg-purple-500/20 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold"
                                       >✨ Generate Recap</button>
                                     )}
-                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); alert('Copied!'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
+                                    <button onClick={() => { navigator.clipboard?.writeText(`Join ${c.name}! Code: ${c.code}`); showToast('Copied!', 'success'); }} className="bg-brand-500/10 border border-brand-500/20 text-brand-300 px-2.5 py-1 rounded-lg text-xs">📋 Share</button>
                                     <button onClick={() => { setEditingCompId(editingCompId === c.id ? null : c.id); setEditCompForm({ name: c.name, pub: c.pub, buyIn: c.buy_in ? `$${Number(c.buy_in).toLocaleString()}` : '', maxTeams: String(c.max_teams || 20), startDate: c.start_date || '', endDate: c.end_date || '', isPrivate: c.is_private || false, weeklyLimit: c.weekly_limit_cents ? String(c.weekly_limit_cents / 100) : '50', finalWeekLimit: c.final_week_limit_cents ? String(c.final_week_limit_cents / 100) : '' }); }} className="bg-brand-500/10 border border-brand-200 text-brand-300 px-2.5 py-1 rounded-lg text-xs">✏ Edit</button>
                                     {adminUser?.role === 'owner' && (
                                       <button
@@ -2900,17 +2922,17 @@ export default function PuntingClub() {
                   <div className="space-y-4">
                     <div>
                       <h2 className="text-xl font-black">Security & Compliance</h2>
-                      <p className="text-gray-500 text-sm">GDPR compliance · Data encryption · Access control</p>
+                      <p className="text-gray-500 text-sm">What protections are actually in place</p>
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-3">
                       {[
-                        { title:'End-to-End Encryption', status:'Active', icon:'🔐', detail:'AES-256 encryption for all PII data at rest and in transit. TLS 1.3 on all API calls.', color:'green' },
-                        { title:'GDPR Compliance', status:'Compliant', icon:'🛡', detail:'Right to erasure, data portability, and consent management enforced. Last audit: 01/03/2025.', color:'green' },
-                        { title:'Security Audits', status:'Scheduled', icon:'🔍', detail:'Next audit: 01/06/2025. Quarterly penetration testing with Rapid7.', color:'amber' },
-                        { title:'2FA / MFA', status:'Recommended', icon:'📲', detail:'Admin accounts require 2FA. User 2FA via SMS OTP optional. Enable for all admin roles.', color:'amber' },
-                        { title:'Rate Limiting', status:'Active', icon:'⚡', detail:'API: 100 req/min per user. Failed login lockout after 5 attempts (15 min cooldown).', color:'green' },
-                        { title:'Data Retention', status:'Policy Set', icon:'📦', detail:'User data retained 7 years post-competition. KYC docs purged after 2 years. Logs kept 1 year.', color:'blue' },
+                        { title:'Encryption in transit', status:'Active', icon:'🔐', detail:'All traffic uses HTTPS (Netlify). The database (Supabase) encrypts stored data at rest.', color:'green' },
+                        { title:'Database access', status:'Active', icon:'🗄', detail:'Row Level Security is on for all tables. Only the server functions (service key) can read or write data.', color:'green' },
+                        { title:'Admin sessions', status:'Active', icon:'🔑', detail:'Admin logins issue signed 8-hour tokens checked on every admin action. Admin accounts are shared — use strong, unique passwords.', color:'amber' },
+                        { title:'Rate limiting', status:'Partial', icon:'⚡', detail:'Login, sign-up and AI endpoints are throttled per server instance. This slows brute-force attempts but is not a hard global limit.', color:'amber' },
+                        { title:'Two-factor login', status:'Not set up', icon:'📲', detail:'There is no 2FA for admins or members yet.', color:'amber' },
+                        { title:'Audit log', status:'Active', icon:'📝', detail:'Admin actions (results, KYC, deletions, resets, exports) are recorded in the audit log.', color:'green' },
                       ].map(item => (
                         <div key={item.title} className={`bg-white border rounded-xl p-4 ${item.color === 'green' ? 'border-green-500/20' : item.color === 'amber' ? 'border-brand-500/20' : 'border-brand-500/20'}`}>
                           <div className="flex items-start gap-3">
@@ -2950,11 +2972,11 @@ export default function PuntingClub() {
                     </div>
 
                     <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-5">
-                      <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>GDPR Data Requests</h3>
-                      <p className="text-gray-400 text-sm mb-3">Handle user data deletion and export requests in compliance with Australian Privacy Act 1988 and GDPR.</p>
+                      <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Privacy requests</h3>
+                      <p className="text-gray-400 text-sm mb-3">Under the Australian Privacy Act members can ask what information you hold about them, or ask to be removed.</p>
                       <div className="flex gap-3 flex-wrap">
-                        <button onClick={() => { addAuditEntry('owner','Data Export','All Users','GDPR compliant full export triggered'); alert('Full encrypted data export initiated. Link will be emailed to admin@puntingclub.com'); }} className="bg-brand-500/20 border border-brand-500/40 text-brand-300 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5"><Download className="w-3 h-3"/>Export All User Data</button>
-                        <button onClick={() => { const phone = prompt('Enter user phone number to delete:'); if(phone) { addAuditEntry('owner','Data Deletion',phone,'GDPR erasure request'); alert(`Data deletion request for ${phone} queued. Will be processed within 30 days per GDPR.`); }}} className="bg-red-500/20 border border-red-500/40 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold">Request Data Erasure</button>
+                        <button onClick={() => { downloadCsv(`punting-club-users-${new Date().toISOString().slice(0,10)}.csv`, ['Name','Phone','Email','KYC','Team','DOB','Postcode','Joined'], adminUsers.map(u => [u.name, u.phone, u.email, u.kyc, u.team, u.dob, u.postcode, u.joinedAt])); addAuditEntry(adminUser?.role || 'owner','Data Export','All Users','Downloaded user list'); }} className="bg-white/5 border border-white/10 text-gray-300 px-4 py-2 rounded-lg text-sm">Download member data (CSV)</button>
+                        <button onClick={() => setAdminTab('users')} className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">Delete a member → Users tab</button>
                       </div>
                     </div>
                   </div>
@@ -2968,7 +2990,7 @@ export default function PuntingClub() {
                         <h2 className="text-xl font-black">Audit Log</h2>
                         <p className="text-gray-500 text-sm">{adminAuditLog.length} entries · Full admin action history</p>
                       </div>
-                      <button onClick={() => { const csv = ['Timestamp,Role,Action,Target,Detail',...adminAuditLog.map(e=>`"${e.ts}",${e.adminRole},"${e.action}","${e.target}","${e.detail}"`)].join('\n'); alert('Audit CSV:\n\n' + csv.substring(0,300)+'...'); }} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
+                      <button onClick={() => downloadCsv(`punting-club-audit-${new Date().toISOString().slice(0,10)}.csv`, ['Timestamp','Role','Action','Target','Detail'], adminAuditLog.map(e => [e.ts, e.adminRole, e.action, e.target, e.detail]))} className="bg-gray-800 border border-white/10 text-gray-400 px-3 py-2 rounded-lg text-xs flex items-center gap-1"><Download className="w-3 h-3"/>Export</button>
                     </div>
                     <div className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
                       <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 uppercase tracking-wider px-4 py-2 border-b border-white/5">
@@ -3026,8 +3048,7 @@ export default function PuntingClub() {
             ]],
             ['Contact',[
               { label:'support@puntingclub.com' },
-              { label:'WhatsApp: +61 XXX XXX XXX' },
-              { label:'FAQ', nav:'competition' },
+              { label:'FAQ', nav:'faq' },
             ]],
           ].map(([h, items]) => (
             <div key={h}>
@@ -3045,7 +3066,14 @@ export default function PuntingClub() {
             </div>
           ))}
         </div>
-        <div className="border-t border-gray-200 pt-6 text-center text-gray-500 text-xs">© 2025 Punting Club. Please gamble responsibly. Must be 18+</div>
+        <div className="border-t border-gray-200 pt-6 text-center text-gray-500 text-xs space-y-1.5">
+          <p>
+            Gamble responsibly. Must be 18+. Need help? Call <a href="tel:1800858858" className="underline">Gambling Help 1800 858 858</a> (24/7, free) or visit{' '}
+            <a href="https://www.gamblinghelponline.org.au" target="_blank" rel="noopener noreferrer" className="underline">gamblinghelponline.org.au</a>.
+            Self-exclude from all licensed betting providers at <a href="https://www.betstop.gov.au" target="_blank" rel="noopener noreferrer" className="underline">BetStop</a>.
+          </p>
+          <p>© {new Date().getFullYear()} Punting Club</p>
+        </div>
       </footer>
 
       {/* ═══════════════════════════════════════════════════════════════════

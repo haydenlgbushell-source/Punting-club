@@ -73,7 +73,7 @@ exports.handler = async (event) => {
       'create_competition','get_competition_requests','update_competition_request',
       'delete_competition','update_competition_status','update_competition','advance_week',
       'update_team','update_bet_result','update_bet_leg','reject_bet','correct_bet',
-      'update_kyc','update_user','delete_user','add_audit',
+      'update_kyc','update_user','delete_user','add_audit','admin_reset_password',
       'get_admin_notifications','mark_notification_read','mark_all_notifications_read',
       'delete_team',
       'generate_recap',
@@ -375,7 +375,7 @@ exports.handler = async (event) => {
 
       case 'update_team': {
         const { teamId, adminRole } = payload;
-        const TEAM_ALLOWED = ['team_name', 'status', 'buy_in_mode', 'finalised', 'deposit_per_member', 'competition_id'];
+        const TEAM_ALLOWED = ['team_name', 'status', 'buy_in_mode', 'finalised', 'deposit_per_member', 'competition_id', 'flagged'];
         const { clean: updates } = sanitizeUpdates(payload.updates, TEAM_ALLOWED);
         if (Object.keys(updates).length === 0) return error('No valid fields to update.');
         const { data, error: e } = await supabase.from('teams').update(updates).eq('id', teamId).select().single();
@@ -932,11 +932,13 @@ exports.handler = async (event) => {
 
       case 'update_kyc': {
         const { userId, kycStatus, adminRole } = payload;
-        const kycErr = isEnum(kycStatus, ['pending', 'approved', 'rejected']);
+        // The app and database use 'verified'; accept 'approved' as an alias.
+        const kyc = kycStatus === 'approved' ? 'verified' : kycStatus;
+        const kycErr = isEnum(kyc, ['pending', 'verified', 'rejected']);
         if (kycErr) return error(`Invalid KYC status. ${kycErr}`);
-        const { data, error: e } = await supabase.from('users').update({ kyc_status: kycStatus, active: kycStatus !== 'rejected' }).eq('id', userId).select().single();
+        const { data, error: e } = await supabase.from('users').update({ kyc_status: kyc, active: kyc !== 'rejected' }).eq('id', userId).select().single();
         if (e) return error(e.message);
-        await addAudit(adminRole, `KYC ${kycStatus}`, `${data.first_name} ${data.last_name}`, `KYC status set to ${kycStatus}`);
+        await addAudit(adminRole, `KYC ${kyc}`, `${data.first_name} ${data.last_name}`, `KYC status set to ${kyc}`);
         return json(data);
       }
 
@@ -973,6 +975,23 @@ exports.handler = async (event) => {
 
         await addAudit(adminRole, 'User Deleted', userName, 'User account permanently deleted to allow re-registration');
         return json({ success: true });
+      }
+
+      case 'admin_reset_password': {
+        // Issue a temporary password for a member who is locked out. The admin
+        // passes it on in person/by text; the member changes it in their profile.
+        const { userId, adminRole } = payload;
+        if (!['owner', 'campaign'].includes(adminRole)) return error('Only the owner or campaign manager can reset passwords.', 403);
+        if (isUUID(userId) !== null) return error('Invalid user.');
+        const { data: target } = await supabase.from('users').select('first_name, last_name').eq('id', userId).maybeSingle();
+        if (!target) return error('User not found.', 404);
+        const WORDS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        let temp = '';
+        while (temp.length < 12) { const b = randomBytes(1)[0]; if (b < 248) temp += WORDS[b % WORDS.length]; }
+        const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password: temp });
+        if (pwErr) return error(pwErr.message);
+        await addAudit(adminRole, 'Password Reset', `${target.first_name} ${target.last_name}`, 'Temporary password issued');
+        return json({ success: true, tempPassword: temp });
       }
 
       // ══════════════════════════════════════════════════════

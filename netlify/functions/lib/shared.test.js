@@ -42,3 +42,11 @@ test('nextCutoff is the coming Wednesday midday', () => {
   const wedAfter = new Date(zonedToUtcMs('2026-11-11', '12:00'));
   assert.equal(nextCutoff(wedAfter).toISOString(), new Date(zonedToUtcMs('2026-11-18', '12:00')).toISOString());
 });
+
+test('ageOn: 18th birthday counts from the Australian date', () => {
+  const { ageOn } = require('../../../src/lib/auTime.js');
+  const now = new Date(zonedToUtcMs('2026-11-08', '09:00'));
+  assert.equal(ageOn('2008-11-08', now), 18);
+  assert.equal(ageOn('2008-11-09', now), 17);
+  assert.equal(ageOn('not-a-date', now), null);
+});

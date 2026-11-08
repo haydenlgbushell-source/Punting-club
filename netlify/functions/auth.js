@@ -1,7 +1,8 @@
 // netlify/functions/auth.js — Node.js (CommonJS)
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isString, isEmail, isDate } = require('./validate');
-const { corsHeaders, rateLimit, bearerToken } = require('./security');
+const { corsHeaders, rateLimit, bearerToken, safeEqual } = require('./security');
+const { ageOn } = require('../../src/lib/auTime.js');
 
 // Verify the caller's Supabase access token and return their auth user, or null.
 // Used to authorise actions that must only touch the caller's own account.
@@ -133,6 +134,11 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Last name must be 1–64 characters.' }) };
       if (!password  || String(password).length < 8 || String(password).length > 128)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Password must be 8–128 characters.' }) };
+      // Gambling-related service: members must be 18 or over.
+      const age = ageOn(dob);
+      if (age === null) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Please enter your date of birth.' }) };
+      if (age < 18) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'You must be 18 or over to join Punting Club.' }) };
+      if (age > 120) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Please check your date of birth.' }) };
       if (teamName && String(teamName).trim().length > 60)
         return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Team name must be 60 characters or fewer.' }) };
       const cleanPhone = normalisePhone(phone);
@@ -325,11 +331,11 @@ exports.handler = async (event) => {
     if (action === 'reset_password') {
       const { phone } = payload;
       if (!phone || !String(phone).trim()) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Mobile number is required.' }) };
-      const cleanPhone = normalisePhone(phone);
-      const authEmail  = `${cleanPhone}@puntingclub.app`;
-      const { error } = await supabase.auth.admin.generateLink({ type: 'recovery', email: authEmail });
-      if (error) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: error.message }) };
-      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true }) };
+      // Accounts use phone-derived addresses that can't receive email, and no SMS
+      // provider is configured — so resets are done by a club admin (Users tab →
+      // Reset Pwd issues a temporary password). Same reply for every number so
+      // this can't be used to find out who is registered.
+      return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ success: true, message: 'Ask your club admin or captain to reset your password. They can issue you a temporary one.' }) };
     }
 
     // ── VERIFY SESSION ───────────────────────────────────────────────────────
@@ -369,7 +375,7 @@ exports.handler = async (event) => {
       const cleanId = String(id || '').trim();
       const acct    = ADMIN_ACCOUNTS[cleanId];
 
-      if (!acct || !acct.pw || acct.pw !== String(password || '')) {
+      if (!acct || !acct.pw || !safeEqual(acct.pw, String(password || ''))) {
         return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Invalid admin credentials.' }) };
       }
 
