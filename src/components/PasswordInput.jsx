@@ -18,7 +18,7 @@ export default function PasswordInput({ className = '', wrapperClassName = '', .
         onClick={() => setShow(s => !s)}
         tabIndex={-1}
         aria-label={show ? 'Hide password' : 'Show password'}
-        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-300 transition-colors"
+        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-slate-700 transition-colors"
       >
         {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
@@ -44,7 +44,7 @@ export function PasswordStrength({ value }) {
     <div className="mt-1.5">
       <div className="flex gap-1">
         {[0, 1, 2, 3].map(i => (
-          <div key={i} className={`h-1 flex-1 rounded-full ${i < level ? colors[level] : 'bg-white/10'}`} />
+          <div key={i} className={`h-1 flex-1 rounded-full ${i < level ? colors[level] : 'bg-gray-200'}`} />
         ))}
       </div>
       <p className={`text-xs mt-1 ${textColors[level]}`}>{labels[level]}</p>

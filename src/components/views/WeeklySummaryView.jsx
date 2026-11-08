@@ -4,6 +4,7 @@ import { Trophy, XCircle, Clock, ChevronLeft } from 'lucide-react';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import WeeklyRecapCard from '../WeeklyRecapCard.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { Page, PageHeader, BackButton, Card, CardTitle, RankBadge, Countdown } from '../ui.jsx';
 
 const WeeklySummaryView = () => {
   const {
@@ -44,242 +45,172 @@ const WeeklySummaryView = () => {
   const totalWinnings = leaderboardTeams.reduce((sum, t) => sum + parseFloat((t.total || '$0').replace(/[^0-9.]/g, '')) || 0, 0);
   const leader = leaderboardTeams[0];
 
+  const money = (n) => `$${n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const resultRows = [
+    ...prevWinners.map(d => ({ ...d, kind: 'won' })),
+    ...prevPending.map(d => ({ ...d, kind: d.bet.overallStatus === 'void' ? 'void' : 'pending' })),
+    ...prevBetsSubmitted.filter(d => d.bet.overallStatus === 'void').map(d => ({ ...d, kind: 'void' })),
+    ...prevLosers.map(d => ({ ...d, kind: 'lost' })),
+    ...prevWeekData.filter(d => !d.bet).map(d => ({ ...d, kind: 'none' })),
+  ];
+  const resultText = (kind, bet) => {
+    if (kind === 'won') return <span className="text-green-700 font-bold">+{bet.actualReturn || bet.estimatedReturn} <span className="text-[11px] uppercase">Won</span></span>;
+    if (kind === 'lost') return <span className="text-red-700 font-bold">−{bet.stake} <span className="text-[11px] uppercase">Lost</span></span>;
+    if (kind === 'void') return <span className="text-slate-500 font-semibold">Refunded</span>;
+    if (kind === 'pending') return <span className="text-slate-500 font-semibold">Pending</span>;
+    return <span className="text-slate-400 text-xs">No bet</span>;
+  };
+  const myStatus = myPrevData?.bet?.overallStatus;
+
   return (
-    <section className="pt-28 pb-16 px-4 sm:px-6">
-      <div className="max-w-5xl mx-auto">
+    <Page>
+      {navHistory.length > 0 && <BackButton onClick={goBack} />}
 
-        {navHistory.length > 0 && (
-          <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-brand-700 text-sm font-semibold mb-6 transition-colors group">
-            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back
-          </button>
-        )}
+      <PageHeader
+        title="Weekly summary"
+        subtitle={`Week ${thisWeek} of ${totalWeeks}${comp?.name ? ` · ${comp.name}` : ''}`}
+      />
 
-        <h1 className="text-3xl font-black mb-1">Weekly Summary</h1>
-        <p className="text-slate-500 mb-4 text-sm">
-          Week {thisWeek} of {totalWeeks}{comp?.name ? ` · ${comp.name}` : ''}
-        </p>
+      {(activeCompetitions.length > 1 || (isLoggedIn && teamsInViewedComp.length > 1)) && (
+        <div className="flex flex-col sm:flex-row gap-2 mb-5">
+          {activeCompetitions.length > 1 && (
+            <SwitcherDropdown label="Competition" items={activeCompetitions} selectedValue={effectiveViewedCode} onSelect={switchViewedCompetition} />
+          )}
+          {isLoggedIn && teamsInViewedComp.length > 1 && (
+            <SwitcherDropdown label="Team" items={teamsInViewedComp} selectedValue={viewedMyTeam?.id} onSelect={switchViewedTeam} valueKey="id" labelKey="team_name" />
+          )}
+        </div>
+      )}
 
-        {(activeCompetitions.length > 1 || (isLoggedIn && teamsInViewedComp.length > 1)) && (
-          <div className="flex flex-col sm:flex-row gap-2 mb-5">
-            {activeCompetitions.length > 1 && (
-              <SwitcherDropdown
-                label="Competition"
-                items={activeCompetitions}
-                selectedValue={effectiveViewedCode}
-                onSelect={switchViewedCompetition}
-              />
+      {/* ── AI MATCH REPORT ── */}
+      {prevWeek >= 1 && comp?.id && (
+        <div className="mb-8"><WeeklyRecapCard competitionId={comp.id} weekNumber={prevWeek} /></div>
+      )}
+
+      {/* ── PREVIOUS WEEK REVIEW ── */}
+      {prevWeek >= 1 ? (
+        <>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <h2 className="text-2xl font-bold text-slate-900">Week {prevWeek} results</h2>
+            {prevWinRate !== null && (
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${prevWinRate >= 50 ? 'bg-green-100 text-green-800' : 'bg-red-50 text-red-700'}`}>{prevWinRate}% won</span>
             )}
-            {isLoggedIn && teamsInViewedComp.length > 1 && (
-              <SwitcherDropdown
-                label="Team"
-                items={teamsInViewedComp}
-                selectedValue={viewedMyTeam?.id}
-                onSelect={switchViewedTeam}
-                valueKey="id"
-                labelKey="team_name"
-              />
+            {prevPending.length > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-slate-600">{prevPending.length} pending</span>
             )}
           </div>
-        )}
 
-        {/* ── AI MATCH REPORT ── */}
-        {prevWeek >= 1 && comp?.id && (
-          <WeeklyRecapCard competitionId={comp.id} weekNumber={prevWeek} />
-        )}
-
-        {/* ── PREVIOUS WEEK REVIEW ── */}
-        {prevWeek >= 1 ? (
-          <>
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-xl font-black text-slate-900">Week {prevWeek} Review</h2>
-              {prevWinRate !== null && (
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${prevWinRate >= 50 ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'bg-red-500/15 border-red-500/40 text-red-400'}`}>
-                  {prevWinRate}% win rate
-                </span>
-              )}
-              {prevPending.length > 0 && (
-                <span className="text-xs text-brand-600 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded-full">{prevPending.length} pending</span>
+          {/* My team callout */}
+          {myPrevData && (
+            <div className="bg-brand-900 text-white rounded-2xl p-5 mb-4 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wider font-bold text-brand-200 mb-1">Your team · {myPrevData.team.team}</p>
+                {myPrevData.bet ? (
+                  <>
+                    <p className={`font-display text-3xl font-bold leading-tight ${myStatus === 'won' ? 'text-gold-400' : 'text-white'}`}>
+                      {myStatus === 'won' ? `Won ${myPrevData.bet.actualReturn || myPrevData.bet.estimatedReturn}` : myStatus === 'lost' ? 'Lost' : myStatus === 'void' ? 'Refunded' : 'Pending'}
+                    </p>
+                    <p className="text-sm text-brand-100 mt-1">
+                      {myPrevData.bet.type} · {myPrevData.bet.stake} stake{myPrevData.bet.submittedBy && <> · placed by {myPrevData.bet.submittedBy}</>}
+                    </p>
+                    {(myPrevData.bet.legs || []).length > 0 && (
+                      <div className="flex gap-1.5 mt-3 flex-wrap">
+                        {myPrevData.bet.legs.map((leg, li) => {
+                          const lc = leg.status === 'won' ? 'bg-green-500/20 text-green-100' : leg.status === 'lost' ? 'bg-red-500/25 text-red-100' : 'bg-white/10 text-white/80';
+                          return <span key={li} className={`text-xs px-2 py-0.5 rounded-full ${lc}`}>{leg.selection}</span>;
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="font-display text-2xl font-bold">No bet went in</p>
+                )}
+              </div>
+              {myPrevData.team.rank && (
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[11px] uppercase tracking-wider font-bold text-brand-200">Season</p>
+                  <p className="font-display text-3xl font-bold leading-tight">#{myPrevData.team.rank}</p>
+                  <p className="text-xs text-brand-100 tabular-nums">{myPrevData.team.total}</p>
+                </div>
               )}
             </div>
+          )}
 
-            {/* My team callout */}
-            {myPrevData && (
-              <div className={`rounded-xl p-5 mb-4 border-2 ${
-                myPrevData.bet?.overallStatus === 'won'  ? 'bg-green-50 border-green-500/40' :
-                myPrevData.bet?.overallStatus === 'lost' ? 'bg-red-50 border-red-500/30' :
-                myPrevData.bet ? 'bg-brand-50 border-brand-500/20' : 'bg-gray-50 border-gray-200'
-              }`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Your Team — {myPrevData.team.team}</p>
-                    {myPrevData.bet ? (
-                      <>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`text-2xl font-black ${myPrevData.bet.overallStatus === 'won' ? 'text-green-400' : myPrevData.bet.overallStatus === 'lost' ? 'text-red-400' : 'text-brand-600'}`}>
-                            {myPrevData.bet.overallStatus === 'won' ? 'WON!' : myPrevData.bet.overallStatus === 'lost' ? 'Lost' : myPrevData.bet.overallStatus === 'void' ? 'Refunded' : 'Pending'}
-                          </span>
-                        </div>
-                        <p className="text-sm text-slate-700">
-                          {myPrevData.bet.type} · Stake: <span className="text-slate-900 font-semibold">{myPrevData.bet.stake}</span>
-                          {myPrevData.bet.overallStatus === 'won' && <> · Return: <span className="text-green-400 font-bold">{myPrevData.bet.actualReturn || myPrevData.bet.estimatedReturn}</span></>}
-                          {myPrevData.bet.submittedBy && <> · Placed by <span className="text-brand-600">{myPrevData.bet.submittedBy}</span></>}
+          {/* All teams results */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-5 pt-4"><CardTitle icon={<Trophy className="w-4 h-4" />}>How everyone did</CardTitle></div>
+            {prevBetsSubmitted.length === 0 ? (
+              <p className="text-slate-500 text-sm px-5 pb-5">No bets went in for Week {prevWeek}. Results show here once bets settle after the weekend.</p>
+            ) : (
+              <div className="divide-y divide-gray-100 border-t border-gray-100">
+                {resultRows.map(({ team: t, bet, kind }) => (
+                  <div key={t.id} className={`flex items-center gap-3 px-5 py-3 ${t.team === myTeamName ? 'bg-[#FBF6E6]' : ''}`}>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-semibold truncate ${kind === 'none' ? 'text-slate-400' : 'text-slate-900'}`}>
+                        {t.team}
+                        {t.team === myTeamName && <span className="ml-1.5 text-[10px] font-bold uppercase bg-gold-500 text-brand-950 rounded-full px-1.5 py-0.5 align-middle">You</span>}
+                      </p>
+                      {bet && (
+                        <p className="text-xs text-slate-500 truncate">
+                          {bet.type} · {(bet.legs || []).length} leg{(bet.legs || []).length !== 1 ? 's' : ''} · {bet.stake}{bet.submittedBy ? ` · ${bet.submittedBy}` : ''}
                         </p>
-                        {(myPrevData.bet.legs || []).length > 0 && (
-                          <div className="flex gap-1 mt-2 flex-wrap">
-                            {myPrevData.bet.legs.map((leg, li) => {
-                              const lc = leg.status === 'won' ? 'bg-green-50 border-green-300 text-green-700' : leg.status === 'lost' ? 'bg-red-50 border-red-300 text-red-700' : 'bg-gray-100 border-gray-200 text-gray-600';
-                              return <span key={li} className={`text-xs px-2 py-0.5 rounded border ${lc}`}>{leg.selection}</span>;
-                            })}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-gray-500 text-sm italic">No bet submitted for Week {prevWeek}</p>
-                    )}
-                  </div>
-                  {myPrevData.team.rank && (
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-slate-500">Season rank</p>
-                      <p className="text-2xl font-black text-brand-600">#{myPrevData.team.rank}</p>
-                      <p className="text-xs text-slate-500">{myPrevData.team.total}</p>
+                      )}
                     </div>
-                  )}
-                </div>
+                    <div className="text-sm text-right flex-shrink-0 tabular-nums">{resultText(kind, bet)}</div>
+                  </div>
+                ))}
               </div>
             )}
+          </Card>
 
-            {/* All teams results */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-              <h3 className="font-bold text-brand-600 mb-4">How Everyone Did — Week {prevWeek}</h3>
-              {prevBetsSubmitted.length === 0 ? (
-                <p className="text-slate-500 text-sm">No bets went in for Week {prevWeek}. Results show here once bets settle after the weekend.</p>
-              ) : (
-                <div className="space-y-3">
-                  {prevWinners.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Trophy className="w-3 h-3" /> Winners</p>
-                      <div className="space-y-2">
-                        {prevWinners.map(({ team: t, bet }) => (
-                          <div key={t.id} className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-sm text-slate-900">{t.team}</span>
-                                {t.team === myTeamName && <span className="text-xs bg-brand-500/20 text-brand-600 px-1.5 py-0.5 rounded">You</span>}
-                                <span className="text-xs text-slate-500">{bet.type} · {(bet.legs || []).length} leg{(bet.legs || []).length !== 1 ? 's' : ''}</span>
-                                {bet.submittedBy && <span className="text-xs text-slate-400">by {bet.submittedBy}</span>}
-                              </div>
-                              {(bet.legs || []).length > 0 && (
-                                <div className="flex gap-1 mt-1.5 flex-wrap">
-                                  {bet.legs.map((leg, li) => (
-                                    <span key={li} className="text-xs bg-green-100 border border-green-200 text-green-700 px-1.5 py-0.5 rounded">{leg.selection}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-green-400 font-bold text-sm">{bet.estimatedReturn}</p>
-                              <p className="text-slate-400 text-xs">from {bet.stake}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {prevLosers.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1"><XCircle className="w-3 h-3" /> Bust</p>
-                      <div className="space-y-2">
-                        {prevLosers.map(({ team: t, bet }) => (
-                          <div key={t.id} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-sm text-slate-900">{t.team}</span>
-                              {t.team === myTeamName && <span className="text-xs bg-brand-500/20 text-brand-600 px-1.5 py-0.5 rounded">You</span>}
-                              <span className="text-xs text-slate-400">{bet.type} · {(bet.legs || []).length} legs</span>
-                              {bet.submittedBy && <span className="text-xs text-slate-400">by {bet.submittedBy}</span>}
-                            </div>
-                            <p className="text-red-400 text-sm font-semibold flex-shrink-0">{bet.stake} lost</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {prevPending.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> Still Pending</p>
-                      <div className="space-y-1">
-                        {prevPending.map(({ team: t, bet }) => (
-                          <div key={t.id} className="bg-brand-50 border border-brand-200 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
-                            <span className="text-sm text-slate-700">{t.team}</span>
-                            <span className="text-xs text-brand-600">{bet.type}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {prevWeekData.filter(d => !d.bet).length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">— No Bet Submitted</p>
-                      <div className="flex flex-wrap gap-2">
-                        {prevWeekData.filter(d => !d.bet).map(({ team: t }) => (
-                          <span key={t.id} className="text-xs text-slate-400 bg-white border border-gray-200 rounded px-2 py-1">{t.team}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Key stat strip (hidden until there is something to show) */}
-            {prevBetsSubmitted.length > 0 && <div className="grid grid-cols-3 gap-4 mb-8">
+          {/* Key stat strip (hidden until there is something to show) */}
+          {prevBetsSubmitted.length > 0 && (
+            <Card className="grid grid-cols-3 divide-x divide-gray-100 mb-8">
               {[
-                ['Week ' + prevWeek + ' Bets', prevBetsSubmitted.length || '—', 'text-brand-600'],
-                ['Win Rate', prevWinRate !== null ? `${prevWinRate}%` : '—', prevWinRate !== null && prevWinRate >= 50 ? 'text-green-400' : 'text-red-400'],
-                ['Season Pot', totalWinnings > 0 ? `$${totalWinnings.toLocaleString()}` : '$0', 'text-brand-600'],
-              ].map(([l, v, c]) => (
-                <div key={l} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                  <p className="text-slate-500 text-xs mb-1">{l}</p>
-                  <p className={`text-2xl font-black ${c}`}>{v}</p>
+                ['Bets placed', prevBetsSubmitted.length],
+                ['Won', prevWinRate !== null ? `${prevWinRate}%` : '—'],
+                ['Season pot', totalWinnings > 0 ? money(totalWinnings) : '$0'],
+              ].map(([l, v]) => (
+                <div key={l} className="p-4 text-center min-w-0">
+                  <p className="text-[11px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">{l}</p>
+                  <p className="font-display text-xl sm:text-2xl font-bold text-slate-900 tabular-nums truncate">{v}</p>
                 </div>
               ))}
-            </div>}
-          </>
-        ) : (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 text-center">
-            <p className="text-slate-500 text-sm">This is Week 1 — no previous week to review yet.</p>
-          </div>
-        )}
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card className="p-6 mb-8 text-center">
+          <p className="text-slate-500 text-sm">This is Week 1, so there's no previous week to review yet.</p>
+        </Card>
+      )}
 
-        {/* ── THIS WEEK OUTLOOK ── */}
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-xl font-black text-slate-900">Week {thisWeek} — Up Next</h2>
-          <span className="text-xs text-slate-500 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full">Deadline {cutoffStr}</span>
-        </div>
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-brand-50 border border-brand-200 rounded-xl p-5">
-            <h3 className="font-bold text-brand-600 mb-2 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Betting Window Open</h3>
-            {currentBettor && <p className="text-slate-700 text-sm">It's <strong className="text-slate-900">{currentBettor}</strong>'s turn to place the bet.</p>}
-            <p className="text-slate-500 text-xs mt-2">Deadline: <span className="text-slate-700 font-medium">{cutoffStr}</span></p>
-            {teamsNoBet.length > 0 && <p className="text-slate-400 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h3 className="font-bold text-brand-600 mb-2 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> Season Standings</h3>
-            {leaderboardTeams.length === 0 && <p className="text-slate-500 text-sm">The ladder fills in once the first results are in.</p>}
+      {/* ── THIS WEEK OUTLOOK ── */}
+      <h2 className="text-2xl font-bold text-slate-900 mb-3">Week {thisWeek} up next</h2>
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card className="p-5">
+          <CardTitle icon={<Clock className="w-4 h-4" />}>Betting window</CardTitle>
+          {currentBettor && <p className="text-slate-800 text-sm">It's <strong>{currentBettor}</strong>'s turn to place your team's bet.</p>}
+          <p className="text-sm mt-2"><Countdown to={nextWedCutoff} /></p>
+          <p className="text-slate-500 text-xs mt-1">Deadline {cutoffStr}</p>
+          {teamsNoBet.length > 0 && <p className="text-slate-500 text-xs mt-1">{teamsNoBet.length} team{teamsNoBet.length !== 1 ? 's' : ''} yet to submit</p>}
+        </Card>
+        <Card className="p-5">
+          <CardTitle icon={<Trophy className="w-4 h-4" />}>Season standings</CardTitle>
+          {leaderboardTeams.length === 0 && <p className="text-slate-500 text-sm">The ladder fills in once the first results are in.</p>}
+          <div className="divide-y divide-gray-100">
             {leaderboardTeams.slice(0, 3).map((t, i) => (
-              <div key={t.id} className="flex items-center gap-2 py-1">
-                <span className={`text-xs font-black w-5 ${i === 0 ? 'text-brand-600' : 'text-slate-500'}`}>#{i + 1}</span>
-                <span className={`text-sm flex-1 truncate ${t.team === myTeamName ? 'text-brand-500 font-bold' : 'text-slate-700'}`}>{t.team}{t.team === myTeamName ? ' (You)' : ''}</span>
-                <span className="text-brand-600 text-xs font-bold">{t.total}</span>
+              <div key={t.id} className="flex items-center gap-3 py-2">
+                <RankBadge rank={i + 1} />
+                <span className={`text-sm flex-1 truncate font-semibold ${t.team === myTeamName ? 'text-brand-800' : 'text-slate-800'}`}>{t.team}{t.team === myTeamName ? ' (you)' : ''}</span>
+                <span className="font-display text-lg font-bold tabular-nums">{t.total}</span>
               </div>
             ))}
-            {leaderboardTeams.length > 3 && <p className="text-slate-400 text-xs mt-1">+{leaderboardTeams.length - 3} more teams</p>}
           </div>
-        </div>
+          {leaderboardTeams.length > 3 && <p className="text-slate-400 text-xs mt-2">+{leaderboardTeams.length - 3} more teams</p>}
+        </Card>
       </div>
-    </section>
+    </Page>
   );
 };
 

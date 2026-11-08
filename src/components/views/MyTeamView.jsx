@@ -28,7 +28,7 @@ const MyTeamView = ({
   const [openMember, setOpenMember] = useState(null); // member whose captain actions are showing
 
   return (
-    <section className="pt-28 pb-16 px-4 sm:px-6">
+    <section className="pt-8 sm:pt-10 pb-16 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto">
         {navHistory.length > 0 && (
           <button onClick={goBack} className="flex items-center gap-1.5 text-slate-500 hover:text-brand-700 text-sm font-semibold mb-6 transition-colors group">
@@ -68,7 +68,7 @@ const MyTeamView = ({
         {/* Team header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
           <div className="min-w-0">
-            <h1 className="text-3xl font-black mb-1.5 truncate">{myTeamName}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 leading-tight mb-1.5 truncate">{myTeamName}</h1>
             <div className="flex items-center gap-2 flex-wrap text-sm">
               <PermissionBadge role={viewedRole} />
               {myTeamData?.rank && <span className="text-slate-500">#{myTeamData.rank} on leaderboard</span>}
@@ -127,7 +127,7 @@ const MyTeamView = ({
         )}
 
         {/* Betting order tracker */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-slate-900 flex items-center gap-1.5"><Target className="w-4 h-4 text-brand-600" /> Betting order</h3>
             {viewedRole === 'captain' && <button onClick={() => setShowOrderModal(true)} className="text-slate-500 hover:text-brand-700 text-xs flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>}
@@ -154,7 +154,7 @@ const MyTeamView = ({
         </div>
 
         {/* This week's bets */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-5">
           {(() => {
             const thisWeekBets = (myTeamData?.bets || []).filter(b => b.weekNumber === currentWeekNum + 1);
             return (
@@ -201,7 +201,7 @@ const MyTeamView = ({
             .sort((a, b) => b.weekNumber - a.weekNumber);
           if (!pastBets.length) return null;
           return (
-            <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 mb-5">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 mb-5">
               <h3 className="font-bold text-slate-900 mb-1 flex items-center gap-1.5"><History className="w-4 h-4 text-brand-600" /> Bet history</h3>
               <ul className="divide-y divide-gray-100">
                 {pastBets.map((bet, i) => {
@@ -237,7 +237,7 @@ const MyTeamView = ({
                       </button>
                       {isExpanded && (
                         <div className="pb-3">
-                          <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="border border-gray-200 rounded-2xl overflow-hidden">
                             <BetSlipCard bet={bet} compact onCheckBet={null} />
                           </div>
                           <div className="flex justify-end mt-2">
@@ -286,7 +286,7 @@ const MyTeamView = ({
           const owingCount = teamMembers.length - paidCount;
           const showMoney = teamFinalised && depositPerMember;
           return (
-            <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-bold text-slate-900 flex items-center gap-1.5"><Users className="w-4 h-4 text-brand-600" /> Members</h3>
                 <div className="flex items-center gap-2">
