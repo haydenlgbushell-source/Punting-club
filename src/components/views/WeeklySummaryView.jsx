@@ -152,7 +152,7 @@ const WeeklySummaryView = () => {
             <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
               <h3 className="font-bold text-brand-600 mb-4">How Everyone Did — Week {prevWeek}</h3>
               {prevBetsSubmitted.length === 0 ? (
-                <p className="text-slate-400 text-sm italic">No bets were submitted last week.</p>
+                <p className="text-slate-500 text-sm">No bets went in for Week {prevWeek}. Results show here once bets settle after the weekend.</p>
               ) : (
                 <div className="space-y-3">
                   {prevWinners.length > 0 && (
@@ -233,8 +233,8 @@ const WeeklySummaryView = () => {
               )}
             </div>
 
-            {/* Key stat strip */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            {/* Key stat strip (hidden until there is something to show) */}
+            {prevBetsSubmitted.length > 0 && <div className="grid grid-cols-3 gap-4 mb-8">
               {[
                 ['Week ' + prevWeek + ' Bets', prevBetsSubmitted.length || '—', 'text-brand-600'],
                 ['Win Rate', prevWinRate !== null ? `${prevWinRate}%` : '—', prevWinRate !== null && prevWinRate >= 50 ? 'text-green-400' : 'text-red-400'],
@@ -245,7 +245,7 @@ const WeeklySummaryView = () => {
                   <p className={`text-2xl font-black ${c}`}>{v}</p>
                 </div>
               ))}
-            </div>
+            </div>}
           </>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 text-center">
@@ -267,6 +267,7 @@ const WeeklySummaryView = () => {
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h3 className="font-bold text-brand-600 mb-2 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> Season Standings</h3>
+            {leaderboardTeams.length === 0 && <p className="text-slate-500 text-sm">The ladder fills in once the first results are in.</p>}
             {leaderboardTeams.slice(0, 3).map((t, i) => (
               <div key={t.id} className="flex items-center gap-2 py-1">
                 <span className={`text-xs font-black w-5 ${i === 0 ? 'text-brand-600' : 'text-slate-500'}`}>#{i + 1}</span>

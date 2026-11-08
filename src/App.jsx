@@ -150,6 +150,7 @@ export default function PuntingClub() {
   const [adminBets, setAdminBets] = useState([]);
   const [adminComps, setAdminComps] = useState([]);
   const [adminSearch, setAdminSearch] = useState('');
+  const [adminBetFilter, setAdminBetFilter] = useState('review'); // review | pending | settled | all
   const [adminAuditLog, setAdminAuditLog] = useState([]);
   const [editingBetField, setEditingBetField] = useState(null); // { betId, field } being inline-edited in admin
   const [expandedBetId, setExpandedBetId] = useState(null); // bet whose legs are shown in admin
@@ -1991,7 +1992,16 @@ export default function PuntingClub() {
 
         const filteredTeams = adminTeams.filter(t => adminSearch === '' || t.name.toLowerCase().includes(adminSearch.toLowerCase()) || t.captain.toLowerCase().includes(adminSearch.toLowerCase()));
         const filteredUsers = adminUsers.filter(u => adminSearch === '' || u.name.toLowerCase().includes(adminSearch.toLowerCase()) || u.phone.includes(adminSearch));
-        const filteredBets  = adminBets.filter(b => adminSearch === '' || b.team.toLowerCase().includes(adminSearch.toLowerCase()) || b.id.toLowerCase().includes(adminSearch.toLowerCase()));
+        const betNeedsReview = (b) => b.flagged || !b.valid || (b.aiConfidence != null && b.aiConfidence < 70) || (b.legs || []).some(l => l.needsReview);
+        const betIsSettled = (b) => ['won', 'lost', 'void', 'rejected'].includes(b.status);
+        const searchedBets = adminBets.filter(b => adminSearch === '' || (b.team || '').toLowerCase().includes(adminSearch.toLowerCase()) || String(b.id).toLowerCase().includes(adminSearch.toLowerCase()));
+        const betFilters = [
+          ['review', 'Needs review', searchedBets.filter(betNeedsReview)],
+          ['pending', 'Pending', searchedBets.filter(b => !betIsSettled(b))],
+          ['settled', 'Settled', searchedBets.filter(betIsSettled)],
+          ['all', 'All', searchedBets],
+        ];
+        const filteredBets = (betFilters.find(f => f[0] === adminBetFilter) || betFilters[3])[2];
 
         return (
           <section className="text-gray-100" style={{position:"fixed",inset:0,zIndex:60,backgroundColor:"#030712",overflowY:"auto",WebkitFontSmoothing:"antialiased",MozOsxFontSmoothing:"grayscale"}}>
@@ -2526,6 +2536,26 @@ export default function PuntingClub() {
                       )}
                     </div>
 
+                    {/* Status filter: open on the bets that need a person */}
+                    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter bets">
+                      {betFilters.map(([key, label, list]) => (
+                        <button
+                          key={key}
+                          role="tab"
+                          aria-selected={adminBetFilter === key}
+                          onClick={() => setAdminBetFilter(key)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${adminBetFilter === key ? 'bg-white text-gray-900 border-white' : 'text-gray-400 border-white/15 hover:text-white'}`}
+                        >
+                          {label} <span className={key === 'review' && list.length ? 'text-red-500' : 'opacity-60'}>{list.length}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {filteredBets.length === 0 && (
+                      <p className="text-gray-400 text-sm bg-white/5 border border-white/8 rounded-xl p-4">
+                        {adminBetFilter === 'review' ? 'Nothing needs a look right now.' : 'No bets match this filter.'}
+                      </p>
+                    )}
+
                     {/* AI confidence legend */}
                     <div className="bg-white/5 border border-white/8 rounded-xl p-4 flex flex-wrap gap-4 text-xs">
                       <div><span className="text-gray-500">AI Confidence: </span><span className="text-green-400 font-bold">90-100%</span><span className="text-gray-600"> = High</span></div>
@@ -2539,7 +2569,7 @@ export default function PuntingClub() {
                           <div className="px-4 py-3 flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                                <span className="text-gray-600 text-xs font-mono">{b.id}</span>
+                                <span className="text-gray-600 text-xs font-mono" title={b.id}>#{String(b.id).slice(-6)}</span>
                                 <p className="font-bold text-sm">{b.team}</p>
                                 <StatusPill s={b.status} />
                                 {b.flagged && <span className="text-red-400 text-xs font-bold">🚩 Flagged</span>}
