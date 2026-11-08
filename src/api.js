@@ -17,6 +17,27 @@ const writeTokens = (access, refresh) => {
   } catch { /* ignore */ }
 };
 
+// One refresh at a time: Supabase rotates refresh tokens, so two parallel
+// refreshes with the same token would log the user out.
+let refreshInFlight = null;
+const refreshTokens = (refreshToken) => {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const rRes = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh', refreshToken }),
+      });
+      if (!rRes.ok) return false;
+      const rData = await rRes.json();
+      if (!rData?.access_token) return false;
+      writeTokens(rData.access_token, rData.refresh_token);
+      return true;
+    })().catch(() => false).finally(() => { setTimeout(() => { refreshInFlight = null; }, 0); });
+  }
+  return refreshInFlight;
+};
+
 // POST with the user's access token, refreshing it once on a 401.
 // Returns the raw { res, data } so callers can handle non-standard error shapes.
 export const postWithAuth = async (endpoint, payload, _retry = false) => {
@@ -32,20 +53,7 @@ export const postWithAuth = async (endpoint, payload, _retry = false) => {
 
   // If the access token has expired, transparently refresh once and retry.
   if (res.status === 401 && !_retry && sess.refreshToken) {
-    try {
-      const rRes = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refresh', refreshToken: sess.refreshToken }),
-      });
-      if (rRes.ok) {
-        const rData = await rRes.json();
-        if (rData?.access_token) {
-          writeTokens(rData.access_token, rData.refresh_token);
-          return postWithAuth(endpoint, payload, true);
-        }
-      }
-    } catch { /* fall through to surface the original error */ }
+    if (await refreshTokens(sess.refreshToken)) return postWithAuth(endpoint, payload, true);
   }
 
   let data;
@@ -58,7 +66,9 @@ const call = async (endpoint, payload) => {
   const { res, data } = await postWithAuth(endpoint, payload);
   if (!res.ok || data.error) {
     const msg = typeof data.error === 'string' ? data.error : data.error?.message;
-    throw new Error(msg || `API error ${res.status}`);
+    const err = new Error(msg || `API error ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
   return data;
 };

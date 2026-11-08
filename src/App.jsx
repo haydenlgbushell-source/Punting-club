@@ -346,6 +346,10 @@ export default function PuntingClub() {
     setDepositPerMember(null);
     setActiveNav('home');
     setNavHistory([]);
+    setViewedCompetitionCode(null);
+    setShowBetAnalyzer(false);
+    setUploadedImages([]); setAnalyzedBet(null); setSelectedTeamForBet('');
+    setPendingMembers([]); setJoinRequestNotifs([]);
     try { localStorage.removeItem('pc_session'); } catch(e) {}
   };
 
@@ -692,8 +696,15 @@ export default function PuntingClub() {
             if (myTeam?.finalised) { setTeamFinalised(true); setDepositPerMember(myTeam.deposit_per_member || null); }
             else { setTeamFinalised(false); setDepositPerMember(null); }
             try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', refreshToken: sess.refreshToken || null, allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
-          }).catch(() => {
-            // Server unreachable — keep cached session, data will load via normal effects
+          }).catch((err) => {
+            if (err?.status === 401 || err?.status === 404) {
+              // Login expired or account gone — don't leave a "logged in" screen where every action fails.
+              try { localStorage.removeItem('pc_session'); } catch(_) {}
+              setIsLoggedIn(false); setCurrentUser(null); setCurrentTeamId(null);
+              setShowLoginModal(true);
+              showToast('Your login has expired — please log in again.', 'warning');
+            }
+            // Otherwise the server is unreachable — keep the cached session for now.
           });
         } else {
           // local_ fallback ID — no longer valid now that functions are deployed, clear it
@@ -701,6 +712,27 @@ export default function PuntingClub() {
         }
       }
     } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }
+  }, []);
+
+  // Invite links: /?join=TEAMCODE opens "join team" (logged in) or sign-up with
+  // the code filled in, then removes the parameter from the address bar.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const code = (params.get('join') || '').trim().toUpperCase();
+      if (!/^[A-Z0-9]{4,10}$/.test(code)) return;
+      const hasSession = !!JSON.parse(localStorage.getItem('pc_session') || '{}')?.user?.id;
+      if (hasSession) {
+        setJoinTeamCode(code); setJoinTeamError(null); setJoinTeamSuccess(null);
+        setTeamModalTab('join'); setShowCreateTeamModal(true);
+      } else {
+        setFormData(f => ({ ...f, teamCode: code }));
+        setSignupMode('join'); setShowSignupModal(true);
+      }
+      params.delete('join');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+    } catch (_) { /* ignore malformed URLs */ }
   }, []);
 
   // ── Admin data loader (reusable) ────────────────────────────────────────
@@ -1135,49 +1167,56 @@ export default function PuntingClub() {
     return false;
   };
 
-  const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB — Claude's per-image limit
+  const MAX_IMAGE_BYTES = 25 * 1024 * 1024; // raw file limit before shrinking
   const MAX_IMAGES = 5;
 
+  // Shrink a photo/screenshot to Claude's working size (1568px long edge) as JPEG.
+  // Keeps uploads well under Netlify's 6 MB request limit (5 raw phone photos
+  // could be 30 MB+) and opens anything the browser can display (incl. HEIC on iPhone).
+  const shrinkImage = (file, maxEdge = 1568, quality = 0.85) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // transparent PNGs → white, not black
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ src: canvas.toDataURL('image/jpeg', quality), name: file.name, mediaType: 'image/jpeg' });
+      } catch (e) { reject(e); }
+      finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`"${file.name}" couldn't be opened. Try a screenshot (PNG or JPG).`)); };
+    img.src = url;
+  });
+
   const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
     const errors = [];
     const valid = [];
-
     for (const f of files) {
-      if (!ALLOWED_IMAGE_TYPES.has(f.type)) {
-        errors.push(`"${f.name}" is not a supported image type. Use JPEG, PNG, WebP, or GIF.`);
-        continue;
-      }
-      if (f.size > MAX_IMAGE_BYTES) {
-        errors.push(`"${f.name}" is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum is 5 MB per image.`);
-        continue;
-      }
+      if (f.type && !f.type.startsWith('image/')) { errors.push(`"${f.name}" is not an image.`); continue; }
+      if (f.size > MAX_IMAGE_BYTES) { errors.push(`"${f.name}" is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Try a screenshot instead.`); continue; }
       valid.push(f);
     }
-
-    if (errors.length) {
-      showToast(errors[0], 'error');
-    }
-
+    if (errors.length) showToast(errors[0], 'error');
     if (!valid.length) return;
 
     const slots = MAX_IMAGES - uploadedImages.length;
     if (slots <= 0) { showToast(`Maximum ${MAX_IMAGES} images allowed.`, 'warning'); return; }
-    if (valid.length > slots) {
-      showToast(`Only ${slots} more image${slots > 1 ? 's' : ''} can be added (max ${MAX_IMAGES}).`, 'warning');
-    }
-    const toLoad = valid.slice(0, slots);
+    if (valid.length > slots) showToast(`Only ${slots} more image${slots > 1 ? 's' : ''} can be added (max ${MAX_IMAGES}).`, 'warning');
 
-    Promise.all(
-      toLoad.map(f => new Promise(res => {
-        const r = new FileReader();
-        r.onload = () => res({ src: r.result, name: f.name, mediaType: f.type });
-        r.readAsDataURL(f);
-      }))
-    ).then(imgs => setUploadedImages(prev => [...prev, ...imgs]));
-
-    e.target.value = '';
+    Promise.allSettled(valid.slice(0, slots).map(f => shrinkImage(f))).then(results => {
+      const ok = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+      const failed = results.find(r => r.status === 'rejected');
+      if (failed) showToast(failed.reason?.message || 'An image could not be read.', 'error');
+      if (ok.length) setUploadedImages(prev => [...prev, ...ok].slice(0, MAX_IMAGES));
+    });
   };
 
   const analyzeBetSlips = async () => {
