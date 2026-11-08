@@ -144,3 +144,8 @@ export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get
 export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
 export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
 export const apiTriggerResultsCheck = (adminToken, betId = null) => call('data', { action: 'trigger_results_check', adminToken, betId });
+
+// ── PUSH NOTIFICATIONS ───────────────────────────────────────
+export const apiPushPublicKey  = ()             => call('data', { action: 'push_public_key' });
+export const apiPushSubscribe  = (subscription) => call('data', { action: 'push_subscribe', subscription });
+export const apiPushUnsubscribe = (endpoint)    => call('data', { action: 'push_unsubscribe', endpoint });

@@ -6,6 +6,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isEnum, isString, isPositiveInt, isPositiveFloat, sanitizeUpdates } = require('./validate');
 const { corsHeaders, bearerToken, verifyAdminToken, triggerInternal } = require('./security');
 const { overallFromLegs } = require('./lib/settle');
+const { notifyBetPlaced, notifyBetsWon } = require('./lib/push');
 const { betStatus, betReturn, STATUS_SHORT } = require('../../src/lib/betMath.js');
 const { weekAt } = require('../../src/lib/auTime.js');
 
@@ -766,6 +767,9 @@ exports.handler = async (event) => {
           if (legsError) return error(legsError.message);
         }
 
+        // Tell the rest of the team (never blocks or fails the bet).
+        await notifyBetPlaced(supabase, bet);
+
         return json(bet);
       }
 
@@ -789,8 +793,10 @@ exports.handler = async (event) => {
 
       case 'update_bet_result': {
         const { betId, overallStatus, adminRole } = payload;
+        const { data: before } = await supabase.from('bets').select('overall_status').eq('id', betId).maybeSingle();
         const { data, error: e } = await supabase.from('bets').update({ overall_status: overallStatus }).eq('id', betId).select('*, teams(team_name)').single();
         if (e) return error(e.message);
+        if (overallStatus === 'won' && before?.overall_status !== 'won') await notifyBetsWon(supabase, [betId]);
         await addAudit(adminRole, `Bet ${overallStatus}`, `${data.teams?.team_name} — ${betId}`, `Result set to ${overallStatus}`);
         return json(data);
       }
@@ -813,7 +819,10 @@ exports.handler = async (event) => {
         if (data.bet_id) {
           const { data: siblings } = await supabase.from('bet_legs').select('status').eq('bet_id', data.bet_id);
           const overall = overallFromLegs(siblings || []);
-          if (overall !== data.bets?.overall_status) await supabase.from('bets').update({ overall_status: overall }).eq('id', data.bet_id);
+          if (overall !== data.bets?.overall_status) {
+            await supabase.from('bets').update({ overall_status: overall }).eq('id', data.bet_id);
+            if (overall === 'won') await notifyBetsWon(supabase, [data.bet_id]);
+          }
         }
         if (adminRole) await addAudit(adminRole, 'Leg Override', `${data.bets?.teams?.team_name} — ${data.selection}`, `Status → ${status}${resultNote ? ': ' + resultNote : ''}`);
         return json(data);
@@ -836,6 +845,40 @@ exports.handler = async (event) => {
         if (e) return error(e.message);
         await addAudit(adminRole, 'Bet Corrected', `${data.teams?.team_name} — ${betId}`, `${field} → ${value}`);
         return json(data);
+      }
+
+      // ══════════════════════════════════════════════════════
+      //  PUSH NOTIFICATIONS (bet placed / bet won)
+      // ══════════════════════════════════════════════════════
+
+      case 'push_public_key': {
+        return json({ publicKey: process.env.VAPID_PUBLIC_KEY || null });
+      }
+
+      case 'push_subscribe': {
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again.', 401);
+        const sub = payload.subscription || {};
+        const endpoint = String(sub.endpoint || '');
+        const p256dh = String(sub.keys?.p256dh || '');
+        const auth = String(sub.keys?.auth || '');
+        if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000) return error('Invalid subscription.');
+        if (!p256dh || p256dh.length > 200 || !auth || auth.length > 100) return error('Invalid subscription.');
+        const { error: e } = await supabase.from('push_subscriptions').upsert({
+          user_id: actor.id, endpoint, p256dh, auth,
+          user_agent: String(event.headers?.['user-agent'] || '').slice(0, 300) || null,
+        }, { onConflict: 'endpoint' });
+        if (e) return error(/push_subscriptions/.test(e.message || '') ? 'Notifications are not set up yet.' : e.message, 503);
+        return json({ ok: true });
+      }
+
+      case 'push_unsubscribe': {
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again.', 401);
+        const endpoint = String(payload.endpoint || '');
+        if (!endpoint) return error('Missing endpoint.');
+        await supabase.from('push_subscriptions').delete().eq('user_id', actor.id).eq('endpoint', endpoint);
+        return json({ ok: true });
       }
 
       // ══════════════════════════════════════════════════════

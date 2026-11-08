@@ -30,6 +30,7 @@ import {
   apiGenerateRecap, apiTriggerResultsCheck, postWithAuth,
 } from './api.js';
 import { buildSlipPrompt } from './lib/slipPrompt.js';
+import { pushState, enablePush, disablePush, registerServiceWorker, resyncPush } from './lib/push.js';
 import { betStatus } from './lib/betMath.js';
 import { oauthEnabled, oauthProviders, startOAuth, isOAuthReturn, finishOAuthFromUrl } from './lib/supabaseClient.js';
 import { nextCutoff, ageOn, formatAuDateTime, formatCutoff } from './lib/auTime.js';
@@ -42,6 +43,9 @@ export default function PuntingClub() {
   const [navHistory, setNavHistory] = useState([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAccountSheet, setShowAccountSheet] = useState(false);
+  // Push notifications on this device: 'unsupported' | 'ios-install' | 'denied' | 'on' | 'off'
+  const [pushStatus, setPushStatus] = useState('off');
+  const [pushBusy, setPushBusy] = useState(false);
 
   // Auth
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -345,6 +349,8 @@ export default function PuntingClub() {
   };
 
   const handleLogout = () => {
+    // Stop this device getting the signed-out member's notifications.
+    if (pushStatus === 'on') disablePush().catch(() => {}).finally(() => setPushStatus('off'));
     setIsLoggedIn(false);
     setCurrentUser(null);
     setCurrentTeamId(null);
@@ -806,6 +812,41 @@ export default function PuntingClub() {
         }
       }
     } catch(e) { try { localStorage.removeItem('pc_session'); } catch(_) {} }
+  }, []);
+
+  // Push notifications: register the service worker and read this device's state.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    registerServiceWorker();
+    pushState().then(setPushStatus).catch(() => setPushStatus('unsupported'));
+    resyncPush();
+  }, [isLoggedIn]);
+
+  const togglePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushStatus === 'on') { await disablePush(); showToast('Notifications off on this device', 'info'); }
+      else { await enablePush(); showToast('Notifications on: you’ll hear about team bets and winners', 'success'); }
+    } catch (e) {
+      showToast(e.message || 'Could not change notifications', 'error');
+    } finally {
+      setPushStatus(await pushState().catch(() => 'unsupported'));
+      setPushBusy(false);
+    }
+  };
+
+  // Tapping a notification opens /?nav=team or /?nav=leaderboard.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const nav = params.get('nav');
+      if (!['team', 'leaderboard'].includes(nav)) return;
+      setActiveNav(nav);
+      params.delete('nav');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+    } catch (_) { /* ignore malformed URLs */ }
   }, []);
 
   // Invite links: /?join=TEAMCODE opens "join team" (logged in) or sign-up with
@@ -4325,6 +4366,38 @@ export default function PuntingClub() {
                 </div>
               </div>
             )}
+
+            <div className="rounded-xl border border-gray-200 px-3 py-3">
+              <div className="flex items-center gap-3">
+                <Bell className="w-5 h-5 text-slate-500 flex-shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold text-sm text-slate-900">Notifications</span>
+                  <span className="block text-xs text-slate-500">When a teammate bets, or any team in your comp wins</span>
+                </span>
+                {(pushStatus === 'on' || pushStatus === 'off') && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={pushStatus === 'on'}
+                    aria-label="Notifications on this device"
+                    disabled={pushBusy}
+                    onClick={togglePush}
+                    className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${pushStatus === 'on' ? 'bg-brand-600' : 'bg-gray-300'} ${pushBusy ? 'opacity-60' : ''}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${pushStatus === 'on' ? 'translate-x-5' : ''}`} />
+                  </button>
+                )}
+              </div>
+              {pushStatus === 'ios-install' && (
+                <p className="mt-2 text-xs text-slate-600">On iPhone, add Punting Club to your Home Screen first: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>, and open it from there.</p>
+              )}
+              {pushStatus === 'denied' && (
+                <p className="mt-2 text-xs text-slate-600">Notifications are blocked for this site. Allow them in your browser or phone settings, then come back here.</p>
+              )}
+              {pushStatus === 'unsupported' && (
+                <p className="mt-2 text-xs text-slate-600">This browser can’t show notifications. Try Chrome on Android, or Safari on iPhone from the Home Screen.</p>
+              )}
+            </div>
 
             <div className="divide-y divide-gray-100 border-t border-gray-100">
               {viewedRole === 'captain' && (
