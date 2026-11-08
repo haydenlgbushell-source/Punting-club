@@ -25,11 +25,12 @@ import {
   apiCreateAdditionalTeam, apiGetAllCompetitions,
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
-  apiUpdateProfile, apiChangePassword, apiAdminResetPassword,
+  apiUpdateProfile, apiChangePassword, apiAdminResetPassword, apiOAuthStatus, apiOAuthRegister,
   apiGenerateRecap, apiTriggerResultsCheck, postWithAuth,
 } from './api.js';
 import { buildSlipPrompt } from './lib/slipPrompt.js';
 import { betStatus } from './lib/betMath.js';
+import { oauthEnabled, oauthProviders, startOAuth, isOAuthReturn, finishOAuthFromUrl } from './lib/supabaseClient.js';
 import { nextCutoff, ageOn } from './lib/auTime.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
@@ -52,6 +53,9 @@ export default function PuntingClub() {
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError]     = useState(null);
   const [signupMode, setSignupMode] = useState(null); // 'create' | 'join'
+  // Set while a Google/Apple user finishes sign-up: { provider, email }
+  const [oauthPending, setOauthPending] = useState(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
 
   // Create / join additional team (logged-in users)
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
@@ -426,6 +430,48 @@ export default function PuntingClub() {
   };
 
   // ── SIGNUP ────────────────────────────────────────────────────────────────
+  // Save tokens (and optionally the user) to the app's session store, then reload
+  // so the normal session-restore path loads teams, members and leaderboard.
+  const saveSessionAndReload = (tokens, user) => {
+    try {
+      localStorage.setItem('pc_session', JSON.stringify({ ...(user ? { user } : {}), token: tokens.accessToken, refreshToken: tokens.refreshToken }));
+    } catch (_) {}
+    if (user) window.location.replace(window.location.pathname);
+  };
+  const readTokens = () => {
+    try { const s = JSON.parse(localStorage.getItem('pc_session') || '{}'); return { accessToken: s.token, refreshToken: s.refreshToken }; }
+    catch { return {}; }
+  };
+
+  const signInWith = async (provider) => {
+    setApiError(null);
+    setOauthBusy(true);
+    try { await startOAuth(provider); }
+    catch (err) { setOauthBusy(false); setApiError(err.message || 'Could not start sign-in.'); }
+  };
+
+  // Returning from Google/Apple (/?oauth=1&code=…)
+  useEffect(() => {
+    if (!isOAuthReturn()) return;
+    (async () => {
+      try {
+        const tokens = await finishOAuthFromUrl();
+        saveSessionAndReload(tokens, null);           // token only, so the next call is authenticated
+        const status = await apiOAuthStatus();
+        if (status.status === 'ok' && status.user) { saveSessionAndReload(tokens, status.user); return; }
+        // New member: finish sign-up (mobile, DOB, team) in the normal sign-up form.
+        setFormData(f => ({ ...f, firstName: status.prefill?.firstName || f.firstName, lastName: status.prefill?.lastName || f.lastName, email: status.prefill?.email || f.email, password: '', confirmPassword: '' }));
+        setOauthPending({ provider: status.provider, email: status.prefill?.email || '' });
+        setSignupMode(m => m || 'create');
+        setShowSignupModal(true);
+      } catch (err) {
+        try { localStorage.removeItem('pc_session'); } catch (_) {}
+        showToast(`Sign-in failed: ${err.message}`, 'error');
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmitSignup = useCallback(async (e) => {
     e.preventDefault();
 
@@ -440,9 +486,11 @@ export default function PuntingClub() {
       return;
     }
     setPhoneError('');
-    if (!formData.password)          { setApiError('Please enter a password.'); return; }
-    if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
-    if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
+    if (!oauthPending) {
+      if (!formData.password)          { setApiError('Please enter a password.'); return; }
+      if (formData.password !== formData.confirmPassword) { setApiError('Passwords do not match.'); return; }
+      if (formData.password.length < 8) { setApiError('Password must be at least 8 characters.'); return; }
+    }
     const age = ageOn(formData.dob);
     if (age === null) { setApiError('Please enter your date of birth.'); return; }
     if (age < 18) { setApiError('You must be 18 or over to join Punting Club.'); return; }
@@ -451,6 +499,30 @@ export default function PuntingClub() {
 
     setApiLoading(true);
     setApiError(null);
+
+    if (oauthPending) {
+      try {
+        const result = await apiOAuthRegister({
+          phone:           validatePhone(formData.phone).normalised || formData.phone.trim(),
+          firstName:       formData.firstName.trim(),
+          lastName:        formData.lastName.trim(),
+          email:           formData.email?.trim() || null,
+          dob:             formData.dob || null,
+          postcode:        formData.postcode?.trim() || null,
+          teamName:        signupMode === 'create' ? formData.teamName.trim() : null,
+          teamCode:        signupMode === 'join'   ? formData.teamCode.trim().toUpperCase() : null,
+          buyInMode:       formData.buyInMode || 'split',
+          competitionCode: formData.competitionCode || null,
+        });
+        setOauthPending(null);
+        saveSessionAndReload(readTokens(), result.user);
+      } catch (err) {
+        setApiError(err.message);
+      } finally {
+        setApiLoading(false);
+      }
+      return;
+    }
 
     try {
       // Try Supabase first — if it works, great
@@ -531,7 +603,7 @@ export default function PuntingClub() {
     } finally {
       setApiLoading(false);
     }
-  }, [formData, signupMode]);
+  }, [formData, signupMode, oauthPending]);
 
   // ── MEMBER MANAGEMENT ────────────────────────────────────────────────────
   // Dismiss a single member from the join-request notification popup
@@ -665,6 +737,8 @@ export default function PuntingClub() {
       .catch(err => console.error('Failed to load competitions:', err));
 
     // Restore session from localStorage so refresh doesn't log out
+    // (skipped on a Google/Apple return — that flow sets the session itself)
+    if (isOAuthReturn()) return;
     try {
       const saved = localStorage.getItem('pc_session');
       if (saved) {
@@ -3089,6 +3163,24 @@ export default function PuntingClub() {
                 <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
               </div>
             )}
+            {oauthEnabled && (
+              <div className="space-y-2">
+                {oauthProviders.includes('google') && (
+                  <button type="button" onClick={() => signInWith('google')} disabled={oauthBusy} className="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+                    Continue with Google
+                  </button>
+                )}
+                {oauthProviders.includes('apple') && (
+                  <button type="button" onClick={() => signInWith('apple')} disabled={oauthBusy} className="w-full bg-black hover:bg-gray-900 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 border border-white/20 disabled:opacity-60">
+                    <svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true" fill="currentColor"><path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C44 790 0 669 0 554 0 370 120 272 238 272c63 0 115 41 155 41 38 0 97-44 168-44 27 0 125 2 189 94zM554 169c29-35 51-84 51-133 0-7-1-14-2-19-48 2-105 32-140 72-27 31-53 80-53 130 0 8 1 15 2 18 3 0 8 1 13 1 43 0 97-29 129-69z"/></svg>
+                    Continue with Apple
+                  </button>
+                )}
+                <div className="flex items-center gap-3 text-gray-600 text-xs py-1"><div className="flex-1 h-px bg-white/10" />or use your mobile<div className="flex-1 h-px bg-white/10" /></div>
+              </div>
+            )}
+            
             <div>
               <label className="block text-xs font-semibold text-brand-300 mb-1.5">Mobile Number</label>
               <input type="tel" required value={loginPhone} onChange={e => { setLoginPhone(e.target.value); setApiError(null); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50 placeholder-gray-600" placeholder="+61 412 345 678" />
@@ -3288,12 +3380,35 @@ export default function PuntingClub() {
 
       {/* SIGNUP */}
       {showSignupModal && (
-        <Modal title={signupMode === 'create' ? 'Create a Team' : 'Join a Team'} onClose={() => { setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
+        <Modal title={oauthPending ? 'Finish setting up your account' : signupMode === 'create' ? 'Create a Team' : 'Join a Team'} onClose={() => { if (oauthPending) { setOauthPending(null); try { localStorage.removeItem('pc_session'); } catch (_) {} } setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
           <form onSubmit={handleSubmitSignup} className="p-5 space-y-3">
             {apiError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm flex items-start gap-2">
                 <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
               </div>
+            )}
+{oauthPending ? (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2.5 text-green-300 text-xs">
+                Signed in with {oauthPending.provider === 'apple' ? 'Apple' : 'Google'}{oauthPending.email ? ` as ${oauthPending.email}` : ''}. Add your mobile and date of birth, then create or join a team.
+              </div>
+            ) : (
+              oauthEnabled && (
+              <div className="space-y-2">
+                {oauthProviders.includes('google') && (
+                  <button type="button" onClick={() => signInWith('google')} disabled={oauthBusy} className="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+                    Continue with Google
+                  </button>
+                )}
+                {oauthProviders.includes('apple') && (
+                  <button type="button" onClick={() => signInWith('apple')} disabled={oauthBusy} className="w-full bg-black hover:bg-gray-900 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 border border-white/20 disabled:opacity-60">
+                    <svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true" fill="currentColor"><path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C44 790 0 669 0 554 0 370 120 272 238 272c63 0 115 41 155 41 38 0 97-44 168-44 27 0 125 2 189 94zM554 169c29-35 51-84 51-133 0-7-1-14-2-19-48 2-105 32-140 72-27 31-53 80-53 130 0 8 1 15 2 18 3 0 8 1 13 1 43 0 97-29 129-69z"/></svg>
+                    Continue with Apple
+                  </button>
+                )}
+                <div className="flex items-center gap-3 text-gray-600 text-xs py-1"><div className="flex-1 h-px bg-white/10" />or use your mobile<div className="flex-1 h-px bg-white/10" /></div>
+              </div>
+            )
             )}
             {/* Toggle */}
             <div className="flex gap-2 p-1 bg-black/30 rounded-lg">
@@ -3465,6 +3580,7 @@ export default function PuntingClub() {
               </div>
             )}
 
+            {!oauthPending && (
             <div className="border-t border-white/5 pt-3 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-brand-300 mb-1">Password *</label>
@@ -3481,6 +3597,7 @@ export default function PuntingClub() {
                 )}
               </div>
             </div>
+            )}
 
             <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-xs text-gray-300">
               <strong className="text-brand-300">Buy-in:</strong> $1,000 per team {signupMode === 'join' && '· Joining requests are approved by the captain'}

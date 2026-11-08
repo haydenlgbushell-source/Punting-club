@@ -80,6 +80,8 @@ export const apiResetPassword  = (phone)         => call('auth', { action: 'rese
 export const apiVerifySession  = (userId)        => call('auth', { action: 'verify_session', userId });
 export const apiAdminLogin     = (id, password)  => call('auth', { action: 'admin_login', id, password });
 export const apiUpdateProfile  = (userId, updates) => call('auth', { action: 'update_profile', userId, ...updates });
+export const apiOAuthStatus    = ()        => call('auth', { action: 'oauth_status' });
+export const apiOAuthRegister  = (payload) => call('auth', { action: 'oauth_register', ...payload });
 export const apiChangePassword = (userId, currentPassword, newPassword) => call('auth', { action: 'change_password', userId, currentPassword, newPassword });
 
 // ── COMPETITIONS ─────────────────────────────────────────────
