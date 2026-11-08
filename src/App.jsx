@@ -3198,6 +3198,11 @@ export default function PuntingClub() {
             <div>
               <label className="block text-xs font-semibold text-brand-700 mb-1.5">Password</label>
               <PasswordInput required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} autoComplete="current-password" className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-brand-500/50 placeholder-slate-400" placeholder="Your password" />
+              <a
+                href={`https://wa.me/61419163012?text=${encodeURIComponent(`Hi, I've forgotten my Punting Club password. My mobile is ${loginPhone || '[your mobile]'}.`)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="inline-block mt-1.5 text-xs font-semibold text-brand-700 hover:underline"
+              >Forgot password? Message us on WhatsApp</a>
             </div>
             <button type="submit" disabled={apiLoading} className="w-full bg-gold-500 hover:bg-gold-400 text-brand-950 font-bold py-2.5 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">{apiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Log In'}</button>
             <div className="text-center">
