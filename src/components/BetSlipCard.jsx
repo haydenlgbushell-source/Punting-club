@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { betStatus } from '../lib/betMath.js';
 
 // Barlow Condensed — sports-display font (loaded via Google Fonts in index.html)
 const BC = "'Barlow Condensed', 'Inter', sans-serif";
@@ -25,23 +26,21 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const pendCount = legs.filter(l => l.status === 'pending').length;
   const totalLegs = legs.length;
 
-  const status = totalLegs === 0 ? (bet.overallStatus || 'pending')
-    : liveCount > 0                       ? 'in_progress'
-    : pendCount > 0                       ? 'pending'
-    : lostCount > 0 && wonCount > 0       ? 'partial'
-    : lostCount > 0                       ? 'lost'
-    :                                       'won';
+  // Shared rules: one lost leg busts the bet; all-void is refunded; won + void
+  // legs pay at reduced odds (actualReturn comes from the server).
+  const status = betStatus(legs, bet.overallStatus);
 
   const allWon         = status === 'won';
   const estimatedReturn = bet.estimatedReturn || bet.return || 'N/A';
-  const payoutValue    = status === 'lost' ? '$0.00' : estimatedReturn;
-  const payoutLabel    = allWon ? 'WINNINGS' : 'POTENTIAL';
+  const settledValue   = bet.actualReturn || estimatedReturn;
+  const payoutValue    = status === 'lost' ? '$0.00' : (status === 'won' || status === 'void') ? settledValue : estimatedReturn;
+  const payoutLabel    = allWon ? (bet.returnReduced ? 'WINNINGS (VOID LEG)' : 'WINNINGS') : status === 'void' ? 'REFUND' : 'POTENTIAL';
   const payoutColor    = allWon ? '#22c55e' : status === 'lost' ? '#ef4444' : '#94a3b8';
 
-  const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
-  const titleColor = allWon ? '#16a34a' : status === 'lost' ? '#dc2626' : status === 'partial' ? '#ca8a04' : '#0d9488';
-  const cardBorder = allWon ? '#22c55e66' : status === 'lost' ? '#ef444466' : status === 'partial' ? '#eab30866' : status === 'in_progress' ? '#f9731666' : '#cbd5e1';
-  const cardBg     = allWon ? '#f0fdf4' : status === 'lost' ? '#fef2f2' : status === 'partial' ? '#fffbeb' : status === 'in_progress' ? '#fff7ed' : '#ffffff';
+  const titleText  = allWon ? 'WINNER!' : status === 'lost' ? 'BUST' : status === 'void' ? 'REFUNDED' : status === 'in_progress' ? 'LIVE' : 'PENDING';
+  const titleColor = allWon ? '#16a34a' : status === 'lost' ? '#dc2626' : status === 'void' ? '#ca8a04' : '#0d9488';
+  const cardBorder = allWon ? '#22c55e66' : status === 'lost' ? '#ef444466' : status === 'void' ? '#eab30866' : status === 'in_progress' ? '#f9731666' : '#cbd5e1';
+  const cardBg     = allWon ? '#f0fdf4' : status === 'lost' ? '#fef2f2' : status === 'void' ? '#fffbeb' : status === 'in_progress' ? '#fff7ed' : '#ffffff';
 
   return (
     <div style={{ border: `1px solid ${cardBorder}`, background: cardBg, borderRadius: 16, overflow: 'hidden' }}>

@@ -29,6 +29,8 @@ import {
   apiGenerateRecap, apiTriggerResultsCheck, postWithAuth,
 } from './api.js';
 import { buildSlipPrompt } from './lib/slipPrompt.js';
+import { betStatus } from './lib/betMath.js';
+import { nextCutoff } from './lib/auTime.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -573,16 +575,8 @@ export default function PuntingClub() {
     catch (err) { showToast(`Failed to update deposit: ${err.message}`, 'error'); }
   };
 
-  // Next Wednesday 12:00 AEST cutoff from now (for display)
-  const nextWedCutoff = (() => {
-    const AEST = 10 * 60 * 60 * 1000;
-    let d = new Date(Date.now() + AEST);
-    d.setUTCHours(12, 0, 0, 0);
-    const daysToWed = (3 - d.getUTCDay() + 7) % 7;
-    d = new Date(d.getTime() + daysToWed * 86400000);
-    if (d.getTime() <= Date.now() + AEST) d = new Date(d.getTime() + 7 * 86400000);
-    return new Date(d.getTime() - AEST); // back to real UTC for display
-  })();
+  // Next Wednesday 12:00 midday cutoff (Sydney time, daylight-saving aware)
+  const nextWedCutoff = nextCutoff();
 
   // ── LEADERBOARD REFRESH ───────────────────────────────────────────────────
   const LEADERBOARD_COLORS = ['from-yellow-400 to-yellow-600','from-gray-300 to-gray-500','from-amber-600 to-amber-800','from-brand-500 to-brand-700','from-brand-500 to-brand-700','from-brand-500 to-brand-700','from-brand-500 to-brand-700','from-brand-500 to-brand-700'];
@@ -594,6 +588,8 @@ export default function PuntingClub() {
     bets: (t.bets || []).map(b => ({
       id: b.id, type: b.bet_type, stake: `$${((b.stake||0)/100).toFixed(2)}`, combinedOdds: b.combined_odds,
       estimatedReturn: `$${((b.estimated_return||0)/100).toFixed(2)}`, overallStatus: b.overall_status,
+      // Actual gross return (reduced for void legs; stake back if all void) from the server's shared rules
+      actualReturn: `$${((b.actual_return ?? 0)/100).toFixed(2)}`, returnReduced: !!b.return_reduced,
       weekNumber: b.week_number,
       submittedAt: new Date(b.submitted_at).toLocaleString(),
       submittedBy: b.submitted_by_name || null,
@@ -1239,13 +1235,8 @@ export default function PuntingClub() {
   // Share a bet slip via Web Share API or clipboard fallback
   const shareBet = async (bet) => {
     const statusLabel = (() => {
-      const legs = bet.legs || [];
-      if (!legs.length) return (bet.overallStatus || 'pending').toUpperCase();
-      if (legs.some(l => l.status === 'in_progress')) return 'LIVE';
-      if (legs.every(l => l.status === 'won'))  return '✅ WON';
-      if (legs.some(l => l.status === 'lost'))  return '❌ LOST';
-      if (legs.some(l => l.status === 'pending')) return '⏳ PENDING';
-      return '⚡ PARTIAL';
+      const st = betStatus(bet.legs, bet.overallStatus);
+      return { won: '✅ WON', lost: '❌ LOST', void: '↩️ REFUNDED', in_progress: 'LIVE', pending: '⏳ PENDING' }[st] || st.toUpperCase();
     })();
     const legsText = (bet.legs || []).map((l, i) =>
       `  ${i + 1}. ${l.selection}${l.market ? ` (${l.market})` : ''} @ ${l.odds}${l.status && l.status !== 'pending' ? ` — ${l.status.toUpperCase()}` : ''}`

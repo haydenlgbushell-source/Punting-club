@@ -38,21 +38,6 @@ export const validatePhone = (raw) => {
   return { valid: false, normalised: null };
 };
 
-// Calculate which competition week we are in.
-// Week boundaries are Wednesday 12:00 AEST — same logic used on frontend and backend.
-export const calcCurrentWeek = (startDate) => {
-  if (!startDate) return 1;
-  const AEST = 10 * 60 * 60 * 1000; // UTC+10 in ms
-  const nowAEST   = Date.now() + AEST;
-  const startAEST = new Date(startDate).getTime() + AEST;
-
-  // First Wednesday 12:00 AEST strictly after startAEST
-  let boundary = new Date(startAEST);
-  boundary.setUTCHours(12, 0, 0, 0);
-  const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
-  boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-  if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-
-  if (nowAEST < boundary.getTime()) return 1;
-  return Math.floor((nowAEST - boundary.getTime()) / (7 * 86400000)) + 2;
-};
+// Competition weeks (Wednesday 12:00 midday cutoff, daylight-saving aware)
+// live in ./lib/auTime.js so the server uses exactly the same rule.
+export { calcCurrentWeek } from './lib/auTime.js';

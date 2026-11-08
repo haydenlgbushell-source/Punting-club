@@ -1,4 +1,5 @@
 import React from 'react';
+import { CUTOFF_TEXT } from '../../lib/auTime.js';
 import { HelpCircle, Sparkles, FileText, Trophy, Users, DollarSign, Settings2, ChevronDown, ChevronLeft } from 'lucide-react';
 
 const FaqView = ({ navHistory, goBack, navigateTo }) => (
@@ -36,7 +37,7 @@ const FaqView = ({ navHistory, goBack, navigateTo }) => (
           items: [
             { q: 'How do I submit a bet?', a: 'Go to the Leaderboard page and tap "Submit Bet". Upload a screenshot of your bet slip from your bookmaker. Our AI will read the slip and extract all the details automatically.' },
             { q: 'What is the weekly bet limit?', a: 'The weekly bet limit is set by your competition host. Your team can split that limit across multiple individual bets — you are not limited to one multi per week.' },
-            { q: 'When is the deadline to submit a bet?', a: 'You must submit your bet before the first leg (event) starts. The competition week runs Wednesday 12:00 AM to Tuesday 11:59 PM AEST. Late submissions will not be accepted.' },
+            { q: 'When is the deadline to submit a bet?', a: `You must submit your bet before the first leg (event) starts. Each competition week closes at ${CUTOFF_TEXT} and the next week starts straight away. Late submissions will not be accepted.` },
             { q: 'Can I bet on any sport?', a: 'Yes — any sport or racing, on any bookmaker platform you choose. Just upload the bet slip screenshot after placing the bet.' },
             { q: 'Do I keep my winnings?', a: 'Yes! Any money you win from your bets is yours to keep. The jackpot prize pool is separate — it is funded by the buy-in amounts and awarded to the top teams at season end.' },
           ],

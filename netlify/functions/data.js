@@ -6,6 +6,8 @@ const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isEnum, isString, isPositiveInt, isPositiveFloat, sanitizeUpdates } = require('./validate');
 const { corsHeaders, bearerToken, verifyAdminToken, triggerInternal } = require('./security');
 const { overallFromLegs } = require('./lib/settle');
+const { betStatus, betReturn, STATUS_SHORT } = require('../../src/lib/betMath.js');
+const { weekAt } = require('../../src/lib/auTime.js');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -802,34 +804,10 @@ exports.handler = async (event) => {
 
         const currentWeek = payload.currentWeek || 1;
 
-        // Derive which competition week a bet belongs to from its upload timestamp.
-        // Wednesday 12:00 AEST marks the boundary between weeks — same logic as the frontend.
-        const calcWeekFromTimestamp = (submittedAt, compStartDate) => {
-          if (!submittedAt || !compStartDate) return null;
-          const AEST = 10 * 60 * 60 * 1000;
-          const submittedAEST = new Date(submittedAt).getTime() + AEST;
-          const startAEST    = new Date(compStartDate).getTime() + AEST;
-          let boundary = new Date(startAEST);
-          boundary.setUTCHours(12, 0, 0, 0);
-          const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
-          boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-          if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-          if (submittedAEST < boundary.getTime()) return 1;
-          return Math.floor((submittedAEST - boundary.getTime()) / (7 * 86400000)) + 2;
-        };
-
-        // Compute overall_status from actual leg statuses — keeps display in sync
-        // even if the DB overall_status column hasn't been written yet
-        const deriveLegStatus = (legs) => {
-          if (!legs?.length) return 'pending';
-          const settled = ['won', 'lost', 'void'];
-          if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-          if (legs.some(l => l.status === 'pending'))     return 'pending';
-          if (!legs.every(l => settled.includes(l.status))) return 'pending';
-          if (legs.every(l => l.status === 'won'))  return 'won';
-          if (legs.some(l => l.status === 'lost'))  return 'lost';
-          return 'partial'; // all void or mixed won/void
-        };
+        // A bet's week comes from its upload time: weeks roll over every Wednesday
+        // 12:00 midday Sydney time (DST-aware) — same rule as the app (src/lib/auTime.js).
+        const calcWeekFromTimestamp = (submittedAt, compStartDate) =>
+          (submittedAt && compStartDate) ? weekAt(new Date(submittedAt).getTime(), compStartDate) : null;
 
         const ranked = data
           .map(team => {
@@ -852,21 +830,23 @@ exports.handler = async (event) => {
                   : (b.week_number || 1),
                 // Attach submitter's name from team members lookup
                 submitted_by_name: b.submitted_by ? (memberNameMap[b.submitted_by] || null) : null,
-                // Re-derive status from legs so it's always accurate
-                overall_status: b.bet_legs?.length ? deriveLegStatus(b.bet_legs) : (b.overall_status || 'pending'),
+                // Re-derive status from legs so it's always accurate (shared rules)
+                overall_status: betStatus(b.bet_legs, b.overall_status || 'pending'),
+                // Actual gross return in cents: reduced for void legs, stake back if all void
+                actual_return: betReturn(b).returnCents,
+                return_reduced: betReturn(b).reducedForVoids,
                 // Sort legs by leg_number
                 bet_legs: (b.bet_legs || []).slice().sort((a, b) => (a.leg_number || 0) - (b.leg_number || 0)),
               }))
               .sort((a, b) => (b.week_number || 0) - (a.week_number || 0));
 
-            const wonBets  = sortedBets.filter(b => b.overall_status === 'won');
-            const totalWon = wonBets.reduce((sum, b) => sum + (b.estimated_return || 0), 0);
+            const totalWon = sortedBets.reduce((sum, b) => sum + (b.actual_return || 0), 0);
             const weekBet  = sortedBets.find(b => b.week_number === currentWeek);
             const weekHistory = Array.from({ length: currentWeek - 1 }, (_, i) => {
               const wb = sortedBets.find(b => b.week_number === i + 1);
-              return wb?.overall_status === 'won' ? 'W' : wb?.overall_status === 'lost' ? 'L' : wb?.overall_status === 'partial' ? 'P' : '–';
+              return STATUS_SHORT[wb?.overall_status] || '–';
             });
-            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString()}`, memberCount, currentWeekBet: weekBet || null, weekHistory };
+            return { ...team, bets: sortedBets, totalWon, totalWonFormatted: `$${(totalWon / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, memberCount, currentWeekBet: weekBet || null, weekHistory };
           })
           .sort((a, b) => b.totalWon - a.totalWon)
           .map((team, i) => ({ ...team, rank: i + 1 }));

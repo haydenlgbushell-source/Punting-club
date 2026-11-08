@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCutoff } from '../../lib/auTime.js';
 import { Trophy, XCircle, Clock, ChevronLeft } from 'lucide-react';
 import SwitcherDropdown from '../SwitcherDropdown.jsx';
 import WeeklyRecapCard from '../WeeklyRecapCard.jsx';
@@ -25,12 +26,12 @@ const WeeklySummaryView = () => {
   const prevBetsSubmitted = prevWeekData.filter(d => d.bet);
   const prevWinners       = prevBetsSubmitted.filter(d => d.bet.overallStatus === 'won');
   const prevLosers        = prevBetsSubmitted.filter(d => d.bet.overallStatus === 'lost');
-  const prevPending       = prevBetsSubmitted.filter(d => !['won', 'lost', 'partial'].includes(d.bet.overallStatus));
+  const prevPending       = prevBetsSubmitted.filter(d => !['won', 'lost', 'void'].includes(d.bet.overallStatus));
   const prevSettledCount  = prevWinners.length + prevLosers.length;
   const prevWinRate       = prevSettledCount > 0 ? Math.round((prevWinners.length / prevSettledCount) * 100) : null;
 
   const bestPrevWin = prevWinners
-    .sort((a, b) => parseFloat((b.bet.estimatedReturn || '0').replace(/[^0-9.]/g, '')) - parseFloat((a.bet.estimatedReturn || '0').replace(/[^0-9.]/g, '')))[0];
+    .slice().sort((a, b) => parseFloat((b.bet.actualReturn || b.bet.estimatedReturn || '0').replace(/[^0-9.]/g, '')) - parseFloat((a.bet.actualReturn || a.bet.estimatedReturn || '0').replace(/[^0-9.]/g, '')))[0];
 
   const myPrevData = prevWeekData.find(d => d.isMyTeam);
 
@@ -38,7 +39,7 @@ const WeeklySummaryView = () => {
     (t.bets || []).filter(b => b.weekNumber === thisWeek)
   );
   const teamsNoBet = leaderboardTeams.filter(t => !(t.bets || []).some(b => b.weekNumber === thisWeek));
-  const cutoffStr  = nextWedCutoff.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+  const cutoffStr  = formatCutoff(nextWedCutoff);
 
   const totalWinnings = leaderboardTeams.reduce((sum, t) => sum + parseFloat((t.total || '$0').replace(/[^0-9.]/g, '')) || 0, 0);
   const leader = leaderboardTeams[0];
@@ -115,12 +116,12 @@ const WeeklySummaryView = () => {
                       <>
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`text-2xl font-black ${myPrevData.bet.overallStatus === 'won' ? 'text-green-400' : myPrevData.bet.overallStatus === 'lost' ? 'text-red-400' : 'text-brand-600'}`}>
-                            {myPrevData.bet.overallStatus === 'won' ? 'WON!' : myPrevData.bet.overallStatus === 'lost' ? 'Lost' : myPrevData.bet.overallStatus === 'partial' ? 'Partial' : 'Pending'}
+                            {myPrevData.bet.overallStatus === 'won' ? 'WON!' : myPrevData.bet.overallStatus === 'lost' ? 'Lost' : myPrevData.bet.overallStatus === 'void' ? 'Refunded' : 'Pending'}
                           </span>
                         </div>
                         <p className="text-sm text-slate-700">
                           {myPrevData.bet.type} · Stake: <span className="text-slate-900 font-semibold">{myPrevData.bet.stake}</span>
-                          {myPrevData.bet.overallStatus === 'won' && <> · Return: <span className="text-green-400 font-bold">{myPrevData.bet.estimatedReturn}</span></>}
+                          {myPrevData.bet.overallStatus === 'won' && <> · Return: <span className="text-green-400 font-bold">{myPrevData.bet.actualReturn || myPrevData.bet.estimatedReturn}</span></>}
                           {myPrevData.bet.submittedBy && <> · Placed by <span className="text-brand-600">{myPrevData.bet.submittedBy}</span></>}
                         </p>
                         {(myPrevData.bet.legs || []).length > 0 && (

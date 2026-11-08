@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { betStatus } from '../../lib/betMath.js';
+import { formatCutoff } from '../../lib/auTime.js';
 import { Trophy, Users, ChevronLeft, Clock, Crown, ChevronDown } from 'lucide-react';
 import Badge from '../Badge.jsx';
 import LegDot from '../LegDot.jsx';
@@ -77,22 +79,13 @@ const LeaderboardView = () => {
     return Math.max(...enrichedLeaderboardTeams.map(t => parseCurrency(t.total)));
   }, [enrichedLeaderboardTeams]);
 
-  const getComputedStatus = (weekBet) => {
-    const legs = weekBet?.legs || [];
-    if (!legs.length) return weekBet?.overallStatus || 'pending';
-    if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-    if (legs.some(l => l.status === 'pending')) return 'pending';
-    if (!legs.every(l => ['won', 'lost', 'void'].includes(l.status))) return 'pending';
-    if (legs.every(l => l.status === 'won')) return 'won';
-    if (legs.some(l => l.status === 'lost')) return 'lost';
-    return 'partial';
-  };
+  const getComputedStatus = (weekBet) => betStatus(weekBet?.legs, weekBet?.overallStatus);
 
   const getRowBg = (isMe, computedStatus) => {
     if (isMe) return 'border-brand-500/40 bg-brand-500/5';
     if (computedStatus === 'won') return 'border-green-500/20 bg-green-50';
     if (computedStatus === 'lost') return 'border-red-500/20 bg-red-50';
-    if (computedStatus === 'partial' || computedStatus === 'in_progress') return 'border-brand-200 bg-brand-50';
+    if (computedStatus === 'void' || computedStatus === 'in_progress') return 'border-brand-200 bg-brand-50';
     return 'border-gray-200 bg-white';
   };
 
@@ -102,7 +95,7 @@ const LeaderboardView = () => {
     const total = comp?.weeks || '—';
     return `Week ${wk} of ${total}`;
   })();
-  const cutoffLabel = nextWedCutoff.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+  const cutoffLabel = formatCutoff(nextWedCutoff);
 
   return (
     <section className="pt-28 pb-16 px-0 sm:px-0">
@@ -119,7 +112,7 @@ const LeaderboardView = () => {
             <h1 className="text-3xl font-black mb-1">Live Leaderboard</h1>
             <p className="text-slate-500 text-sm flex items-center gap-1.5 flex-wrap">
               {weekLabel} · <Countdown to={nextWedCutoff} />
-              <span className="text-slate-400">(Wed 12:00 AEST, {cutoffLabel})</span>
+              <span className="text-slate-400">(closes {cutoffLabel})</span>
             </p>
             {lastChecked && (
               <p className="text-slate-400 text-xs mt-0.5" title={resultLog.slice(0, 3).map(l => `${l.time} — ${l.message}`).join('\n')}>
@@ -194,22 +187,23 @@ const LeaderboardView = () => {
             const isMe = isLoggedIn && team.team === myTeamName;
             const currentWeek = currentWeekNum + 1;
             const weekBet = team.bets.find(b => b.weekNumber === currentWeek) || null;
-            const isOpen = selectedTeamIdx === idx;
+            const rowId = team.id || idx;
+            const isOpen = selectedTeamIdx === rowId;
             const computedStatus = getComputedStatus(weekBet);
             const rowBg = getRowBg(isMe, computedStatus);
             const teamTotal = parseCurrency(team.total);
             const behind = leaderTotal - teamTotal;
 
             return (
-              <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-brand-400/30' : ''}`}>
+              <div key={rowId} className={`rounded-xl border overflow-hidden transition-all ${rowBg} ${isMe ? 'ring-1 ring-brand-400/30' : ''}`}>
 
                 {/* ── MOBILE CARD (shown below md) ── */}
                 <div
                   className="md:hidden cursor-pointer active:bg-gray-100/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                   role="button" tabIndex={0} aria-expanded={isOpen}
                   aria-label={`${team.team}, rank ${team.rank}, ${team.total}. Tap to ${isOpen ? 'collapse' : 'expand'} details`}
-                  onClick={() => toggleRow(idx)}
-                  onKeyDown={(e) => rowKeyDown(e, idx)}
+                  onClick={() => toggleRow(rowId)}
+                  onKeyDown={(e) => rowKeyDown(e, rowId)}
                 >
                   {/* Top row: rank, name, total */}
                   <div className="flex items-center gap-2.5 px-3 pt-3 pb-1">
@@ -256,8 +250,8 @@ const LeaderboardView = () => {
                   className="hidden md:grid grid-cols-12 gap-2 items-center px-3 py-3 cursor-pointer hover:bg-gray-100/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded-lg"
                   role="button" tabIndex={0} aria-expanded={isOpen}
                   aria-label={`${team.team}, rank ${team.rank}, ${team.total}. Activate to ${isOpen ? 'collapse' : 'expand'} details`}
-                  onClick={() => toggleRow(idx)}
-                  onKeyDown={(e) => rowKeyDown(e, idx)}
+                  onClick={() => toggleRow(rowId)}
+                  onKeyDown={(e) => rowKeyDown(e, rowId)}
                 >
                   <div className="col-span-1">
                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${team.color} flex items-center justify-center font-black text-white text-sm`}>{team.rank}</div>
@@ -287,7 +281,7 @@ const LeaderboardView = () => {
                           <span className="text-slate-500 text-xs">·</span>
                           <span className="text-green-600 text-xs font-semibold">{weekBet.stake}</span>
                           <span className="text-slate-500 text-xs">/</span>
-                          <span className="text-green-600 text-xs font-bold">{weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
+                          <span className="text-green-600 text-xs font-bold">{(['won','void'].includes(computedStatus) && weekBet.actualReturn) || weekBet.estimatedReturn || weekBet.return || 'N/A'}</span>
                           {weekBet.legs?.length > 0 && (
                             <div className="flex gap-1 flex-wrap">
                               {weekBet.legs.map((leg, li) => <LegDot key={li} leg={leg} />)}

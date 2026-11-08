@@ -20,7 +20,7 @@
 
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 const MODEL     = process.env.SETTLER_MODEL || 'claude-haiku-4-5-20251001';
-const TZ        = process.env.APP_TIMEZONE || 'Australia/Sydney';
+const TZ        = process.env.APP_TIMEZONE || 'Australia/Sydney'; // used in prompts/search location
 const UNSETTLED = ['pending', 'in_progress'];
 const SETTLED   = ['won', 'lost', 'void'];
 const VERSION   = 'v10-facts-evidence';
@@ -37,34 +37,9 @@ const DELAYS = {
   default: [3 * HOUR, 12 * HOUR, 24 * HOUR],
 };
 
-// ── Time helpers (DST-correct via Intl) ─────────────────────────────────────
-
-function tzOffsetMinutes(utcMs, timeZone) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
-  const p = Object.fromEntries(dtf.formatToParts(new Date(utcMs)).map(x => [x.type, x.value]));
-  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
-  return Math.round((asUtc - utcMs) / 60000);
-}
-
-// "2026-11-08" + "19:30" in Australia/Sydney → UTC epoch ms (handles AEDT/AEST).
-function zonedToUtcMs(dateStr, timeStr, timeZone = TZ) {
-  const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ''));
-  if (!d) return NaN;
-  const t = /^(\d{1,2}):(\d{2})/.exec(String(timeStr || '')) || [null, '0', '0'];
-  const guess = Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1], +t[2]);
-  const off1 = tzOffsetMinutes(guess, timeZone);
-  let utc = guess - off1 * 60000;
-  const off2 = tzOffsetMinutes(utc, timeZone);
-  if (off2 !== off1) utc = guess - off2 * 60000;
-  return utc;
-}
-
-function todayInTz(now = new Date(), timeZone = TZ) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-}
+// ── Time helpers (shared with the app; DST-correct) ─────────────────────────
+const { zonedToUtcMs, todayInTz } = require('../../../src/lib/auTime.js');
+const { storedOverallStatus } = require('../../../src/lib/betMath.js');
 
 function daysApart(a, b) {
   const ta = Date.parse(`${String(a).slice(0, 10)}T00:00:00Z`);
@@ -494,17 +469,9 @@ function makeDb(supabase, log) {
   return { updateLeg, getCached, putCached };
 }
 
-function overallFromLegs(legs) {
-  if (!legs.length) return 'pending';
-  const allDone = legs.every(l => SETTLED.includes(l.status));
-  if (allDone) {
-    if (legs.every(l => l.status === 'won')) return 'won';
-    if (legs.some(l => l.status === 'lost')) return 'lost';
-    return 'partial';
-  }
-  if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-  return 'pending';
-}
+// Stored bets.overall_status, using the shared rules (lost leg busts a multi;
+// all-void is stored as 'partial').
+const overallFromLegs = (legs) => storedOverallStatus(legs);
 
 // ── Main entry point ────────────────────────────────────────────────────────
 

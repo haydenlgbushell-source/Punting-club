@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { betStatus } from '../../lib/betMath.js';
 import { CheckCircle, AlertCircle, AlertTriangle, Clock, Users, Edit3, Share2, User, ChevronLeft, ChevronDown, Crown, DollarSign, BarChart3, History, Target, Sparkles } from 'lucide-react';
 import BetSlipCard from '../BetSlipCard.jsx';
 import PermissionBadge from '../PermissionBadge.jsx';
@@ -206,17 +207,9 @@ const MyTeamView = ({
               <div className="space-y-3">
                 {pastBets.map((bet, i) => {
                   const legs = bet.legs || [];
-                  const status = (() => {
-                    if (!legs.length) return bet.overallStatus || 'pending';
-                    if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-                    if (legs.some(l => l.status === 'pending'))     return 'pending';
-                    if (!legs.every(l => ['won', 'lost', 'void'].includes(l.status))) return 'pending';
-                    if (legs.every(l => l.status === 'won'))  return 'won';
-                    if (legs.some(l => l.status === 'lost'))  return 'lost';
-                    return 'partial';
-                  })();
-                  const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'partial' ? 'text-brand-600 bg-brand-500/15 border-brand-500/40' : 'text-slate-500 bg-gray-100 border-gray-300';
-                  const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'partial' ? 'PARTIAL' : status === 'in_progress' ? 'LIVE' : 'PENDING';
+                  const status = betStatus(legs, bet.overallStatus);
+                  const resultCls = status === 'won' ? 'text-green-400 bg-green-500/15 border-green-500/40' : status === 'lost' ? 'text-red-400 bg-red-500/15 border-red-500/40' : status === 'void' ? 'text-brand-600 bg-brand-500/15 border-brand-500/40' : 'text-slate-500 bg-gray-100 border-gray-300';
+                  const resultLabel = status === 'won' ? 'WON' : status === 'lost' ? 'LOST' : status === 'void' ? 'REFUNDED' : status === 'in_progress' ? 'LIVE' : 'PENDING';
                   const isExpanded = expandedPastBet === (bet.id || i);
                   return (
                     <div key={bet.id || i} className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
@@ -237,7 +230,7 @@ const MyTeamView = ({
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
                             <span className="text-slate-500 text-xs">Stake: <span className="text-slate-700">{bet.stake}</span></span>
-                            {status === 'won' && <span className="text-green-400 text-xs font-semibold">Return: {bet.estimatedReturn}</span>}
+                            {(status === 'won' || status === 'void') && <span className="text-green-400 text-xs font-semibold">{status === 'void' ? 'Refund' : 'Return'}: {bet.actualReturn || bet.estimatedReturn}{bet.returnReduced ? ' (void leg)' : ''}</span>}
                             <span className="text-slate-400 text-xs">{bet.submittedAt}</span>
                           </div>
                         </div>

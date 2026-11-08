@@ -1,6 +1,6 @@
 // netlify/functions/generate-recap-background.js
-// Scheduled background function — runs every Wednesday 04:00 UTC (14:00 AEST),
-// 2 hours after the Wed 12:00 AEST betting deadline.
+// Background function — triggered every Wednesday 04:00 UTC (14:00 AEST /
+// 15:00 AEDT), after the Wednesday 12:00 midday betting cutoff.
 // Generates AI-powered weekly recaps for each active competition.
 
 const { createClient } = require('@supabase/supabase-js');
@@ -8,44 +8,13 @@ const { isInternalCall } = require('./security');
 
 const VERSION = 'v1-weekly-recap';
 
-const AEST_OFFSET_MS = 10 * 60 * 60 * 1000;
+// Shared with the app: Wednesday 12:00 midday Sydney cutoff (DST-aware) and the
+// bet status / payout rules (void legs reduce the return, all-void refunds).
+const { weekAt, calcCurrentWeek } = require('../../src/lib/auTime.js');
+const { betStatus, betReturn } = require('../../src/lib/betMath.js');
 
-function calcCurrentWeek(startDate) {
-  if (!startDate) return 1;
-  const nowAEST   = Date.now() + AEST_OFFSET_MS;
-  const startAEST = new Date(startDate).getTime() + AEST_OFFSET_MS;
-  let boundary = new Date(startAEST);
-  boundary.setUTCHours(12, 0, 0, 0);
-  const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
-  boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-  if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-  if (nowAEST < boundary.getTime()) return 1;
-  return Math.floor((nowAEST - boundary.getTime()) / (7 * 86400000)) + 2;
-}
-
-function calcWeekFromTimestamp(submittedAt, compStartDate) {
-  if (!submittedAt || !compStartDate) return null;
-  const submittedAEST = new Date(submittedAt).getTime() + AEST_OFFSET_MS;
-  const startAEST     = new Date(compStartDate).getTime() + AEST_OFFSET_MS;
-  let boundary = new Date(startAEST);
-  boundary.setUTCHours(12, 0, 0, 0);
-  const daysToWed = (3 - boundary.getUTCDay() + 7) % 7;
-  boundary = new Date(boundary.getTime() + daysToWed * 86400000);
-  if (boundary.getTime() <= startAEST) boundary = new Date(boundary.getTime() + 7 * 86400000);
-  if (submittedAEST < boundary.getTime()) return 1;
-  return Math.floor((submittedAEST - boundary.getTime()) / (7 * 86400000)) + 2;
-}
-
-function deriveLegStatus(legs) {
-  if (!legs?.length) return 'pending';
-  if (legs.some(l => l.status === 'in_progress')) return 'in_progress';
-  if (legs.some(l => l.status === 'pending'))     return 'pending';
-  const settled = ['won', 'lost', 'void'];
-  if (!legs.every(l => settled.includes(l.status))) return 'pending';
-  if (legs.every(l => l.status === 'won'))  return 'won';
-  if (legs.some(l => l.status === 'lost'))  return 'lost';
-  return 'partial';
-}
+const calcWeekFromTimestamp = (submittedAt, compStartDate) =>
+  (submittedAt && compStartDate) ? weekAt(new Date(submittedAt).getTime(), compStartDate) : null;
 
 function formatCents(cents) {
   return '$' + (cents / 100).toLocaleString('en-AU', { minimumFractionDigits: 2 });
@@ -77,7 +46,7 @@ ${weekData.map(d => {
   if (!d.bet) return `• ${d.teamName}: No bet submitted`;
   const status = d.bet.overall_status;
   const legs = (d.bet.bet_legs || []).map(l => `${l.selection} (${l.status})`).join(', ');
-  return `• ${d.teamName}: ${status.toUpperCase()} — ${d.bet.bet_type} @ ${d.bet.combined_odds || '?'} odds — Stake ${formatCents(d.bet.stake)} → Return ${formatCents(d.bet.estimated_return)} — Legs: ${legs}`;
+  return `• ${d.teamName}: ${status.toUpperCase()} — ${d.bet.bet_type} @ ${d.bet.combined_odds || '?'} odds — Stake ${formatCents(d.bet.stake)} → Return ${formatCents(d.bet.overall_status === 'won' ? d.bet.actual_return : d.bet.estimated_return)} — Legs: ${legs}`;
 }).join('\n')}
 
 SEASON STANDINGS (after Week ${weekNumber}):
@@ -202,12 +171,12 @@ exports.handler = async (event) => {
           week_number: comp.start_date && b.submitted_at
             ? calcWeekFromTimestamp(b.submitted_at, comp.start_date)
             : (b.week_number || 1),
-          overall_status: b.bet_legs?.length ? deriveLegStatus(b.bet_legs) : (b.overall_status || 'pending'),
+          overall_status: betStatus(b.bet_legs, b.overall_status || 'pending'),
+          actual_return: betReturn(b).returnCents,
           bet_legs: (b.bet_legs || []).sort((a, b) => (a.leg_number || 0) - (b.leg_number || 0)),
         }));
 
-        const wonBets  = bets.filter(b => b.overall_status === 'won');
-        const totalWon = wonBets.reduce((sum, b) => sum + (b.estimated_return || 0), 0);
+        const totalWon = bets.reduce((sum, b) => sum + (b.actual_return || 0), 0);
         const weekBet  = bets.find(b => b.week_number === recapWeek) || null;
 
         return { teamName: team.team_name, bets, totalWon, bet: weekBet };
@@ -225,7 +194,7 @@ exports.handler = async (event) => {
         .sort((a, b) => b.totalWon - a.totalWon);
 
       // Check if there are any settled bets to recap
-      const settledBets = weekData.filter(d => d.bet && ['won', 'lost', 'partial'].includes(d.bet.overall_status));
+      const settledBets = weekData.filter(d => d.bet && ['won', 'lost', 'void'].includes(d.bet.overall_status));
       if (settledBets.length === 0 && !manualCompId) {
         console.log(`[generate-recap] ${comp.name} Week ${recapWeek}: no settled bets yet, skipping`);
         continue;
@@ -235,7 +204,7 @@ exports.handler = async (event) => {
       const winners = weekData.filter(d => d.bet?.overall_status === 'won');
       const losers  = weekData.filter(d => d.bet?.overall_status === 'lost');
       const noBet   = weekData.filter(d => !d.bet);
-      const biggestWin = winners.sort((a, b) => (b.bet.estimated_return || 0) - (a.bet.estimated_return || 0))[0] || null;
+      const biggestWin = winners.slice().sort((a, b) => (b.bet.actual_return || 0) - (a.bet.actual_return || 0))[0] || null;
       const totalPot = seasonStandings.reduce((sum, t) => sum + t.totalWon, 0);
 
       const stats = {
@@ -243,7 +212,7 @@ exports.handler = async (event) => {
         losers:     losers.length,
         noBet:      noBet.length,
         winRate:    settledBets.length > 0 ? Math.round((winners.length / settledBets.length) * 100) : null,
-        biggestWin: biggestWin ? { team: biggestWin.teamName, amount: biggestWin.bet.estimated_return } : null,
+        biggestWin: biggestWin ? { team: biggestWin.teamName, amount: biggestWin.bet.actual_return } : null,
         totalPot,
         leader:     seasonStandings[0] || null,
       };
