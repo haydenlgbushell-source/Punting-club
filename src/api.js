@@ -17,7 +17,9 @@ const writeTokens = (access, refresh) => {
   } catch { /* ignore */ }
 };
 
-const call = async (endpoint, payload, _retry = false) => {
+// POST with the user's access token, refreshing it once on a 401.
+// Returns the raw { res, data } so callers can handle non-standard error shapes.
+export const postWithAuth = async (endpoint, payload, _retry = false) => {
   const sess = readSession();
   const headers = { 'Content-Type': 'application/json' };
   if (sess.token && sess.token !== 'ok') headers.Authorization = `Bearer ${sess.token}`;
@@ -40,14 +42,24 @@ const call = async (endpoint, payload, _retry = false) => {
         const rData = await rRes.json();
         if (rData?.access_token) {
           writeTokens(rData.access_token, rData.refresh_token);
-          return call(endpoint, payload, true);
+          return postWithAuth(endpoint, payload, true);
         }
       }
     } catch { /* fall through to surface the original error */ }
   }
 
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`);
+  let data;
+  try { data = await res.json(); }
+  catch { data = { error: `Server error ${res.status}` }; }
+  return { res, data };
+};
+
+const call = async (endpoint, payload) => {
+  const { res, data } = await postWithAuth(endpoint, payload);
+  if (!res.ok || data.error) {
+    const msg = typeof data.error === 'string' ? data.error : data.error?.message;
+    throw new Error(msg || `API error ${res.status}`);
+  }
   return data;
 };
 
@@ -117,26 +129,4 @@ export const apiGetWeeklyRecap  = (competitionId, weekNumber) => call('data', { 
 export const apiGetLatestRecap  = (competitionId) => call('data', { action: 'get_latest_recap', competitionId });
 export const apiGetAllRecaps    = (competitionId) => call('data', { action: 'get_all_recaps', competitionId });
 export const apiGenerateRecap   = (competitionId, weekNumber, adminToken) => call('data', { action: 'generate_recap', competitionId, weekNumber, adminToken });
-export const apiTriggerResultsCheck = (adminToken) => call('data', { action: 'trigger_results_check', adminToken });
-
-// ── CLAUDE AI ────────────────────────────────────────────────
-export const apiAnalyseBetSlip = (imageData, mediaType) => call('claude', {
-  model: 'claude-haiku-4-5-20251001',
-  max_tokens: 1200,
-  messages: [{
-    role: 'user',
-    content: [
-      { type: 'text', text: `Analyse this bet slip image and return ONLY valid JSON:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"aiConfidence":95,"legs":[{"legNumber":1,"event":"Event","selection":"Selection","market":"Win","odds":"2.10","status":"pending"}]}\nRules: dollar signs on money, decimal odds, status in {pending,won,lost,void}, submissionValid=placed before first leg, aiConfidence=0-100. Return ONLY JSON.` },
-      { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } },
-    ],
-  }],
-});
-
-export const apiCheckBetResults = (legs) => call('claude', {
-  model: 'claude-haiku-4-5-20251001',
-  max_tokens: 500,
-  messages: [{
-    role: 'user',
-    content: `Today: ${new Date().toLocaleDateString('en-AU', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}.\n\nBet legs:\n${legs.map(l => `Leg ${l.leg_number}: ${l.selection} — ${l.event} — ${l.market} @ ${l.odds} — status: ${l.status}`).join('\n')}\n\nFor each pending leg determine if concluded. Return ONLY JSON array:\n[{"legId":"uuid","legNumber":1,"status":"won|lost|void|pending","result":"brief note"}]\nOnly settle if confident. Return all legs.`,
-  }],
-});
+export const apiTriggerResultsCheck = (adminToken, betId = null) => call('data', { action: 'trigger_results_check', adminToken, betId });

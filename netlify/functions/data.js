@@ -4,7 +4,8 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { isUUID, isEnum, isString, isPositiveInt, isPositiveFloat, sanitizeUpdates } = require('./validate');
-const { corsHeaders, bearerToken } = require('./security');
+const { corsHeaders, bearerToken, verifyAdminToken, triggerInternal } = require('./security');
+const { overallFromLegs } = require('./lib/settle');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -27,6 +28,28 @@ const isTeamCaptain = async (userId, teamId) => {
   if (team && team.captain_id === userId) return true;
   const { data: mem } = await supabase.from('team_members').select('role').eq('team_id', teamId).eq('user_id', userId).maybeSingle();
   return !!mem && mem.role === 'captain';
+};
+
+// The caller's membership row for a team (any role), or null.
+const getMembership = async (userId, teamId) => {
+  if (!userId || !teamId) return null;
+  const { data: team } = await supabase.from('teams').select('captain_id').eq('id', teamId).maybeSingle();
+  if (team && team.captain_id === userId) return { role: 'captain', can_bet: true };
+  const { data: mem } = await supabase.from('team_members').select('role, can_bet').eq('team_id', teamId).eq('user_id', userId).maybeSingle();
+  return mem || null;
+};
+
+// Remove phone numbers from member rows unless the caller may see them
+// (a member of that team, or an admin). Phone numbers are personal info.
+const stripPhones = (members) => (members || []).map(m => (
+  m && m.users ? { ...m, users: { ...m.users, phone: undefined } } : m
+));
+const canSeeTeamContacts = async (event, payload, teamId) => {
+  try { verifyAdminToken(payload.adminToken); return true; } catch (_) { /* not admin */ }
+  const actor = await getAuthUser(event);
+  if (!actor) return false;
+  const mem = await getMembership(actor.id, teamId);
+  return !!mem && mem.role !== 'pending';
 };
 
 exports.handler = async (event) => {
@@ -301,6 +324,7 @@ exports.handler = async (event) => {
           .select(`*, competitions(*), team_members(*, users(id, first_name, last_name, phone, kyc_status))`)
           .eq('id', teamId).single();
         if (e) return error(e.message);
+        if (!(await canSeeTeamContacts(event, payload, teamId))) data.team_members = stripPhones(data.team_members);
         return json(data);
       }
 
@@ -388,6 +412,7 @@ exports.handler = async (event) => {
           e    = res2.error;
         }
         if (e) return error(e.message);
+        if (!(await canSeeTeamContacts(event, payload, teamId))) data = stripPhones(data);
         return json(data);
       }
 
@@ -599,7 +624,16 @@ exports.handler = async (event) => {
       // ══════════════════════════════════════════════════════
 
       case 'submit_bet': {
-        const { teamId, weekNumber, betType, stake, combinedOdds, estimatedReturn, submissionValid, aiConfidence, legs, submittedBy } = payload;
+        const { teamId, weekNumber, betType, stake, combinedOdds, estimatedReturn, submissionValid, aiConfidence, legs } = payload;
+
+        // Authorise: only a signed-in team member who is allowed to bet may submit,
+        // and the submitter is always the caller (never taken from the request).
+        const actor = await getAuthUser(event);
+        if (!actor) return error('Please log in again to submit a bet.', 401);
+        if (isUUID(teamId) !== null) return error('Invalid team.');
+        const membership = await getMembership(actor.id, teamId);
+        if (!membership || membership.role === 'pending') return error('You are not a member of this team.', 403);
+        if (membership.role === 'view-only' || membership.can_bet === false) return error('You do not have betting rights in this team. Ask your captain.', 403);
 
         const stakeErr = isPositiveInt(stake, { max: 1_000_000, label: 'Stake' });
         if (stakeErr) return error(stakeErr);
@@ -631,24 +665,53 @@ exports.handler = async (event) => {
           overall_status:   'pending',
           submission_valid: submissionValid !== false,
           ai_confidence:    aiConfidence || null,
-          submitted_by:     submittedBy || null,
+          submitted_by:     actor.id,
           flagged:          !submissionValid,
         }).select().single();
         if (betError) return error(betError.message);
 
         if (legs?.length) {
-          const legRows = legs.map(leg => ({
+          const MARKET_TYPES = ['head_to_head', 'line', 'total', 'anytime_scorer', 'first_scorer', 'win', 'place', 'other'];
+          const str = (v, max = 120) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+          const intOrNull = (v) => { const n = parseInt(v, 10); return isNaN(n) ? null : n; };
+          const numOrNull = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+          const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null);
+          const timeOrNull = (v) => (/^\d{1,2}:\d{2}/.test(String(v || '')) ? String(v).slice(0, 5) : null);
+          const baseRows = legs.map((leg, i) => ({
             bet_id:     bet.id,
-            leg_number: leg.legNumber,
+            leg_number: intOrNull(leg.legNumber) || i + 1,
             event:      leg.event,
             selection:  leg.selection,
             market:     leg.market,
-            odds:       parseFloat(leg.odds) || null,
-            event_date: leg.eventDate || null,
-            start_time: leg.startTime || null,
+            odds:       numOrNull(leg.odds),
+            event_date: dateOrNull(leg.eventDate),
+            start_time: timeOrNull(leg.startTime),
             status:     'pending',
           }));
-          const { error: legsError } = await supabase.from('bet_legs').insert(legRows);
+          // Structured fields extracted from the slip (v2 migration). They let the
+          // settler search precisely and settle most markets in code.
+          const fullRows = baseRows.map((row, i) => {
+            const leg = legs[i];
+            const mt = String(leg.marketType || '').toLowerCase();
+            return {
+              ...row,
+              sport:         str(leg.sport, 40),
+              competition:   str(leg.competition),
+              home_team:     str(leg.homeTeam),
+              away_team:     str(leg.awayTeam),
+              market_type:   MARKET_TYPES.includes(mt) ? mt : null,
+              line:          numOrNull(leg.line),
+              player:        str(leg.player),
+              venue:         str(leg.venue),
+              race_number:   intOrNull(leg.raceNumber),
+              runner_number: intOrNull(leg.runnerNumber),
+            };
+          });
+          let { error: legsError } = await supabase.from('bet_legs').insert(fullRows);
+          if (legsError && /column|schema cache/i.test(legsError.message || '')) {
+            // v2 columns not migrated yet — store the basic fields.
+            ({ error: legsError } = await supabase.from('bet_legs').insert(baseRows));
+          }
           if (legsError) return error(legsError.message);
         }
 
@@ -683,8 +746,24 @@ exports.handler = async (event) => {
 
       case 'update_bet_leg': {
         const { legId, status, resultNote, adminRole } = payload;
-        const { data, error: e } = await supabase.from('bet_legs').update({ status, result_note: resultNote, updated_at: new Date().toISOString() }).eq('id', legId).select('*, bets(id, teams(team_name))').single();
+        const legStatusErr = isEnum(status, ['pending', 'in_progress', 'won', 'lost', 'void']);
+        if (legStatusErr) return error(`Invalid leg status. ${legStatusErr}`);
+        const baseUpdate = { status, result_note: resultNote, updated_at: new Date().toISOString() };
+        const sel = '*, bets(id, overall_status, teams(team_name))';
+        // Admin decision: clear the review flag and record who settled it (v2 columns).
+        let { data, error: e } = await supabase.from('bet_legs')
+          .update({ ...baseUpdate, settled_by: 'admin', needs_review: false })
+          .eq('id', legId).select(sel).single();
+        if (e && /column|schema cache/i.test(e.message || '')) {
+          ({ data, error: e } = await supabase.from('bet_legs').update(baseUpdate).eq('id', legId).select(sel).single());
+        }
         if (e) return error(e.message);
+        // Keep the bet's overall status in step with its legs.
+        if (data.bet_id) {
+          const { data: siblings } = await supabase.from('bet_legs').select('status').eq('bet_id', data.bet_id);
+          const overall = overallFromLegs(siblings || []);
+          if (overall !== data.bets?.overall_status) await supabase.from('bets').update({ overall_status: overall }).eq('id', data.bet_id);
+        }
         if (adminRole) await addAudit(adminRole, 'Leg Override', `${data.bets?.teams?.team_name} — ${data.selection}`, `Status → ${status}${resultNote ? ': ' + resultNote : ''}`);
         return json(data);
       }
@@ -972,23 +1051,13 @@ exports.handler = async (event) => {
       }
 
       case 'trigger_results_check': {
-        const { adminRole } = payload;
+        const { adminRole, betId } = payload;
         if (!adminRole) return error('Admin access required', 403);
-        const bgUrl = process.env.URL
-          ? `${process.env.URL}/.netlify/functions/check-results-background`
-          : null;
-        if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
-        // Await the invocation. Background functions return 202 immediately, so this
-        // is fast — but awaiting is essential: a fire-and-forget fetch can be dropped
-        // when the serverless runtime freezes on return, so the worker never runs.
+        if (betId && isUUID(betId) !== null) return error('Invalid betId.');
         let bgStatus = null, bgErr = null;
-        try {
-          const res = await fetch(bgUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-          bgStatus = res.status;
-        } catch (e) {
-          bgErr = e.message;
-        }
-        await addAudit(adminRole, 'Results Check Triggered', 'All pending bets',
+        try { bgStatus = await triggerInternal('check-results-background', { betId: betId || null }); }
+        catch (e) { bgErr = e.message; }
+        await addAudit(adminRole, 'Results Check Triggered', betId ? `Bet ${betId}` : 'All pending bets',
           bgErr ? `Background trigger failed: ${bgErr}` : `Background settler invoked (HTTP ${bgStatus})`);
         if (bgErr) return error('Could not start results check: ' + bgErr, 502);
         return json({ success: true, message: `Results check started (HTTP ${bgStatus})`, bgStatus });
@@ -998,16 +1067,11 @@ exports.handler = async (event) => {
         const { competitionId, weekNumber, adminRole } = payload;
         if (!adminRole) return error('Admin access required', 403);
         if (!competitionId) return error('competitionId is required');
-        // Trigger the background function via internal fetch
-        const bgUrl = process.env.URL
-          ? `${process.env.URL}/.netlify/functions/generate-recap-background`
-          : null;
-        if (!bgUrl) return error('Cannot determine site URL for background trigger', 500);
-        fetch(bgUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ competitionId, weekNumber: weekNumber || null }),
-        }).catch(e => console.error('[generate_recap] trigger error:', e.message));
+        try {
+          await triggerInternal('generate-recap-background', { competitionId, weekNumber: weekNumber || null });
+        } catch (e) {
+          return error('Could not start recap generation: ' + e.message, 502);
+        }
         return json({ success: true, message: 'Recap generation started' });
       }
 
@@ -1034,25 +1098,6 @@ const createAdminNotif = async (type, title, message, data = {}) => {
 const getAdminRole = (payload) => {
   try { return verifyAdminToken(payload.adminToken).role; }
   catch { return null; }
-};
-
-// Helper: verify signed admin token
-const verifyAdminToken = (token) => {
-  const { createHmac } = require('crypto');
-  if (!token) { const e = new Error('Admin token required'); e.status = 401; throw e; }
-  const secret = process.env.ADMIN_JWT_SECRET;
-  if (!secret) { const e = new Error('Admin auth not configured'); e.status = 500; throw e; }
-  const dot = String(token).lastIndexOf('.');
-  if (dot < 0) { const e = new Error('Invalid token format'); e.status = 401; throw e; }
-  const payloadB64 = String(token).slice(0, dot);
-  const sig        = String(token).slice(dot + 1);
-  const expected   = createHmac('sha256', secret).update(payloadB64).digest('hex');
-  if (sig !== expected) { const e = new Error('Invalid admin token'); e.status = 401; throw e; }
-  let claims;
-  try { claims = JSON.parse(Buffer.from(payloadB64, 'base64').toString()); }
-  catch(_) { const e = new Error('Invalid token payload'); e.status = 401; throw e; }
-  if (!claims.exp || Date.now() > claims.exp) { const e = new Error('Admin session expired, please log in again'); e.status = 401; throw e; }
-  return claims;
 };
 
 // Helper: generate random code (crypto-safe)

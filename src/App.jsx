@@ -26,7 +26,7 @@ import {
   apiRequestCompetition, apiGetCompetitionRequests, apiUpdateCompetitionRequest, apiGetCompetitionByCode,
   apiGetAdminNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead,
   apiUpdateProfile, apiChangePassword,
-  apiGenerateRecap, apiTriggerResultsCheck,
+  apiGenerateRecap, apiTriggerResultsCheck, postWithAuth,
 } from './api.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
@@ -167,11 +167,8 @@ export default function PuntingClub() {
   const fileInputRef = useRef(null);
 
   // Result checking
-  const [checkingResults, setCheckingResults] = useState(false);
-  const [lastChecked, setLastChecked] = useState(null);
-  const [checkingBetId, setCheckingBetId] = useState(null);
-  const [resultLog, setResultLog] = useState([]);
-  const intervalRef = useRef(null);
+  const [lastChecked] = useState(null);
+  const [resultLog] = useState([]);
 
   // Captain join-request notifications
   const [joinRequestNotifs, setJoinRequestNotifs] = useState([]);
@@ -380,7 +377,10 @@ export default function PuntingClub() {
       setCurrentTeamId(team.id);
       if (newCompCode) setViewedCompetitionCode(newCompCode);
       setTeamMembers([{ user_id: currentUser.id, role: 'captain', can_bet: true, canBet: true, deposit_paid: false, depositPaid: false, name: `${currentUser.firstName} ${currentUser.lastName}`, users: { id: currentUser.id, first_name: currentUser.firstName, last_name: currentUser.lastName } }]);
-      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: newCompCode || currentUser.competitionCode, token: 'ok', allTeamIds: updatedAllTeamIds })); } catch(_) {}
+      // Keep the existing login tokens — overwriting them logged the user out of every API call.
+      let prevSess = {};
+      try { prevSess = JSON.parse(localStorage.getItem('pc_session') || '{}'); } catch(_) {}
+      try { localStorage.setItem('pc_session', JSON.stringify({ user: currentUser, teamId: team.id, teamCode: team.team_code, teamName: team.team_name, role: 'captain', competitionCode: newCompCode || currentUser.competitionCode, token: prevSess.token || null, refreshToken: prevSess.refreshToken || null, allTeamIds: updatedAllTeamIds })); } catch(_) {}
       setShowCreateTeamModal(false);
       setCreateTeamForm({ teamName: '', competitionCode: '', buyInMode: 'split' });
       setActiveNav('team');
@@ -596,7 +596,7 @@ export default function PuntingClub() {
       weekNumber: b.week_number,
       submittedAt: new Date(b.submitted_at).toLocaleString(),
       submittedBy: b.submitted_by_name || null,
-      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+      legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time, resultSourceUrl: l.result_source_url || null, needsReview: !!l.needs_review, settledBy: l.settled_by || null })),
     })),
   })), []);
 
@@ -626,41 +626,10 @@ export default function PuntingClub() {
     return null;
   }, [currentUser?.competitionCode, activeCompetitions, mapLeaderboardData, LEADERBOARD_TTL_MS]);
 
-  // ── RESULT CHECKER ────────────────────────────────────────────────────────
-  // Calls the synchronous /api/check-results function once per pending bet
-  // (one bet at a time keeps each call within the 26s Netlify timeout).
-  const reviewBetResults = useCallback(async (teams) => {
-    const UNSETTLED = ['pending', 'in_progress'];
-    const hasPendingBets = (teams || []).some(t =>
-      (t.bets || []).some(b => (b.legs || []).some(l => UNSETTLED.includes(l.status)))
-    );
-    if (!hasPendingBets) return; // no pending bets — silently skip
-
-    setCheckingResults(true);
-
-    try {
-      // Single batch call — backend deduplicates shared events across all bet slips
-      const res = await fetch('/api/check-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const totalLegsUpdated = data.legsUpdated || 0;
-        await refreshLeaderboard(undefined, undefined, { force: true });
-        setLastChecked(new Date());
-        if (totalLegsUpdated > 0) {
-          showToast('Results updated — leaderboard refreshed!', 'success');
-          setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `${totalLegsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
-        }
-      }
-    } catch (e) {
-      console.warn('[check-results] batch error:', e.message);
-    }
-
-    setCheckingResults(false);
-  }, [refreshLeaderboard, showToast]);
+  // ── RESULT CHECKING ───────────────────────────────────────────────────────
+  // Results are settled server-side only: the scheduled check-results function
+  // runs every 3 hours, and admins can trigger a run via "Update Scores"
+  // (triggerResultsCheck). Browsers never call the settler directly.
 
   // ── LOAD DATA ON MOUNT ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -782,7 +751,7 @@ export default function PuntingClub() {
           stake: `$${((b.stake || 0) / 100).toFixed(2)}`, odds: b.combined_odds, aiConfidence: b.ai_confidence,
           valid: b.submission_valid !== false,
           flagged: b.flagged, submittedAt: new Date(b.submitted_at).toLocaleDateString('en-AU'),
-          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time })),
+          legs: (b.bet_legs || []).map(l => ({ ...l, legNumber: l.leg_number, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time, resultSourceUrl: l.result_source_url || null, needsReview: !!l.needs_review })),
         })));
       }
       if (comps.status === 'fulfilled' && comps.value) {
@@ -850,110 +819,6 @@ export default function PuntingClub() {
       refreshLeaderboard(code, activeCompetitions);
     }
   }, [activeNav]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Smart auto-check: fire every 3 hours from the first event's start time.
-  // Admin-only — regular users must never trigger a settlement run from their
-  // browser. The scheduled server function handles automatic checks for everyone.
-  useEffect(() => {
-    if (!isAdminLoggedIn) return;
-    if (!leaderboardTeams.length) return;
-
-    // Only schedule the timer when there are actually pending/in-progress bets
-    const hasPendingBets = leaderboardTeams.some(t =>
-      (t.bets || []).some(b => (b.legs || []).some(l => ['pending', 'in_progress'].includes(l.status)))
-    );
-    if (!hasPendingBets) return;
-
-    const THREE_HOURS = 3 * 60 * 60 * 1000;
-
-    // Find the earliest event start across all pending/in-progress legs
-    let firstEventMs = null;
-    for (const team of leaderboardTeams) {
-      for (const bet of team.bets || []) {
-        for (const leg of bet.legs || []) {
-          if (leg.eventDate && ['pending', 'in_progress'].includes(leg.status)) {
-            const timeStr = leg.startTime ? leg.startTime.substring(0, 5) : '00:00';
-            const dt = new Date(`${leg.eventDate}T${timeStr}`);
-            if (!isNaN(dt.getTime()) && (!firstEventMs || dt.getTime() < firstEventMs)) {
-              firstEventMs = dt.getTime();
-            }
-          }
-        }
-      }
-    }
-
-    // Calculate milliseconds until next 3-hour check boundary from first event
-    const now = Date.now();
-    let delay;
-    if (!firstEventMs) {
-      delay = THREE_HOURS; // no event dates stored — fall back to 3h from now
-    } else if (now < firstEventMs) {
-      delay = firstEventMs - now; // wait until first event starts
-    } else {
-      const elapsed = now - firstEventMs;
-      const nextCount = Math.ceil(elapsed / THREE_HOURS) || 1;
-      delay = firstEventMs + nextCount * THREE_HOURS - now;
-      if (delay < 30000) delay += THREE_HOURS; // avoid firing within 30s
-    }
-
-    // Schedule first check, then repeat every 3 hours
-    const runCheck = async () => {
-      const current = leaderboardTeams;
-      if (current.length) await reviewBetResults(current);
-    };
-    const tid = setTimeout(() => {
-      runCheck();
-      intervalRef.current = setInterval(runCheck, THREE_HOURS);
-    }, delay);
-
-    return () => {
-      clearTimeout(tid);
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminLoggedIn, leaderboardTeams.length, reviewBetResults, refreshLeaderboard]);
-
-  // Trigger a result check using client-side Claude+web-search, then persist
-  // any changes to the DB. The scheduled background function runs the same
-  // logic server-side every 3 hours as a backup.
-  const checkResultsNow = useCallback(async () => {
-    if (!isAdminLoggedIn) return; // admin-only — users cannot trigger a results check
-    if (!leaderboardTeams.length) {
-      showToast('No leaderboard data to check', 'info');
-      return;
-    }
-    await reviewBetResults(leaderboardTeams);
-  }, [isAdminLoggedIn, leaderboardTeams, reviewBetResults, showToast]);
-
-  // Per-bet result check — calls the synchronous /api/check-results function
-  // with a specific betId. One bet fits comfortably within the 26s Netlify timeout.
-  const checkSingleBet = useCallback(async (betId) => {
-    if (!isAdminLoggedIn) return; // admin-only — users cannot trigger a results check
-    if (!betId || checkingBetId) return;
-    setCheckingBetId(betId);
-    showToast('Checking result — searching live sports data…', 'info');
-
-    try {
-      const res = await fetch('/api/check-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ betId }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      await refreshLeaderboard(undefined, undefined, { force: true });
-      if (data.legsUpdated > 0) {
-        showToast('Result found — leaderboard updated!', 'success');
-        setResultLog(prev => [{ time: new Date().toLocaleTimeString(), message: `Bet — ${data.legsUpdated} leg(s) settled` }, ...prev.slice(0, 19)]);
-      } else {
-        showToast('No new results — match may still be in progress', 'info');
-      }
-    } catch (err) {
-      showToast('Could not check result — try again shortly', 'warning');
-      console.error('[check-results]', err.message);
-    }
-    setCheckingBetId(null);
-  }, [isAdminLoggedIn, checkingBetId, refreshLeaderboard, showToast]);
 
   // ── BET SUBMISSION ────────────────────────────────────────────────────────
 
@@ -1286,12 +1151,28 @@ export default function PuntingClub() {
       // Scale the output budget with the number of slips so a multi-image bet
       // (many legs) isn't truncated mid-JSON — the old fixed 1024 cut off large
       // multis and surfaced as a bogus "couldn't read the image" error.
-      const maxTokens = Math.min(2048 + imgCount * 1024, 8192);
-      const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages:[{ role:'user', content:[
-        { type:'text', text:`You are given ${imgCount} bet slip image${imgCount > 1 ? 's' : ''}. They are parts of ONE bet — combine EVERY leg from ALL images into a single JSON bet. Return JSON only, no other text:\n{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Team A vs Team B","selection":"Team A to Win","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending"}]}\nRules:\n- Include one leg object for EVERY selection across all images; number legNumber sequentially from 1.\n- eventDate: the date the MATCH is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.\n- startTime: kick-off time per leg in 24h HH:MM, or null if not shown.\n- stake/combinedOdds/estimatedReturn: the overall bet totals (usually the "Potential"/payout figure). Include $ on money; odds as decimals.\n- status: pending/won/lost/void.\n- submissionValid: true if bet was placed before first leg started.` },
+      const maxTokens = Math.min(3072 + imgCount * 1536, 8192);
+      const slipPrompt = `You are given ${imgCount} bet slip image${imgCount > 1 ? 's' : ''}. They are parts of ONE bet — combine EVERY leg from ALL images into a single JSON bet. Return JSON only, no other text:
+{"betType":"Multi","stake":"$50.00","combinedOdds":"3.50","estimatedReturn":"$175.00","submissionValid":true,"legs":[{"legNumber":1,"event":"Melbourne Storm vs Penrith Panthers","selection":"Melbourne Storm","market":"Head to Head","odds":"2.10","eventDate":"YYYY-MM-DD","startTime":"HH:MM","status":"pending","sport":"rugby_league","competition":"NRL","homeTeam":"Melbourne Storm","awayTeam":"Penrith Panthers","marketType":"head_to_head","line":null,"player":null,"venue":null,"raceNumber":null,"runnerNumber":null}]}
+Rules:
+- Include one leg object for EVERY selection across all images; number legNumber sequentially from 1.
+- eventDate: the date the MATCH/RACE is played — NOT the slip print date. Use the date next to each leg. YYYY-MM-DD, assume current year if missing.
+- startTime: start time per leg in 24h HH:MM as shown on the slip (Australian local time), or null if not shown.
+- stake/combinedOdds/estimatedReturn: the overall bet totals (usually the "Potential"/payout figure). Include $ on money; odds as decimals.
+- status: pending/won/lost/void.
+- submissionValid: true if bet was placed before first leg started.
+- sport: one of rugby_league, afl, cricket, soccer, rugby_union, basketball, tennis, nfl, combat, horse_racing, harness, greyhounds, or another lowercase word.
+- competition: e.g. NRL, AFL, BBL, EPL, A-League, NBA, or the race meeting name.
+- homeTeam/awayTeam: full team (or player) names for matches; null for races.
+- marketType: one of head_to_head, line, total, anytime_scorer, first_scorer, win, place, other.
+- line: the handicap or total number as a signed decimal (e.g. -6.5, 42.5), else null.
+- player: the player's full name for scorer/player markets, else null.
+- venue/raceNumber/runnerNumber: for races only (e.g. "Flemington", 7, 4), else null.`;
+      const { res, data } = await postWithAuth('claude', { model:'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages:[{ role:'user', content:[
+        { type:'text', text: slipPrompt },
         ...uploadedImages.slice(0, MAX_IMAGES).map(img => ({ type:'image', source:{ type:'base64', media_type: img.mediaType, data: img.src.split(',')[1] } }))
-      ]}] }) });
-      const data = await res.json();
+      ]}] });
+      if (res.status === 401) { showToast('Please log in to analyse a bet slip.', 'warning'); return; }
       if (!res.ok || data.error || data.type === 'error') {
         const errMsg = data.error?.message || data.error || `API error ${res.status}`;
         showToast(`Analysis failed: ${errMsg}`, 'error');
@@ -2574,7 +2455,7 @@ export default function PuntingClub() {
                                 className="w-full px-4 py-2 text-left text-xs text-gray-500 hover:text-brand-300 flex items-center gap-1.5 transition-colors"
                               >
                                 <Edit3 className="w-3 h-3" />
-                                {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})`}
+                                {expandedBetId === b.id ? '▲ Hide leg overrides' : `▼ Override individual legs (${b.legs.length})${b.legs.some(l => l.needsReview && l.status === 'pending') ? ' · ⚑ needs review' : ''}`}
                               </button>
                               {expandedBetId === b.id && (
                                 <div className="px-4 pb-4 space-y-2 bg-black/30">
@@ -2589,9 +2470,20 @@ export default function PuntingClub() {
                                             <span className="text-white text-xs font-semibold">{leg.selection}</span>
                                             <span className="text-gray-500 text-xs"> · {leg.market}</span>
                                           </div>
-                                          <span className={`text-xs font-bold ${legColor}`}>{leg.status?.toUpperCase()}</span>
+                                          <span className={`text-xs font-bold ${legColor}`}>
+                                            {leg.needsReview && leg.status === 'pending' ? '⚑ NEEDS REVIEW' : leg.status?.toUpperCase()}
+                                          </span>
                                         </div>
                                         <div className="text-gray-600 text-xs mb-2 truncate">{leg.event}</div>
+                                        {(leg.resultNote || leg.result_evidence) && (
+                                          <div className="text-gray-500 text-xs mb-2">
+                                            {leg.resultNote}
+                                            {leg.result_evidence && <span className="block italic text-gray-600">“{leg.result_evidence}”</span>}
+                                            {/^https?:\/\//.test(leg.resultSourceUrl || '') && (
+                                              <a href={leg.resultSourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-300 underline">View source</a>
+                                            )}
+                                          </div>
+                                        )}
                                         <div className="flex items-center gap-1.5 flex-wrap mb-2">
                                           {['won','lost','pending','void'].map(s => (
                                             <button

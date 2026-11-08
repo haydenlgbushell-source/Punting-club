@@ -3,6 +3,15 @@ import React, { useState } from 'react';
 // Barlow Condensed — sports-display font (loaded via Google Fonts in index.html)
 const BC = "'Barlow Condensed', 'Inter', sans-serif";
 
+// Only render http(s) links from stored data; returns { href, host } or null.
+const safeSource = (url) => {
+  try {
+    const u = new URL(String(url || ''));
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return { href: u.href, host: u.hostname.replace(/^www\./, '') };
+  } catch { return null; }
+};
+
 const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
   const [openLegs, setOpenLegs] = useState({});
   if (!bet) return null;
@@ -107,7 +116,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                             const [yr, mo, dy] = leg.eventDate.split('-').map(Number);
                             return new Date(yr, mo - 1, dy).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
                           })() : ''}
-                          {leg.startTime ? ` · ${String(leg.startTime).substring(0, 5)} AEST` : ''}
+                          {leg.startTime ? ` · ${String(leg.startTime).substring(0, 5)}` : ''}
                         </div>
                       )}
                     </div>
@@ -115,7 +124,7 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, marginLeft: 10 }}>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 15, color: '#0d9488' }}>@ {leg.odds}</div>
                     <div style={{ fontFamily: BC, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', padding: '2px 9px', borderRadius: 5, background: `${legColor}18`, color: legColor, border: `1px solid ${legColor}44` }}>
-                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : 'WAIT'}
+                      {won ? '✓ WON' : lost ? '✗ LOST' : live ? '● LIVE' : leg.status === 'void' ? '— VOID' : leg.needsReview ? 'IN REVIEW' : 'WAIT'}
                     </div>
                     {leg.resultNote && (
                       <button onClick={() => toggleLeg(i)} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: 11, cursor: 'pointer', padding: 0 }}>
@@ -127,7 +136,17 @@ const BetSlipCard = ({ bet, compact = false, onCheckBet, isChecking }) => {
                 {isOpen && leg.resultNote && (
                   <div style={{ borderTop: '1px solid #e5e7eb', padding: '10px 14px 12px', display: 'flex', gap: 7, fontSize: 13, color: '#64748b', lineHeight: 1.5, alignItems: 'flex-start' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: won ? '#22c55e' : lost ? '#ef4444' : '#eab308', flexShrink: 0, marginTop: 4, display: 'inline-block' }} />
-                    <span>{leg.resultNote}</span>
+                    <span>
+                      {leg.resultNote}
+                      {safeSource(leg.resultSourceUrl) && (
+                        <>
+                          {' '}
+                          <a href={safeSource(leg.resultSourceUrl).href} target="_blank" rel="noopener noreferrer" style={{ color: '#0d9488', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+                            Source: {safeSource(leg.resultSourceUrl).host}
+                          </a>
+                        </>
+                      )}
+                    </span>
                   </div>
                 )}
               </div>

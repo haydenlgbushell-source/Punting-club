@@ -4,6 +4,7 @@
 // Generates AI-powered weekly recaps for each active competition.
 
 const { createClient } = require('@supabase/supabase-js');
+const { isInternalCall } = require('./security');
 
 const VERSION = 'v1-weekly-recap';
 
@@ -113,6 +114,11 @@ RULES:
 }
 
 exports.handler = async (event) => {
+  // Only internal triggers (scheduled function / admin action) may start a run.
+  if (!isInternalCall(event)) {
+    console.warn('[generate-recap] Rejected call without a valid internal token');
+    return { statusCode: 401 };
+  }
   console.log(`[generate-recap] ${VERSION} — Starting`);
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
