@@ -11,7 +11,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: #FAFAF7; font-family: 'Inter', sans-serif; }
+body { margin: 0; background: #F4F6F4; font-family: 'Inter', sans-serif; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #e2e8f0; }
 ::-webkit-scrollbar-thumb { background: #2B634755; border-radius: 3px; }

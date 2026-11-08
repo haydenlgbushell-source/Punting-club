@@ -31,7 +31,7 @@ import {
 import { buildSlipPrompt } from './lib/slipPrompt.js';
 import { betStatus } from './lib/betMath.js';
 import { oauthEnabled, oauthProviders, startOAuth, isOAuthReturn, finishOAuthFromUrl } from './lib/supabaseClient.js';
-import { nextCutoff, ageOn } from './lib/auTime.js';
+import { nextCutoff, ageOn, formatAuDateTime } from './lib/auTime.js';
 import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -692,7 +692,7 @@ export default function PuntingClub() {
       // Actual gross return (reduced for void legs; stake back if all void) from the server's shared rules
       actualReturn: `$${((b.actual_return ?? 0)/100).toFixed(2)}`, returnReduced: !!b.return_reduced,
       weekNumber: b.week_number,
-      submittedAt: new Date(b.submitted_at).toLocaleString(),
+      submittedAt: formatAuDateTime(b.submitted_at), submittedAtIso: b.submitted_at || null,
       submittedBy: b.submitted_by_name || null,
       legs: (b.bet_legs||[]).map(l => ({ id: l.id, legNumber: l.leg_number, selection: l.selection, event: l.event, market: l.market, odds: l.odds, status: l.status, resultNote: l.result_note, eventDate: l.event_date, startTime: l.start_time, resultSourceUrl: l.result_source_url || null, needsReview: !!l.needs_review, settledBy: l.settled_by || null })),
     })),
@@ -887,7 +887,7 @@ export default function PuntingClub() {
         setAdminComps(comps.value.map(c => ({ ...c, buyIn: `$${(c.buy_in||0).toLocaleString()}`, maxTeams: c.max_teams, startDate: c.start_date, endDate: c.end_date })));
       }
       if (audit.status === 'fulfilled' && audit.value) {
-        setAdminAuditLog(audit.value.map(e => ({ ts: new Date(e.created_at).toLocaleString(), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
+        setAdminAuditLog(audit.value.map(e => ({ ts: formatAuDateTime(e.created_at), adminRole: e.admin_role, action: e.action, target: e.target, detail: e.detail })));
       }
       if (requests.status === 'fulfilled' && requests.value) {
         setAdminCompRequests(requests.value);
@@ -1034,7 +1034,7 @@ export default function PuntingClub() {
   };
 
   const addAuditEntry = (role, action, target, detail) => {
-    const entry = { ts: new Date().toLocaleString(), adminRole: role, action, target, detail };
+    const entry = { ts: formatAuDateTime(new Date()), adminRole: role, action, target, detail };
     setAdminAuditLog(prev => [entry, ...prev.slice(0, 99)]);
   };
 
