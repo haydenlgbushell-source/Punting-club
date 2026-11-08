@@ -33,7 +33,7 @@ import { buildSlipPrompt } from './lib/slipPrompt.js';
 import { betStatus } from './lib/betMath.js';
 import { oauthEnabled, oauthProviders, startOAuth, isOAuthReturn, finishOAuthFromUrl } from './lib/supabaseClient.js';
 import { nextCutoff, ageOn, formatAuDateTime, formatCutoff } from './lib/auTime.js';
-import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import { Trophy, Zap, Users, TrendingUp, ArrowRight, Menu, X, Sparkles, RotateCcw, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Shield, Eye, Edit3, Lock, UserCheck, Activity, Database, Bell, Search, Filter, MoreVertical, Download, RefreshCw, Hash, DollarSign, FileText, Share2, Crown, LogOut, Home, BookOpen, BarChart3, ChevronRight, Building2, Smartphone, XCircle, MinusCircle, Loader2, User, MapPin, Star, CalendarRange, LayoutDashboard, Settings2, HelpCircle, Camera, Image as ImageIcon, ChevronLeft } from 'lucide-react';
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function PuntingClub() {
@@ -55,6 +55,8 @@ export default function PuntingClub() {
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError]     = useState(null);
   const [signupMode, setSignupMode] = useState(null); // 'create' | 'join'
+  const [signupStep, setSignupStep] = useState(1);     // 1 = about you, 2 = team + password
+  useEffect(() => { if (!showSignupModal) setSignupStep(1); }, [showSignupModal]);
   // Set while a Google/Apple user finishes sign-up: { provider, email }
   const [oauthPending, setOauthPending] = useState(null);
   const [oauthBusy, setOauthBusy] = useState(false);
@@ -475,6 +477,17 @@ export default function PuntingClub() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Step 1 of sign-up: browser checks the visible fields, then we check mobile and age.
+  const handleSignupNext = (e) => {
+    e.preventDefault();
+    setApiError(null);
+    const phoneCheck = validatePhone(formData.phone);
+    if (!phoneCheck.valid) { setApiError('Please enter a valid Australian mobile number, like 0412 345 678.'); return; }
+    const age = ageOn(formData.dob);
+    if (age === null || age < 18) { setApiError('You must be 18 or over to join.'); return; }
+    setSignupStep(2);
+  };
 
   const handleSubmitSignup = useCallback(async (e) => {
     e.preventDefault();
@@ -3377,7 +3390,7 @@ export default function PuntingClub() {
       {/* SIGNUP */}
       {showSignupModal && (
         <Modal title={oauthPending ? 'Finish setting up your account' : signupMode === 'create' ? 'Create a Team' : 'Join a Team'} onClose={() => { if (oauthPending) { setOauthPending(null); try { localStorage.removeItem('pc_session'); } catch (_) {} } setShowSignupModal(false); setSignupMode(null); setApiError(null); }}>
-          <form onSubmit={handleSubmitSignup} className="p-5 space-y-3">
+          <form onSubmit={signupStep === 1 ? handleSignupNext : handleSubmitSignup} className="p-5 space-y-3">
             {apiError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-700 text-sm flex items-start gap-2">
                 <span className="flex-shrink-0 mt-0.5">✗</span>{apiError}
@@ -3388,7 +3401,7 @@ export default function PuntingClub() {
                 Signed in with {oauthPending.provider === 'apple' ? 'Apple' : 'Google'}{oauthPending.email ? ` as ${oauthPending.email}` : ''}. Add your mobile and date of birth, then create or join a team.
               </div>
             ) : (
-              oauthEnabled && (
+              oauthEnabled && signupStep === 1 && (
               <div className="space-y-2">
                 {oauthProviders.includes('google') && (
                   <button type="button" onClick={() => signInWith('google')} disabled={oauthBusy} className="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60">
@@ -3406,13 +3419,16 @@ export default function PuntingClub() {
               </div>
             )
             )}
-            {/* Toggle */}
-            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
-              {[['create','Create Team'],['join','Join Team']].map(([m,l]) => (
-                <button key={m} type="button" onClick={() => setSignupMode(m)} className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${signupMode === m ? 'bg-brand-600 text-white' : 'text-slate-600 hover:text-slate-900'}`}>{l}</button>
-              ))}
+            {/* Progress */}
+            <div>
+              <div className="flex gap-1.5" aria-hidden="true">
+                <span className="flex-1 h-1 rounded-full bg-brand-700" />
+                <span className={`flex-1 h-1 rounded-full ${signupStep === 2 ? 'bg-brand-700' : 'bg-gray-200'}`} />
+              </div>
+              <p className="text-xs text-slate-500 mt-1.5">Step {signupStep} of 2 · {signupStep === 1 ? 'About you' : signupMode === 'create' ? 'Your team and password' : 'Team code and password'}</p>
             </div>
-
+            {signupStep === 1 && (
+              <>
             <div className="grid grid-cols-2 gap-3">
               {[['firstName','First Name','text','John','given-name'],['lastName','Last Name','text','Smith','family-name']].map(([f,l,t,p,ac]) => (
                 <div key={f}>
@@ -3466,6 +3482,23 @@ export default function PuntingClub() {
                 <label className="block text-xs font-semibold text-brand-700 mb-1">Postcode *</label>
                 <input type="text" required value={formData.postcode} onChange={e => setFormData(p => ({...p, postcode: e.target.value}))} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-brand-500/50 placeholder-slate-400" placeholder="2000" />
               </div>
+            </div>
+
+            <button type="submit" className="w-full bg-brand-700 hover:bg-brand-800 text-white font-bold py-3 rounded-xl transition-all text-sm">
+              Next
+            </button>
+              </>
+            )}
+            {signupStep === 2 && (
+              <>
+            <button type="button" onClick={() => { setSignupStep(1); setApiError(null); }} className="text-sm font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1">
+              <ChevronLeft className="w-4 h-4" /> Back
+            </button>
+            {/* Toggle */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+              {[['create','Create Team'],['join','Join Team']].map(([m,l]) => (
+                <button key={m} type="button" onClick={() => setSignupMode(m)} className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${signupMode === m ? 'bg-brand-600 text-white' : 'text-slate-600 hover:text-slate-900'}`}>{l}</button>
+              ))}
             </div>
 
             {signupMode === 'create' && (
@@ -3604,6 +3637,8 @@ export default function PuntingClub() {
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> {signupMode === 'create' ? 'Creating...' : 'Joining...'}</>
                 : signupMode === 'create' ? 'Create Team & Register' : 'Request to Join Team'}
             </button>
+              </>
+            )}
           </form>
         </Modal>
       )}
