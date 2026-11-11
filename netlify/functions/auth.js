@@ -26,7 +26,7 @@ const supabase = createClient(
 // shared `supabase` client above, that made every query after a login run as
 // the member, which Row Level Security now blocks (login said "User profile
 // not found"), and on a warm function it leaked one member's session into the
-// next person's request. Never call these on the shared client.
+// next person's request. Never call these (or refreshSession) on the shared client.
 const sessionClient = () => createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -494,7 +494,10 @@ exports.handler = async (event) => {
     if (action === 'refresh') {
       const { refreshToken } = payload;
       if (!refreshToken) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'refreshToken required' }) };
-      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+      // Throwaway client: refreshSession stores the member's new session on the
+      // client it runs on, which would make the shared service-role client query
+      // as that member and break the next login on a warm function.
+      const { data, error } = await sessionClient().auth.refreshSession({ refresh_token: refreshToken });
       if (error || !data?.session) return { statusCode: 401, headers: HEADERS, body: JSON.stringify({ error: 'Session expired' }) };
       return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ access_token: data.session.access_token, refresh_token: data.session.refresh_token }) };
     }
