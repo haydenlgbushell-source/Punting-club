@@ -795,7 +795,13 @@ export default function PuntingClub() {
             // Restore finalised state from live team data
             if (myTeam?.finalised) { setTeamFinalised(true); setDepositPerMember(myTeam.deposit_per_member || null); }
             else { setTeamFinalised(false); setDepositPerMember(null); }
-            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: sess.token || 'ok', refreshToken: sess.refreshToken || null, allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
+            // Re-read the tokens now: if the access token had expired, the call
+            // above refreshed it and saved a new pair. Writing back the pair read
+            // at page load would put a used-up refresh token back, so the next
+            // refresh fails and the member is logged out.
+            let latest = sess;
+            try { latest = JSON.parse(localStorage.getItem('pc_session') || '{}'); } catch(_) {}
+            try { localStorage.setItem('pc_session', JSON.stringify({ user, teamId: myTeam?.id, teamCode: myTeam?.team_code, teamName: myTeam?.team_name, role: myTeam?.myRole || user.role, competitionCode: compCode, token: latest.token || sess.token || 'ok', refreshToken: latest.refreshToken || sess.refreshToken || null, allTeamIds, teamFinalised: myTeam?.finalised || false, depositPerMember: myTeam?.deposit_per_member || null })); } catch(_) {}
           }).catch((err) => {
             if (err?.status === 401 || err?.status === 404) {
               // Login expired or account gone — don't leave a "logged in" screen where every action fails.
