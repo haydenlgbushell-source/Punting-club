@@ -1510,48 +1510,45 @@ export default function PuntingClub() {
     }
   };
 
+  // Make a team the one whose people (members, pending requests, betting order) we
+  // show. Clears the old team's people straight away so they never linger on the
+  // new team's screen; the load effect below fetches the new team's people.
+  const selectTeam = useCallback((team) => {
+    if (!team?.id || team.id === currentTeamId) return;
+    setTeamMembers([]);
+    setPendingMembers([]);
+    setBettingOrder([]);
+    setJoinRequestNotifs([]);
+    setShowJoinRequestNotif(false);
+    setCurrentTeamId(team.id);
+    setCurrentUser(u => u ? { ...u, teamId: team.id, teamCode: team.team_code || u.teamCode, teamName: team.team_name || u.teamName } : u);
+  }, [currentTeamId]);
+
   // Switch which competition is displayed on leaderboard / weekly / team pages
   const switchViewedCompetition = useCallback(async (code) => {
     setViewedCompetitionCode(code);
     setViewedTeamId(null); // reset per-team selection when switching competitions
-    await refreshLeaderboard(code, activeCompetitions, { force: true });
-    // Load team members for the user's first team in the new competition
+    // Show the user's first team in the new competition
     const comp = activeCompetitions.find(c => c.code === code);
     const myTeamInComp = (comp?.teams || []).find(t => (currentUser?.allTeamIds || []).includes(t.id));
-    if (myTeamInComp?.id && myTeamInComp.id !== currentTeamId) {
-      try {
-        const members = await apiGetTeamMembers(myTeamInComp.id);
-        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
-        setCurrentTeamId(myTeamInComp.id);
-      } catch (_) {}
-    }
-  }, [activeCompetitions, currentUser?.allTeamIds, currentTeamId, refreshLeaderboard]);
+    selectTeam(myTeamInComp);
+    await refreshLeaderboard(code, activeCompetitions, { force: true });
+  }, [activeCompetitions, currentUser?.allTeamIds, selectTeam, refreshLeaderboard]);
 
   // Switch between teams within the same competition
-  const switchViewedTeam = useCallback(async (teamId) => {
+  const switchViewedTeam = useCallback((teamId) => {
     setViewedTeamId(teamId);
-    if (teamId !== currentTeamId) {
-      try {
-        const members = await apiGetTeamMembers(teamId);
-        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
-        setCurrentTeamId(teamId);
-      } catch (_) {}
-    }
-  }, [currentTeamId]);
+    const comp = activeCompetitions.find(c => (c.teams || []).some(t => t.id === teamId));
+    selectTeam((comp?.teams || []).find(t => t.id === teamId) || { id: teamId });
+  }, [activeCompetitions, selectTeam]);
 
   // Switch the actively managed team from the profile chip (cross-competition)
   const switchActiveTeam = useCallback(async (team) => {
     setViewedCompetitionCode(team.compCode);
     setViewedTeamId(team.id);
+    selectTeam(team);
     await refreshLeaderboard(team.compCode, activeCompetitions, { force: true });
-    if (team.id !== currentTeamId) {
-      try {
-        const members = await apiGetTeamMembers(team.id);
-        setTeamMembers(members.map(m => ({ ...m, name: `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), phone: m.users?.phone, depositPaid: m.deposit_paid, canBet: m.can_bet })));
-        setCurrentTeamId(team.id);
-      } catch (_) {}
-    }
-  }, [currentTeamId, activeCompetitions, refreshLeaderboard]);
+  }, [selectTeam, activeCompetitions, refreshLeaderboard]);
 
   // ── DERIVED ───────────────────────────────────────────────────────────────
   // Effective competition being viewed (leaderboard / weekly / team)
@@ -1570,7 +1567,7 @@ export default function PuntingClub() {
     if (viewedTeamId) {
       return teamsInViewedComp.find(t => t.id === viewedTeamId) || teamsInViewedComp[0] || null;
     }
-    return teamsInViewedComp[0] || null;
+    return teamsInViewedComp.find(t => t.id === currentTeamId) || teamsInViewedComp[0] || null;
   })();
   const myTeamName = (isLoggedIn && viewedMyTeam?.team_name) || currentUser?.teamName || '';
   // Match by id first (names can repeat across competitions); never fall back to another team.
@@ -1590,7 +1587,7 @@ export default function PuntingClub() {
 
   // Enrich leaderboard with member names for current user's team
   const enrichedLeaderboardTeams = leaderboardTeams.map(t => {
-    if (t.team === myTeamName && teamMembers.length > 0) {
+    if ((viewedMyTeam?.id ? t.id === viewedMyTeam.id : t.team === myTeamName) && viewedMyTeam?.id === currentTeamId && teamMembers.length > 0) {
       return { ...t, memberList: teamMembers.map(m => ({ name: m.name || `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim(), role: m.role })) };
     }
     return t;
@@ -1606,18 +1603,23 @@ export default function PuntingClub() {
   const currentBettor = bettingOrder[currentWeekBettorIdx % Math.max(1, bettingOrder.length)]?.name || null;
   const shareableLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://puntingclub.com'}?join=${currentUser?.teamCode || 'XXXXXX'}`;
 
-  // Load team data when user logs in
+  // Load the people for the active team: on login and every time the team changes.
+  // Ignores a slow reply for a team the user has already switched away from.
   useEffect(() => {
-    if (!isLoggedIn || !currentUser?.teamId) return;
-    apiGetTeamMembers(currentUser.teamId)
+    if (!isLoggedIn || !currentTeamId) return;
+    let stale = false;
+    const teamId = currentTeamId;
+    apiGetTeamMembers(teamId)
       .then(members => {
-        const mapped = members.map(m => ({
+        if (stale) return;
+        const mapped = (members || []).map(m => ({
           ...m,
-          phone:       m.users?.phone || m.user_id,
-          name:        `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
-          role:        m.role,
-          canBet:      m.can_bet,
-          depositPaid: m.deposit_paid,
+          phone:         m.users?.phone || m.user_id,
+          name:          `${m.users?.first_name || ''} ${m.users?.last_name || ''}`.trim() || 'Member',
+          role:          m.role,
+          canBet:        m.can_bet,
+          depositPaid:   m.deposit_paid,
+          betting_order: m.betting_order ?? null,
         }));
         setTeamMembers(mapped);
         const pending = mapped.filter(m => m.role === 'pending');
@@ -1625,15 +1627,21 @@ export default function PuntingClub() {
         // Populate betting order from active members who can bet (excludes pending + view-only)
         setBettingOrder(orderFromMembers(mapped));
         // Show join-request popup for captains if there are already pending members
-        if (currentUser?.role === 'captain' && pending.length > 0) {
+        const myRole = mapped.find(m => m.user_id === currentUser?.id)?.role;
+        if (myRole === 'captain' && pending.length > 0) {
           setJoinRequestNotifs(pending.map(m => ({ user_id: m.user_id, name: m.name, phone: m.phone })));
           setShowJoinRequestNotif(true);
         }
         // Seed known IDs so polling doesn't re-notify for these
         knownPendingIdsRef.current = new Set(pending.map(m => m.user_id));
       })
-      .catch(err => console.warn('Could not load team members (using demo data):', err));
-  }, [isLoggedIn, currentUser?.teamId]);
+      .catch(err => {
+        if (stale) return;
+        console.warn('Could not load team members:', err);
+        showToast('Could not load this team’s members. Refresh the page to try again.', 'warning');
+      });
+    return () => { stale = true; };
+  }, [isLoggedIn, currentTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll for new join requests every 30 s (captains only)
   useEffect(() => {
